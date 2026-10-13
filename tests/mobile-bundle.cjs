@@ -1,0 +1,6 @@
+const fs=require('node:fs');const vm=require('node:vm');const assert=require('node:assert/strict');
+let registrations=0,commands=0;class Plugin{loadData(){return Promise.resolve({vaultId:'mobile-vault'})}saveData(value){assert.deepEqual(Object.keys(value),['vaultId']);return Promise.resolve()}registerView(){registrations++}registerExtensions(){}addCommand(){commands++}addSettingTab(){throw Error('Mobile settings should be hidden')}}
+const context={exports:{},module:{exports:{}},console,setTimeout,clearTimeout,crypto:require('node:crypto').webcrypto,require(name){if(name!=='obsidian')throw Error('Mobile eagerly loaded '+name);return {Plugin,PluginSettingTab:class{},FuzzySuggestModal:class{},Modal:class{},FileView:class{},Platform:{isMobile:true},Notice:class{}}}};
+context.exports=context.module.exports;
+vm.runInNewContext(fs.readFileSync('dist/main.js','utf8'),context);
+(async()=>{const plugin=new context.module.exports.default();await plugin.onload();assert.equal(registrations,1);assert.equal(commands,0);assert.equal(JSON.parse(fs.readFileSync('dist/manifest.json')).isDesktopOnly,false);console.log('PASS 手机 bundle 不加载 Node 模块，仅注册只读视图')})().catch(error=>{console.error(error);process.exitCode=1});

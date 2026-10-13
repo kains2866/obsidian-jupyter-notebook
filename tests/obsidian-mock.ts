@@ -1,0 +1,11 @@
+export class FileSystemAdapter{getBasePath(){return '/tmp'}getFullPath(p:string){return '/tmp/'+p}}
+export class FileView{
+ app:any;file:any;contentEl:any={empty(){},createEl(){}};
+ constructor(leaf:any){this.app=leaf.app}
+ addChild(c:any){return c}removeChild(){}
+}
+export class Notice{constructor(..._args:any[]){}}
+export class Component{}
+export const MarkdownRenderer={render:async()=>{}};
+export function sanitizeHTMLToDom():any{return {}}
+export const Platform={isMobile:false,isDesktopApp:true};

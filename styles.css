@@ -1,0 +1,84 @@
+.ipynb-editor{box-sizing:border-box;height:100%;overflow-y:auto;overflow-x:hidden;padding:0 24px 40px;color:var(--text-normal);background:var(--background-primary);font-size:14px}
+.ipynb-toolbar{position:sticky;top:0;z-index:4;display:flex;gap:4px;align-items:center;min-height:48px;background:var(--background-primary);border-bottom:1px solid var(--background-modifier-border)}
+.ipynb-editor button{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:inherit;font-size:12px;padding:5px 8px;border:0;border-radius:4px;cursor:pointer;min-height:28px;background:transparent;color:var(--text-muted);box-shadow:none;white-space:nowrap}
+.ipynb-editor button:hover,.ipynb-menu-trigger:hover{background:var(--background-secondary);color:var(--text-normal)}
+.ipynb-editor button:disabled{opacity:.4;cursor:default}
+.ipynb-editor svg{width:16px;height:16px;flex-shrink:0}
+.ipynb-icon-button{width:28px;padding:4px!important}
+.ipynb-editor button:focus-visible,.ipynb-editor select:focus-visible,.ipynb-editor summary:focus-visible,.ipynb-markdown-preview:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:2px}
+.ipynb-environment{margin-left:auto;max-width:210px;overflow:hidden;text-overflow:ellipsis;display:block!important}
+.ipynb-status{color:var(--text-muted);font-size:11px;white-space:nowrap;padding-left:8px}
+.ipynb-insert-toolbar{display:flex;gap:10px;padding:12px 0 14px 42px}
+.ipynb-menu{position:relative;flex-shrink:0}
+.ipynb-menu-trigger{list-style:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:4px;color:var(--text-muted);cursor:pointer}
+.ipynb-menu-trigger::-webkit-details-marker{display:none}
+.ipynb-menu-panel{position:absolute;right:0;top:32px;z-index:8;min-width:144px;padding:5px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:6px;box-shadow:0 4px 16px #0002}
+.ipynb-menu-panel button{width:100%;justify-content:flex-start}
+.ipynb-menu-panel select{width:100%;margin:4px 0;padding:4px;background:var(--background-secondary);color:var(--text-normal);border:1px solid var(--background-modifier-border);border-radius:4px;font-size:12px}
+.ipynb-cell{position:relative;margin:0 0 16px;padding-left:42px;min-width:0}
+.ipynb-cell-gutter{position:absolute;left:0;top:5px;width:34px;display:flex;flex-direction:column;align-items:center;gap:3px}
+.ipynb-cell-gutter button{color:var(--interactive-accent)}
+.ipynb-count{font-family:var(--font-monospace);font-size:11px;color:var(--text-muted)}
+.ipynb-cell-body{border:1px solid var(--background-modifier-border);border-radius:5px;min-width:0}
+.ipynb-markdown-cell .ipynb-cell-body{border-color:transparent}
+.ipynb-code-cell:focus-within .ipynb-cell-body{border-color:var(--interactive-accent)}
+.ipynb-cell-toolbar{position:absolute;right:8px;top:-13px;z-index:2;display:flex;gap:2px;align-items:center;padding:2px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s}
+.ipynb-cell:hover .ipynb-cell-toolbar,.ipynb-cell:focus-within .ipynb-cell-toolbar,.ipynb-cell-toolbar:has(details[open]){opacity:1;pointer-events:auto}
+.ipynb-code .cm-editor{min-height:46px;padding:8px 0;background:transparent}
+.ipynb-code .cm-editor.cm-focused{outline:none}
+.ipynb-code .cm-gutters{background:transparent!important;color:var(--text-muted);font-size:11px;min-width:30px}
+.ipynb-code .cm-activeLine,.ipynb-code .cm-activeLineGutter{background:transparent}
+.ipynb-code .cm-focused .cm-activeLine{background:var(--background-secondary)}
+.ipynb-code .cm-content{padding:2px 0;line-height:1.6}
+.ipynb-output:not(:empty){padding:12px 16px;border-top:1px solid var(--background-modifier-border);overflow:auto;max-width:100%}
+.ipynb-output pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-monospace);font-size:13px;background:transparent}
+.ipynb-output img{max-width:100%;height:auto}
+.ipynb-output table{border-collapse:collapse;font-size:13px}
+.ipynb-output th,.ipynb-output td{padding:5px 10px;border:1px solid var(--background-modifier-border)}
+.ipynb-error,.ipynb-stderr{color:var(--text-error)}
+.ipynb-markdown-preview{padding:8px 12px;line-height:1.65;overflow-wrap:anywhere;cursor:text}
+.ipynb-markdown-preview h1{font-size:1.8em;line-height:1.3;margin:12px 0}
+.ipynb-markdown-preview h2{font-size:1.4em;margin:14px 0 8px}
+.ipynb-markdown-preview p{margin:6px 0}
+.ipynb-message{margin:12px 0 4px 42px;padding:10px 12px;border-left:1px solid var(--text-error);border-radius:3px;background:var(--background-secondary);font-size:12px}
+.ipynb-message[hidden]{display:none}
+.ipynb-message-heading{display:flex;align-items:center;gap:10px}
+.ipynb-message-heading strong{font-weight:500;overflow-wrap:anywhere}
+.ipynb-message-heading button{margin-left:auto;flex-shrink:0}
+.ipynb-message-hint{margin:3px 0;color:var(--text-muted);line-height:1.5}
+.ipynb-error-details summary{cursor:pointer;color:var(--text-muted);margin-top:6px}
+.ipynb-error-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:240px;overflow:auto}
+.ipynb-empty{text-align:center;color:var(--text-muted);padding:60px 20px}
+.ipynb-environment-dialog input{width:100%;margin-bottom:12px}
+@media(hover:none){.ipynb-cell-toolbar{opacity:1;pointer-events:auto}}
+@media(max-width:650px){.ipynb-editor{padding:0 8px 24px}.ipynb-toolbar{gap:1px;flex-wrap:wrap;padding:6px 0}.ipynb-environment{max-width:135px}.ipynb-status{padding-left:3px}.ipynb-cell{padding-left:34px}.ipynb-cell-gutter{width:28px}.ipynb-insert-toolbar{padding-left:34px}.ipynb-message{margin-left:34px}.ipynb-toolbar button{padding:4px 5px}}
+
+/* Obsidian themes style .view-content with stronger selectors than the editor class. */
+.workspace-leaf-content[data-type="native-ipynb"] .view-content.ipynb-editor{padding:0 24px 40px;box-sizing:border-box}
+@media(max-width:650px){.workspace-leaf-content[data-type="native-ipynb"] .view-content.ipynb-editor{padding:0 8px 24px}}
+.ipynb-cell-list{position:relative}
+.ipynb-insert-gap{height:24px;display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 8px 42px}
+.ipynb-insert-gap button{opacity:0;transition:opacity .12s}
+.ipynb-insert-gap:hover button,.ipynb-insert-gap:focus-within button{opacity:1}
+.ipynb-drag-handle{touch-action:none;cursor:grab!important;color:var(--text-muted)!important}
+.ipynb-drag-ghost{position:fixed;z-index:100;pointer-events:none;max-width:360px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:12px;background:var(--background-secondary);color:var(--text-normal);border:1px solid var(--interactive-accent);border-radius:5px;box-shadow:var(--shadow-s)}
+.ipynb-drop-line{position:absolute;height:2px;background:var(--interactive-accent);left:42px;right:0;z-index:10;pointer-events:none}
+@media(hover:none){.ipynb-insert-gap button{opacity:1}}
+.ipynb-editor{overflow-anchor:none}
+.ipynb-drag-ghost{max-width:none;max-height:65vh;white-space:normal;padding:8px;overflow:hidden}
+.ipynb-drag-cell{margin:0;pointer-events:none}
+.ipynb-drag-cell .ipynb-cell-toolbar,.ipynb-drag-cell .ipynb-drag-handle{display:none}
+
+/* Explicit environment manager: native controls and two visible choices. */
+.ipynb-environment-modal { width: min(760px, calc(100vw - 48px)); }
+.ipynb-environment-modal .modal-content { overflow-y: auto; }
+.ipynb-environment-section { margin-top: 20px; padding: 16px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); }
+.ipynb-environment-managed { border-color: var(--interactive-accent); background: var(--background-secondary); }
+.ipynb-environment-section h3 { margin: 0 0 10px; }
+.ipynb-environment-section .setting-item { padding: 10px 0; flex-wrap: wrap; gap: 8px; }
+.ipynb-environment-section .setting-item-control { flex-wrap: wrap; gap: 8px; }
+.ipynb-environment-section select { max-width: 100%; }
+.ipynb-environment-status, .ipynb-environment-path { overflow-wrap: anywhere; white-space: pre-wrap; }
+.ipynb-environment-path { font-family: var(--font-monospace); font-size: var(--font-smallest); color: var(--text-muted); }
+.ipynb-environment-warning { color: var(--text-muted); font-size: var(--font-small); }
+@media (max-width: 600px) { .ipynb-environment-section .setting-item-control { width: 100%; justify-content: flex-start; } }

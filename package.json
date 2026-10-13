@@ -1,0 +1,28 @@
+{
+  "name": "obsidian-jupyter-notebook",
+  "version": "0.3.0",
+  "private": true,
+  "scripts": {
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "build": "node build.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.4",
+    "esbuild": "^0.28.2",
+    "obsidian": "^1.14.4",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.4"
+  },
+  "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/lang-python": "^6.2.1",
+    "@codemirror/language": "^6.13.1",
+    "@codemirror/state": "6.7.6",
+    "@codemirror/view": "6.43.13",
+    "@lezer/highlight": "^1.2.5"
+  }
+}

@@ -1,0 +1,28 @@
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'/Users/tiyukains/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
+const assert=require('node:assert/strict');
+(async()=>{const browser=await chromium.launch({channel:'chrome',headless:true});try{
+ const page=await browser.newPage({viewport:{width:1100,height:760}});await page.goto('http://127.0.0.1:4318');await page.locator('.ipynb-toolbar').waitFor();
+ assert.equal(await page.locator('.ipynb-insert-gap').count(),3,'每格上方及列表末尾必须可就地插入');
+ await page.locator('.ipynb-insert-gap').nth(1).hover();await page.locator('.ipynb-insert-gap').nth(1).getByRole('button',{name:'添加代码',exact:true}).click();
+ assert.equal(await page.locator('.ipynb-cell').count(),3);assert.ok(await page.locator('.ipynb-cell').nth(1).locator('.cm-content').evaluate(e=>e.contains(document.activeElement)||e===document.activeElement),'新单元格获得焦点');
+ assert.equal(await page.locator('.ipynb-drag-handle').count(),3);
+ const from=await page.locator('.ipynb-drag-handle').nth(2).boundingBox(),to=await page.locator('.ipynb-cell').first().boundingBox();
+ await page.mouse.move(from.x+8,from.y+8);await page.mouse.down();await page.mouse.move(to.x+60,to.y+2,{steps:10});assert.equal(await page.locator('.ipynb-drag-ghost').count(),1);await page.mouse.up();
+ assert.ok((await page.locator('.ipynb-cell').first().textContent()).includes('greeting'));assert.equal(await page.locator('.ipynb-drag-ghost').count(),0);
+ await page.locator('.ipynb-toolbar summary').click();await page.getByRole('button',{name:'撤销',exact:true}).click();assert.ok((await page.locator('.ipynb-cell').first().textContent()).includes('Native Notebook'));
+ await page.locator('.ipynb-cell').first().hover();await page.locator('.ipynb-cell').first().getByRole('button',{name:'编辑',exact:true}).click();assert.ok((await page.getByRole('button',{name:'预览',exact:true}).locator('path').getAttribute('d')).includes('M2'));
+ await page.evaluate(()=>document.documentElement.style.setProperty('--code-variable','rgb(1, 177, 77)'));
+ const colors=await page.locator('.ipynb-cell').last().locator('.cm-line span').evaluateAll(es=>es.map(e=>getComputedStyle(e).color));assert.ok(colors.includes('rgb(1, 177, 77)'), '主题变量必须动态决定变量颜色');
+ const handle=await page.locator('.ipynb-drag-handle').last().boundingBox();await page.mouse.move(handle.x+8,handle.y+8);await page.mouse.down();await page.keyboard.press('Escape');await page.mouse.up();assert.equal(await page.locator('.ipynb-drag-ghost').count(),0);
+ await page.evaluate(()=>{window.unlock=window.notebookSession.lock()});assert.equal(await page.locator('.ipynb-drag-handle:enabled').count(),0);assert.equal(await page.locator('.ipynb-insert-gap button:enabled').count(),0);await page.evaluate(()=>window.unlock());
+ await page.locator('.ipynb-cell').first().hover();await page.getByRole('button',{name:'预览',exact:true}).click();
+ await page.evaluate(()=>{window.originalNotebook=window.notebookSession.notebook;const n=window.originalNotebook;window.notebookSession.structure({...n,cells:[...n.cells,...Array.from({length:24},(_,i)=>({id:'long-'+i,cell_type:'code',source:'value = '+i+'\n'.repeat(4),metadata:{},outputs:[],execution_count:null}))].map(({id,...cell})=>cell)});window.notebookEditor.renderCells();document.getElementById('app').style.height='760px';document.getElementById('app').scrollTop=650});await page.waitForTimeout(100);
+ const anchor=await page.evaluate(()=>{const r=document.getElementById('app');const n=[...r.querySelectorAll('.ipynb-cell')].find(e=>e.getBoundingClientRect().bottom>r.getBoundingClientRect().top+48);return {id:n.dataset.cellId,top:n.getBoundingClientRect().top}});
+ for(const operation of ['insert','move','delete']){await page.evaluate(op=>{const s=window.notebookSession,n=s.notebook;let cells=[...n.cells];if(op==='insert')cells=[{id:'scroll-insert',cell_type:'code',source:'',metadata:{},outputs:[],execution_count:null},...cells];if(op==='move')cells=[...cells.slice(1),cells[0]];if(op==='delete')cells=cells.filter(c=>c.id==='scroll-insert'?false:true);s.structure({...n,cells});window.notebookEditor.renderCells()},operation);await page.waitForTimeout(100);const top=await page.locator(`[data-cell-id="${anchor.id}"]`).evaluate(e=>e.getBoundingClientRect().top);assert.ok(Math.abs(top-anchor.top)<2,operation+'保持当前位置 '+JSON.stringify({top,anchor}))}
+ await page.evaluate(()=>{document.getElementById('app').scrollTop+=240});await page.waitForTimeout(100);
+ const manualAnchor=await page.evaluate(()=>{const r=document.getElementById('app');const n=[...r.querySelectorAll('.ipynb-cell')].find(e=>e.getBoundingClientRect().bottom>r.getBoundingClientRect().top+48);return {id:n.dataset.cellId,top:n.getBoundingClientRect().top}});
+ await page.evaluate(()=>{const p=document.querySelector('.ipynb-markdown-preview');if(p)p.style.minHeight='600px'});await page.waitForTimeout(100);assert.ok(Math.abs((await page.locator(`[data-cell-id="${manualAnchor.id}"]`).evaluate(e=>e.getBoundingClientRect().top))-manualAnchor.top)<2,'手动滚动后异步 Markdown 高度变化保持位置');
+ await page.evaluate(()=>{window.notebookSession.structure(window.originalNotebook);window.notebookEditor.renderCells()});
+ await page.evaluate(()=>window.showReadOnly());assert.equal(await page.locator('button').count(),0);assert.equal(await page.locator('.cm-content[contenteditable="true"]').count(),0);assert.equal(await page.locator('.ipynb-markdown-preview').count(),1);
+ console.log('PASS insertion, focus, pointer reorder, undo, markdown eye icon, theme tokens');
+ }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

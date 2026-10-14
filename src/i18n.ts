@@ -1,3 +1,4 @@
+import {importCheckTranslations} from './import-check-translations';
 import {environmentTranslations} from './environment-translations';
 import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
@@ -35,5 +36,5 @@ const common:Record<string,string>={
 export function resolveLanguage(setting:LanguageSetting='auto',locale='en'): 'zh'|'en'{return setting==='auto'?(locale.toLowerCase().startsWith('zh')?'zh':'en'):setting}
 export function createTranslator(setting:LanguageSetting='auto',locale='en'):Translator{
  const english=resolveLanguage(setting,locale)==='en';
- return (text,values={})=>{const translated=english?(environmentTranslations[text]??outputTranslations[text]??common[text]??text):text;return translated.replace(/\{(\w+)\}/g,(match,key)=>values[key]===undefined?match:String(values[key]))};
+ return (text,values={})=>{const translated=english?(importCheckTranslations[text]??environmentTranslations[text]??outputTranslations[text]??common[text]??text):text;return translated.replace(/\{(\w+)\}/g,(match,key)=>values[key]===undefined?match:String(values[key]))};
 }

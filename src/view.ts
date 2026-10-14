@@ -12,6 +12,7 @@ import {EnvironmentPicker,confirm} from './settings';
 import {environmentName,belongsToEnvironmentDirectory} from './environments';
 export const NOTEBOOK_VIEW='native-ipynb';
 export class NotebookView extends FileView{
+ private importTimer?:ReturnType<typeof setTimeout>;private importController?:AbortController;private importGeneration=0;private importKey='';
  private session?:NotebookSession;private editor?:NotebookEditor;
  private kernel?:KernelClient;private starting?:Promise<KernelClient>;
  private kernelPython:string;
@@ -26,7 +27,7 @@ export class NotebookView extends FileView{
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
  async onLoadFile(file:TFile):Promise<void>{
-  this.disposed=false;
+  this.disposed=false;this.importKey='';
   const text=await this.app.vault.read(file);
   try{this.loadNotebook(text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:String(error)});throw error}
  }
@@ -38,12 +39,36 @@ export class NotebookView extends FileView{
   this.editor?.destroy();this.clearMarkdown();
   this.editor=new NotebookEditor(this.contentEl,session,{
    translate:this.t,confirm:(title,message)=>confirm(this.app,title,message,this.t),
+   notebookChanged:()=>this.scheduleImportCheck(),retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
    readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
    environment:()=>this.t(environmentName(this.kernelPython)),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
   },state);
+  this.scheduleImportCheck(true);
+ }
+ private scheduleImportCheck(force=false):void{
+  if(Platform.isMobile||this.disposed||!this.session)return;
+  const cells=this.session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText);
+  const key=JSON.stringify([this.kernelPython,this.file?.path,cells]);if(!force&&key===this.importKey)return;this.importKey=key;
+  clearTimeout(this.importTimer);this.importController?.abort();const generation=++this.importGeneration;
+  if(!cells.length){this.editor?.setImportStatuses?.([]);return}
+  if(!this.kernelPython){this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'no-environment'})));return}
+  this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'checking'})));
+  this.importTimer=setTimeout(()=>{void this.checkImports(cells,generation)},900);
+ }
+ private async checkImports(cells:string[],generation:number):Promise<void>{
+  if(this.disposed||generation!==this.importGeneration)return;
+  const controller=new AbortController();this.importController=controller;
+  try{
+   const adapter=this.app.vault.adapter;if(!(adapter instanceof FileSystemAdapter))throw new Error('Local filesystem required');
+   const {checkNotebookImports}=await import('./import-check');
+   if(controller.signal.aborted)return;
+   const result=await checkNotebookImports(this.kernelPython,adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}/import_check.py`),this.projectDir()??'',cells,controller.signal);
+   if(!this.disposed&&generation===this.importGeneration)this.editor?.setImportStatuses?.(result.cells);
+  }catch(error){if(!this.disposed&&generation===this.importGeneration&&!controller.signal.aborted){console.error('[Obsidian Jupyter Notebook] Import check failed',this.kernelPython,error);this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'error'})))}}
+  finally{if(this.importController===controller)this.importController=undefined}
  }
  private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement):Promise<void>{
   const child=new Component();this.addChild(child);this.markdownChildren.push(child);
@@ -75,7 +100,7 @@ export class NotebookView extends FileView{
   try{await this.kernel?.close();this.kernel=undefined;this.kernelBridgePython=undefined;if(this.session?.dirty)await this.save();return true}catch(error){this.finishEnvironmentRemoval();throw error}
  }
  finishEnvironmentRemoval():void{this.removalUnlock?.();this.removalUnlock=undefined}
- clearRemovedEnvironment(python:string):void{if(belongsToEnvironmentDirectory(this.kernelPython,python))this.kernelPython='';this.editor?.refresh()}
+ clearRemovedEnvironment(python:string):void{if(belongsToEnvironmentDirectory(this.kernelPython,python))this.kernelPython='';this.editor?.refresh();this.scheduleImportCheck(true)}
  private guardRemoval():void{if(this.plugin.environmentRemovalActive)throw new Error(this.t('正在卸载运行环境，请稍后重试。'))}
  private clearMarkdown():void{for(const c of this.markdownChildren)this.removeChild(c);this.markdownChildren=[]}
  private requireDesktop():void{if(Platform.isMobile)throw new Error(this.t('手机端只读，Python 与编辑功能仅在电脑端提供。'))}
@@ -150,7 +175,7 @@ export class NotebookView extends FileView{
  private async openDependencyManager(query?:string):Promise<void>{
   this.requireDesktop();this.guardRemoval();const root=this.plugin.vaultRoot();if(!root)throw new Error(this.t('Notebook 运行需要桌面端本地文件系统。'));
   const {showDependencies}=await import('./dependency-modal');
-  await showDependencies(this.app,{...this.plugin.getEnvironmentPickerOptions(),vaultRoot:root,configDir:this.app.vault.configDir,deviceId:this.plugin.deviceId,currentPython:this.kernelPython,translate:this.t,chooseManaged:()=>this.chooseEnvironment()},query);
+  try{await showDependencies(this.app,{...this.plugin.getEnvironmentPickerOptions(),vaultRoot:root,configDir:this.app.vault.configDir,deviceId:this.plugin.deviceId,currentPython:this.kernelPython,translate:this.t,chooseManaged:()=>this.chooseEnvironment()},query)}finally{this.scheduleImportCheck(true)}
  }
  private async runAll():Promise<void>{
   this.requireDesktop();
@@ -200,7 +225,7 @@ export class NotebookView extends FileView{
     const previous=this.plugin.settings;
     this.plugin.settings={...previous,kernelPython:environment.python,...(useAsBridge?{bridgePython:environment.python}:{})};
     try{await this.plugin.saveSettings()}catch(error){this.plugin.settings=previous;throw error}
-    this.kernelPython=environment.python;this.editor?.refresh();return true;
+    this.kernelPython=environment.python;this.editor?.refresh();this.scheduleImportCheck(true);return true;
    }finally{unlock?.()}
   };
   await EnvironmentPicker.show(this.app,this.kernelPython,this.projectDir(),environment=>apply(environment),{
@@ -210,7 +235,7 @@ export class NotebookView extends FileView{
  async onUnloadFile(_file:TFile):Promise<void>{await this.dispose()}
  async onClose():Promise<void>{await this.dispose()}
  private async dispose():Promise<void>{
-  if(this.disposed)return;this.disposed=true;this.stopAll=true;
+  if(this.disposed)return;this.disposed=true;this.stopAll=true;clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;
   const starting=this.starting;
   try{
    try{await this.kernel?.close();if(starting)await starting.catch(()=>{})}

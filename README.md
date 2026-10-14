@@ -2,7 +2,7 @@
 title: Obsidian Jupyter Notebook 使用与开发说明
 created: 2026-10-13
 updated: 2026-10-14
-version: "0.6.3"
+version: "0.6.4"
 status: readyForReview
 scope:
   - obsidian-ipynb
@@ -31,10 +31,10 @@ scope:
 
 ## 安装
 
-安装包位于工作区 `../assets/releases/obsidian-ipynb-v0.6.3.zip`。
+安装包位于工作区 `../assets/releases/obsidian-ipynb-v0.6.4.zip`。
 
 1. 解压，将包中的 `obsidian-ipynb` 文件夹放到仓库 `.obsidian/plugins/` 下。
-2. 确认该文件夹中有 `main.js`、`manifest.json`、`styles.css`、`kernel_bridge.py` 四个文件。
+2. 确认该文件夹中有 `main.js`、`manifest.json`、`styles.css`、`kernel_bridge.py`、`import_check.py` 五个文件。
 3. 重载 Obsidian，在「设置 → 第三方插件」中启用 **Obsidian Jupyter Notebook**。
 4. 打开 `.ipynb`，点击顶部 Python 按钮选择本机环境，或点击「创建并安装仓库环境」。
    若启用其他直接打开 `.ipynb` 的查看插件（如 Jupyter Notebook Viewer），先停用该查看插件，避免文件类型注册冲突。
@@ -142,3 +142,11 @@ status: 学习中
 启用 Dataview 后，可用 `TABLE title, status FROM #Python` 查询 Notebook。属性以已保存文件为准；修改后保存会更新索引。插件仅在内存适配 Dataview，不修改 Obsidian 核心 Properties 面板。Dataview 接口存在版本兼容限制，不支持时安全退化。
 
 文件保持标准 nbformat；导出到 Jupyter/VS Code 时 YAML 是普通 Markdown，不影响 Python 执行。Dataview 查询需 Obsidian 与 Dataview 插件，在其他工具中仅显示其 Markdown 源码。
+
+## 编辑时 import 依赖检测（0.6.4）
+
+代码编辑停顿后，插件静态识别当前单元格的 `import` 和 `from … import …`，检查当前选中的Python解释器。检查不会执行Notebook代码、导入用户模块或启动Jupyter内核。
+
+缺失模块在对应代码块内提示，可打开依赖管理窗口选择发行包安装。安装仅作用于本设备仓库环境；若当前选择外部环境，需要切换至仓库环境才能使用新安装的包。安装窗口关闭或切换解释器后会重新检查，也可手动重新检测。
+
+标准库、本地模块、相对导入与可选导入避免直接误报缺库。未完成的Python语法暂不下结论。静态检测只判断根模块可发现性，无法保证其内部依赖完整；动态导入及运行时加载仍以实际执行后的缺库提醒为准。手机不启动依赖检测。

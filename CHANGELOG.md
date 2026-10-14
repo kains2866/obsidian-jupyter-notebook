@@ -2,13 +2,20 @@
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
 updated: 2026-10-14
-version: "0.6.3"
+version: "0.6.4"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.6.4] - 2026-10-14
+
+- 编辑停顿后静态识别import/from与alias、多行等语法，检查当前运行Python环境，不执行用户导入、不启动内核。
+- 代码块内显示依赖状态，缺库可跳转安装与重新检测；切换环境、依赖窗口关闭后刷新结果。
+- 标准库、本地模块、相对与可选导入、不完整语法避免误报；关闭和快速编辑取消旧检测，手机不探测。
+
 
 ## 0.6.3
 

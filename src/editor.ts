@@ -31,9 +31,15 @@ export interface EditorActions {
  sanitize(html:string):DocumentFragment;
  markdown(text:string,parent:HTMLElement):Promise<void>;
  clearMarkdown?():void;
+ notebookChanged?():void;
+ retryImports?():void;
+ installImport?(module:string):Promise<void>;
+ externalKernel?():boolean;
 }
+export interface ImportStatus {modules:string[];missing:string[];optional?:string[];syntaxError?:boolean;state?:'checking'|'no-environment'|'error'}
 export interface EditorSnapshot {preview:boolean[];selections:({ranges:{anchor:number;head:number}[];main:number}|undefined)[];focused:number}
 export class NotebookEditor {
+ private importStatuses:ImportStatus[]=[];
  private editors:EditorView[]=[];
  private cellNodes:HTMLElement[]=[];
  private toolbar!:HTMLElement;private message!:HTMLElement;private list!:HTMLElement;
@@ -153,6 +159,7 @@ export class NotebookEditor {
      EditorView.theme({'&':{fontSize:'13px'},'.cm-content':{fontFamily:'var(--font-monospace)',caretColor:'var(--caret-color, var(--text-normal))'},'.cm-cursor':{borderLeftColor:'var(--caret-color, var(--text-normal))'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'var(--text-selection)'},'.cm-content ::selection':{backgroundColor:'var(--text-selection)'},'.cm-scroller':{overflow:'auto'},'.cm-gutters':{backgroundColor:'var(--background-secondary)',border:'none'}}),
     ]})});this.editors[index]=editor;
    }
+   if(cell.cell_type==='code'&&!this.actions.readOnly)this.el('div','ipynb-import-status',body);
    this.el('div','ipynb-output',body);
   });
   if(!this.actions.readOnly)this.insertionGap(this.session.notebook.cells.length);
@@ -199,7 +206,18 @@ export class NotebookEditor {
  private dragEnd=()=>{const drag=this.dragging;if(!drag)return;const {from,to}=drag;this.cancelDrag();if(from!==to)void this.perform(()=>this.structure(()=>moveCell(this.session.notebook,from,to)))};
  private cancelDrag():void{if(this.dragging){cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}document.removeEventListener('pointermove',this.dragMove);document.removeEventListener('pointerup',this.dragEnd);document.removeEventListener('pointercancel',this.dragCancel);document.removeEventListener('keydown',this.dragKey)}
  focusCell(index:number):void{this.editors[Math.min(index,this.session.notebook.cells.length-1)]?.focus()}
+ setImportStatuses(statuses:ImportStatus[]):void{this.importStatuses=statuses;this.renderImportStatuses()}
+ private renderImportStatuses():void{
+  let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const status=this.importStatuses[codeIndex++];const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-import-status');if(!host)return;host.replaceChildren();if(!status||(!status.modules.length&&!status.state&&!status.syntaxError&&!status.optional?.length))return;host.setAttribute('aria-live','polite');
+   const text=status.state==='no-environment'?'选择环境后检查依赖':status.state==='checking'?'正在检查依赖…':status.state==='error'?'依赖检查失败，请重试':status.syntaxError?'代码尚未完整，暂不检查依赖':status.missing.length?this.t('缺少模块：{module}',{module:status.missing.join(', ')}):'依赖就绪';this.el('span','ipynb-import-label',host).textContent=this.t(text);host.classList.toggle('is-missing',!!status.missing.length);
+   for(const module of status.missing)this.button(host,this.t('查找并安装依赖')+' · '+module,()=>this.actions.installImport?.(module)??Promise.resolve());
+   if(status.missing.length&&this.actions.externalKernel?.())this.el('span','ipynb-import-external',host).textContent=this.t('当前使用外部环境。依赖只安装到仓库环境，安装后需切换环境。');
+   if(status.state==='error'||status.missing.length)this.button(host,'重新检查',()=>{this.actions.retryImports?.()});
+   if(status.optional?.length)this.el('span','ipynb-import-optional',host).textContent=this.t('可选模块未安装：{modules}',{modules:status.optional.join(', ')});
+  });
+ }
  refresh():void{
+  this.actions.notebookChanged?.();this.renderImportStatuses();
   this.status.textContent=`${(this.session.running||this.session.busy)?this.t('运行中')+' · ':''}${this.t(this.session.dirty?'未保存':'已保存')}`;if(this.session.outputWarning!==this.lastOutputWarning){this.lastOutputWarning=this.session.outputWarning;if(this.lastOutputWarning)this.showMessage(this.t(this.lastOutputWarning))};
   if(this.environmentLabel){this.environmentLabel.textContent=this.actions.environment();this.environmentLabel.setAttribute('aria-label',this.actions.environment());this.environmentLabel.title=this.actions.environment();}
   if(this.session.running||this.session.busy)this.cancelDrag();

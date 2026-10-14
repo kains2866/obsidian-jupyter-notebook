@@ -65,7 +65,10 @@ export class NotebookView extends FileView{
    const adapter=this.app.vault.adapter;if(!(adapter instanceof FileSystemAdapter))throw new Error('Local filesystem required');
    const {checkNotebookImports}=await import('./import-check');
    if(controller.signal.aborted)return;
-   const result=await checkNotebookImports(this.kernelPython,adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}/import_check.py`),this.projectDir()??'',cells,controller.signal);
+   const {ensurePythonScripts}=await import('./script-assets');
+   const {checker}=await ensurePythonScripts(adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`));
+   if(controller.signal.aborted)return;
+   const result=await checkNotebookImports(this.kernelPython,checker,this.projectDir()??'',cells,controller.signal);
    if(!this.disposed&&generation===this.importGeneration)this.editor?.setImportStatuses?.(result.cells);
   }catch(error){if(!this.disposed&&generation===this.importGeneration&&!controller.signal.aborted){console.error('[Obsidian Jupyter Notebook] Import check failed',this.kernelPython,error);this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'error'})))}}
   finally{if(this.importController===controller)this.importController=undefined}
@@ -144,7 +147,8 @@ export class NotebookView extends FileView{
    let client:KernelClient|undefined;
    try{
     const {KernelClient}=await import('./kernel');
-    const bridge=adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}/kernel_bridge.py`);
+    const {ensurePythonScripts}=await import('./script-assets');
+    const {bridge}=await ensurePythonScripts(adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`));
     this.kernelBridgePython=this.plugin.settings.bridgePython;
     client=new KernelClient(this.kernelBridgePython,this.kernelPython,bridge,this.projectDir());
     await client.start();if(this.disposed){await client.close();throw new Error(this.t('Notebook 已关闭。'))}

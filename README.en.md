@@ -1,13 +1,12 @@
 <div align="center">
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — native notebooks, local Python, one workspace" width="100%" />
-  <h1>Obsidian Jupyter Notebook</h1>
+  <h1>Jupyter Notebook</h1>
   <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
   <p>
-    <a href="release-archives/v0.6.4/"><img src="https://img.shields.io/badge/version-0.6.4-8B5CF6?style=flat-square" alt="Version 0.6.4" /></a>
+    <a href="release-archives/v0.6.5/"><img src="https://img.shields.io/badge/version-0.6.5-8B5CF6?style=flat-square" alt="Version 0.6.5" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.5%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.5 or later" /></a>
     <a href="#yaml-properties-and-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="Desktop editing and execution" /></a>
-    <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Mobile-view%20only-64748B?style=flat-square" alt="Mobile viewing only" /></a>
     <a href="https://buymeacoffee.com/kains3772d"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=flat-square&amp;logo=buymeacoffee&amp;logoColor=000000" alt="Buy Me a Coffee" /></a>
     <a href="https://ifdian.net/a/kains2866"><img src="https://img.shields.io/badge/Aifadian-support-946CE6?style=flat-square" alt="Support on Aifadian" /></a>
   </p>
@@ -19,7 +18,7 @@
 
 Create, edit, and run Jupyter Notebooks natively in Obsidian.
 
-**Obsidian Jupyter Notebook** provides a dedicated cell editor for `.ipynb` files, bringing Markdown, Python code, and execution results into one workspace. Notebooks retain their standard file format: no conversion to Markdown or Markdown mirror files is required.
+**Jupyter Notebook** provides a dedicated cell editor for `.ipynb` files, bringing Markdown, Python code, and execution results into one workspace. Notebooks retain their standard file format: no conversion to Markdown or Markdown mirror files is required.
 
 ## Documentation
 
@@ -42,7 +41,7 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 | --- | --- |
 | View, edit, and save Notebooks on desktop | Supported |
 | Run Python locally on desktop | Supported |
-| View code, Markdown, and saved outputs on mobile | Supported; editing, environment installation, and Python execution are unavailable |
+| Mobile | The 0.6.5 store edition is desktop-only; mobile viewing belongs to earlier versions |
 | Cloud-synced vaults | Files must be accessible locally; each computer uses its own environment |
 | Remote Jupyter servers | Not currently supported |
 
@@ -50,22 +49,24 @@ Standalone Python installation has been verified on **macOS Apple Silicon**. Win
 
 ## Installation
 
+Version 0.6.5 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
+
 The plugin currently uses manual installation.
 
-1. Download an [installation package](release-archives/). The archive directory includes a `SHA256SUMS` file for verification.
-2. Extract the archive and place the `obsidian-ipynb` folder in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
-3. Confirm that the plugin directory contains these five files:
+1. Download and extract the ZIP from the [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5), or download the individual `main.js`, `manifest.json`, and `styles.css` assets.
+
+   [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
+2. Create a `jupyter-notebook` folder containing the three 0.6.5 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
+3. Confirm that the plugin directory contains these three files:
 
    ```text
-   obsidian-ipynb/
+   jupyter-notebook/
    ├── main.js
    ├── manifest.json
-   ├── styles.css
-   ├── kernel_bridge.py
-   └── import_check.py
+   └── styles.css
    ```
 
-4. Reload Obsidian and enable **Obsidian Jupyter Notebook** under **Settings → Community plugins**.
+4. Reload Obsidian and enable **Jupyter Notebook** under **Settings → Community plugins**.
 5. Open or create an `.ipynb` file, then click the Python button in the top toolbar to select an execution environment.
 
 If `.ipynb` files do not appear in the file explorer, enable **Settings → Files and links → Detect all file extensions**. Other plugins that register an `.ipynb` view may conflict with this plugin; enable only one Notebook viewer or editor at a time.
@@ -222,7 +223,7 @@ npm run build
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-Build outputs are written to `dist/`, including the five files required for installation.
+Build outputs are written to `dist/`, including the three standard files required for store installation (the optional standalone Python helper copies are also built).
 
 On Windows, Python unit tests can use `.venv\Scripts\python.exe`. Some Node kernel and integration tests still use Unix paths and require adaptation before running.
 

@@ -1,3 +1,4 @@
+vi.mock('../src/script-assets',()=>({ensurePythonScripts:async(directory:string)=>({bridge:directory+'/kernel_bridge.py',checker:directory+'/import_check.py'})}));
 import {describe,it,expect,vi} from 'vitest';
 vi.mock('../src/editor',()=>({NotebookEditor:class{actions:any;constructor(_root:any,_session:any,actions:any){this.actions=actions}destroy(){}refresh(){}showMessage(){}perform(action:()=>unknown){return action()}}}));
 const kernelMock=vi.hoisted(()=>({start:vi.fn(async()=>{}),close:vi.fn(async()=>{}),execute:vi.fn(async()=>({status:'ok',execution_count:1})),interrupt:vi.fn(async()=>{}),restart:vi.fn(async()=>{})}));

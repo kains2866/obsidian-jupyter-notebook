@@ -9,10 +9,10 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   if (error.code !== 'ENOENT') throw error;
  }
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'native-notebook-obsidian-'));const vault=path.join(root,'vault'),profile=path.join(root,'profile');
- const plugin=path.join(vault,'.obsidian/plugins/obsidian-ipynb');await fs.mkdir(plugin,{recursive:true});await fs.mkdir(profile);
- for(const name of ['main.js','manifest.json','styles.css','kernel_bridge.py'])await fs.copyFile(path.join('dist',name),path.join(plugin,name));
+ const plugin=path.join(vault,'.obsidian/plugins/jupyter-notebook');await fs.mkdir(plugin,{recursive:true});await fs.mkdir(profile);
+ for(const name of ['main.js','manifest.json','styles.css'])await fs.copyFile(path.join('dist',name),path.join(plugin,name));
  const python=path.resolve('.venv/bin/python');await fs.writeFile(path.join(plugin,'data.json'),JSON.stringify({bridgePython:python,kernelPython:python}));
- await fs.writeFile(path.join(vault,'.obsidian/community-plugins.json'),JSON.stringify(['obsidian-ipynb']));await fs.writeFile(path.join(vault,'.obsidian/app.json'),JSON.stringify({showUnsupportedFiles:true}));
+ await fs.writeFile(path.join(vault,'.obsidian/community-plugins.json'),JSON.stringify(['jupyter-notebook']));await fs.writeFile(path.join(vault,'.obsidian/app.json'),JSON.stringify({showUnsupportedFiles:true}));
  await fs.writeFile(path.join(profile,'obsidian.json'),JSON.stringify({vaults:{testnotebook:{path:vault,ts:Date.now(),open:true}}}));
  await fs.writeFile(path.join(vault,'测试.ipynb'),JSON.stringify({nbformat:4,nbformat_minor:5,metadata:{},cells:[{id:'intro',cell_type:'markdown',source:'# Notebook',metadata:{}},{id:'one',cell_type:'code',source:'print("Obsidian 中运行成功")',metadata:{},outputs:[],execution_count:null}]}));
  console.log('Sandbox:',root);
@@ -31,7 +31,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
  await page.waitForLoadState('domcontentloaded');
  await page.waitForFunction(()=>window.app?.vault?.getAbstractFileByPath('测试.ipynb'),{timeout:30000});
  const trust=page.getByRole('button',{name:'Trust author and enable plugins',exact:true});if(await trust.isVisible())await trust.click();
- await page.waitForFunction(()=>window.app?.plugins?.plugins?.['obsidian-ipynb'],{timeout:30000});
+ await page.waitForFunction(()=>window.app?.plugins?.plugins?.['jupyter-notebook'],{timeout:30000});
  await page.evaluate(async()=>{const file=window.app.vault.getAbstractFileByPath('测试.ipynb');await window.app.workspace.getLeaf('tab').openFile(file)});
  assert.equal(await page.locator('.ipynb-cell').first().locator('.cm-editor').count(),0);
  await page.locator('.ipynb-markdown-preview').first().dblclick();
@@ -66,7 +66,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
  await page.locator('.ipynb-toolbar > details > summary').click();
  await page.getByRole('button',{name:'另存副本',exact:true}).click();
  assert.ok((await fs.readdir(vault)).some(name=>name.includes('副本')&&name.endsWith('.ipynb')));
- await page.screenshot({path:process.env.IPYNB_OBSIDIAN_SCREENSHOT||'/tmp/obsidian-ipynb-live.png',fullPage:true});console.log('PASS 独立 Obsidian：加载、编辑、真实运行、HTML表格与脚本过滤、Markdown单元格、保存、冲突保护与副本');
+ await page.screenshot({path:process.env.IPYNB_OBSIDIAN_SCREENSHOT||'/tmp/jupyter-notebook-live.png',fullPage:true});console.log('PASS 独立 Obsidian：加载、编辑、真实运行、HTML表格与脚本过滤、Markdown单元格、保存、冲突保护与副本');
  }catch(error){const pages=browser?.contexts()[0]?.pages()??[];for(const p of pages)console.log((await p.locator('body').innerText()).slice(0,3500));throw error}
  finally{await browser?.close();child.kill('SIGTERM')}
 })().catch(e=>{console.error(e);process.exitCode=1});

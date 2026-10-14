@@ -1,0 +1,14 @@
+{
+  "id": "jupyter-notebook",
+  "name": "Jupyter Notebook",
+  "version": "0.6.5",
+  "minAppVersion": "1.5.0",
+  "description": "Edit and run native Jupyter notebooks with local Python environments, dependency checks, Markdown previews, and saved outputs.",
+  "author": "Kains",
+  "authorUrl": "https://github.com/kains2866",
+  "fundingUrl": {
+    "Buy Me a Coffee": "https://buymeacoffee.com/kains3772d",
+    "Aifadian": "https://ifdian.net/a/kains2866"
+  },
+  "isDesktopOnly": true
+}

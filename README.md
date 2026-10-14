@@ -1,13 +1,12 @@
 <div align="center">
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — 原生 Notebook、本机 Python、统一工作区" width="100%" />
-  <h1>Obsidian Jupyter Notebook</h1>
+  <h1>Jupyter Notebook</h1>
   <p><strong>在你的知识库里，编写笔记、运行代码、保留结果。</strong></p>
   <p>
-    <a href="release-archives/v0.6.4/"><img src="https://img.shields.io/badge/version-0.6.4-8B5CF6?style=flat-square" alt="版本 0.6.4" /></a>
+    <a href="release-archives/v0.6.5/"><img src="https://img.shields.io/badge/version-0.6.5-8B5CF6?style=flat-square" alt="版本 0.6.5" /></a>
     <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.5%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.5 及以上" /></a>
     <a href="#yaml-属性与-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#平台与运行方式"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="桌面端编辑与运行" /></a>
-    <a href="#平台与运行方式"><img src="https://img.shields.io/badge/Mobile-view%20only-64748B?style=flat-square" alt="手机端仅查看" /></a>
     <a href="https://buymeacoffee.com/kains3772d"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=flat-square&amp;logo=buymeacoffee&amp;logoColor=000000" alt="Buy Me a Coffee" /></a>
     <a href="https://ifdian.net/a/kains2866"><img src="https://img.shields.io/badge/Aifadian-support-946CE6?style=flat-square" alt="爱发电支持作者" /></a>
   </p>
@@ -19,7 +18,7 @@
 
 在 Obsidian 中原生创建、编辑和运行 Jupyter Notebook。
 
-**Obsidian Jupyter Notebook** 为 `.ipynb` 文件提供独立的单元格编辑视图，将 Markdown、Python 代码及运行结果整合在同一工作区中。Notebook 保持标准文件格式，无需转换为 Markdown，也不会生成 Markdown 镜像。
+**Jupyter Notebook** 为 `.ipynb` 文件提供独立的单元格编辑视图，将 Markdown、Python 代码及运行结果整合在同一工作区中。Notebook 保持标准文件格式，无需转换为 Markdown，也不会生成 Markdown 镜像。
 
 ## 文档导航
 
@@ -42,7 +41,7 @@
 | --- | --- |
 | 桌面端查看、编辑和保存 Notebook | 支持 |
 | 桌面端本机 Python 执行 | 支持 |
-| 手机端查看代码、Markdown 和已有输出 | 支持；不提供编辑、环境安装或 Python 执行 |
+| 手机端 | 0.6.5 商店版为桌面专用；手机只读仅为旧版能力 |
 | 云同步仓库 | 文件须在本机可访问；每台电脑使用独立环境 |
 | 远程 Jupyter 服务 | 暂不支持 |
 
@@ -50,22 +49,24 @@
 
 ## 安装
 
+0.6.5 为桌面专用发行版，正在准备商店上架。插件名称改为 **Jupyter Notebook**，ID 为 `jupyter-notebook`。升级前备份旧目录 `obsidian-ipynb`，停用旧插件后安装新插件；如需保留设置，可在 Obsidian 关闭时将旧目录的 `data.json` 复制到新目录。不要同时启用两个版本；不删除 `.obsidian/ipynb-envs/` 或 `.obsidian/ipynb-runtimes/`，然后重新选择并验证本机环境。标准安装只需三个文件，Python 脚本已内嵌并按需恢复。
+
 目前采用手动安装方式。
 
-1. 下载 [安装包](release-archives)。归档目录提供 `SHA256SUMS` 校验文件。
-2. 解压，将 `obsidian-ipynb` 文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
-3. 确认插件目录包含以下五个文件：
+1. 下载 [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5) 中的 ZIP 并解压，或下载独立 `main.js`、`manifest.json` 和 `styles.css`。
+
+   [历史安装包](release-archives) 仍使用旧 `obsidian-ipynb/` 目录及原清单，必须保留包内全部五个文件；不要按下方新版三文件步骤安装旧包。
+2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.5 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
+3. 确认插件目录包含以下三个文件：
 
    ```text
-   obsidian-ipynb/
+   jupyter-notebook/
    ├── main.js
    ├── manifest.json
-   ├── styles.css
-   ├── kernel_bridge.py
-   └── import_check.py
+   └── styles.css
    ```
 
-4. 重载 Obsidian，在 **设置 → 第三方插件** 中启用 **Obsidian Jupyter Notebook**。
+4. 重载 Obsidian，在 **设置 → 第三方插件** 中启用 **Jupyter Notebook**。
 5. 打开或创建一个 `.ipynb` 文件，点击顶部 Python 按钮选择运行环境。
 
 如果文件列表不显示 `.ipynb`，请开启 **设置 → 文件与链接 → 检测所有文件扩展名**。其他插件若也注册了 `.ipynb` 文件视图，可能产生冲突，建议仅启用一个 Notebook 查看或编辑插件。
@@ -222,7 +223,7 @@ npm run build
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-构建产物位于 `dist/`，包含安装所需的五个文件。
+构建产物位于 `dist/`，包含安装所需的三个标准文件。
 
 Windows 的 Python 单元测试可使用 `.venv\Scripts\python.exe`；部分 Node 内核与集成测试仍使用 Unix 路径，需要适配后运行。
 

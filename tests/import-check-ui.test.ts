@@ -1,3 +1,4 @@
+vi.mock('../src/script-assets',()=>({ensurePythonScripts:async(directory:string)=>({bridge:directory+'/kernel_bridge.py',checker:directory+'/import_check.py'})}));
 import {describe,it,expect,vi,afterEach} from 'vitest';
 const checker=vi.hoisted(()=>vi.fn(async(..._args:unknown[])=>({cells:[{modules:['numpy'],missing:['numpy']}]})));
 vi.mock('../src/import-check',()=>({checkNotebookImports:checker}));

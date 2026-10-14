@@ -2,13 +2,19 @@
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
 updated: 2026-10-14
-version: "0.6.4"
+version: "0.6.5"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.6.5] - 2026-10-14
+
+- 准备商店标准三文件安装；Python 桥接与依赖检测脚本内嵌并按需恢复。
+- 根目录清单作为构建来源，统一 Jupyter Notebook 名称、jupyter-notebook ID、作者和赞助链接。
+- 添加 MIT 与版本兼容记录；商店版设为桌面专用，附旧 ID 迁移说明。
 
 ## [0.6.4] - 2026-10-14
 

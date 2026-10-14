@@ -1,0 +1,15 @@
+export const outputTranslations:Record<string,string>={
+ '正在卸载运行环境，请稍后重试。':'A kernel environment is being removed. Please try again shortly.',
+ '中断':'Interrupt','重启内核':'Restart kernel','更多操作':'More actions','另存副本':'Save a copy','重新加载':'Reload','撤销':'Undo','重做':'Redo','关闭错误':'Dismiss error','查看详细日志':'View diagnostic log','空 Notebook · 添加一个代码单元格开始。':'Empty notebook · Add a code cell to begin.',
+ '运行单元格':'Run cell','拖动单元格':'Drag cell','编辑':'Edit','预览':'Preview','上移':'Move up','下移':'Move down','单元格操作':'Cell actions','在下方插入':'Insert below','删除':'Delete','单元格类型':'Cell type','代码':'Code','添加代码':'Add code','添加 Markdown':'Add Markdown','Markdown 预览':'Markdown preview','Markdown 预览，按 Enter 编辑':'Markdown preview, press Enter to edit',
+ '清除全部输出':'Clear all outputs','清除单元格输出':'Clear cell outputs','清除输出':'Clear outputs','清除输出并释放撤销历史，操作无法撤销。':'Clear outputs and release undo history? This cannot be undone.','清除全部输出？此操作可以撤销。':'Clear all outputs? You can undo this operation.',
+ '展开输出':'Expand output','收起输出':'Collapse output','Notebook 输出图像':'Notebook output image',
+ '输出超过配额，当前输出仍保留。':'Output exceeds the storage budget. All current output is retained.',
+ '输出超过配额，已停止保留后续输出并请求中断。':'Output exceeds the storage budget. Further output is not retained; interruption was requested.',
+ '输出超过配额，已按设置移除旧输出。':'Output exceeds the storage budget. Older output was removed according to your settings.',
+ '运行时不能清除输出。':'Outputs cannot be cleared during execution.','运行时不能调整单元格结构。':'Cell structure cannot change during execution.','运行时不能撤销。':'Undo is unavailable during execution.','运行时不能重做。':'Redo is unavailable during execution.',
+ 'Python 环境尚未就绪':'Python environment is not ready','桥接环境缺少运行依赖。请在插件设置中选择已配置的桥接 Python。':'The bridge environment is missing dependencies. Choose a configured bridge Python in plugin settings.',
+ '所选运行环境尚未就绪':'Selected kernel is not ready','该环境需要 ipykernel。请安装后重试，或选择已配置的 Python 环境。':'This environment requires ipykernel. Install it or choose a configured Python environment.',
+ '文件已在其他程序中修改':'File changed in another application','当前编辑已保留。请另存副本，或重新加载文件。':'Your edits are preserved. Save a copy or reload the file.','内核正在运行':'Kernel is running','请等待当前单元格结束，或使用顶部的中断按钮。':'Wait for execution to finish or use Interrupt in the toolbar.','操作未完成':'Action did not complete','请检查所选 Python 环境，展开详情查看具体原因。':'Check the selected Python environment and expand the diagnostic log.',
+ 'Notebook JSON 格式错误，原文件未修改。':'Invalid notebook JSON. The original file is unchanged.','只支持合法的 nbformat 4 Notebook。':'Only valid nbformat 4 notebooks are supported.','Notebook 单元格格式错误。':'Invalid notebook cell format.','代码单元格输出或执行计数格式错误。':'Invalid code cell outputs or execution count.','单元格位置无效。':'Invalid cell position.','插入位置无效。':'Invalid insertion position.','文件已被外部程序修改。请另存副本或重新加载，当前编辑已保留。':'The file changed externally. Save a copy or reload; your edits are preserved.',
+};

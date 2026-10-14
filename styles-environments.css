@@ -1,0 +1,44 @@
+.ipynb-environment-modal,.ipynb-dependency-modal{width:min(760px,92vw)}
+.ipynb-environment-toolbar,.ipynb-dependency-tabs{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:12px 0}
+.ipynb-kernel-list,.ipynb-package-list{display:flex;flex-direction:column;gap:0;margin:8px 0;border:1px solid var(--background-modifier-border);border-radius:var(--radius-m);overflow:hidden}
+.ipynb-kernel-row{display:grid;grid-template-columns:minmax(0,1fr) auto 22px;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--background-modifier-border)}
+.ipynb-kernel-row:last-child,.ipynb-package-row:last-child{border-bottom:0}
+.ipynb-kernel-owned{background:var(--background-secondary)}
+.ipynb-kernel-info,.ipynb-package-info{display:flex;flex-direction:column;gap:4px;min-width:0}
+.ipynb-kernel-info strong,.ipynb-package-info strong{font-size:var(--font-ui-medium);font-weight:var(--font-semibold)}
+.ipynb-kernel-info small,.ipynb-package-info small,.ipynb-environment-description{color:var(--text-muted);font-size:var(--font-ui-small);overflow-wrap:anywhere;line-height:1.5}
+.ipynb-kernel-version{font-size:var(--font-ui-small);color:var(--text-muted)}
+.ipynb-kernel-actions{display:flex;gap:8px}
+.ipynb-kernel-radio{grid-column:3;margin:0;cursor:pointer;accent-color:var(--interactive-accent)}
+.ipynb-kernel-radio:disabled{cursor:default}
+.ipynb-kernel-radio:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:3px}
+.ipynb-kernel-badge{color:var(--text-accent);font-size:var(--font-ui-small)}
+.ipynb-environment-warning{color:var(--text-warning);font-size:var(--font-ui-small)}
+.ipynb-environment-status{font-size:var(--font-ui-small);overflow-wrap:anywhere;line-height:1.5;margin:12px 0}
+.ipynb-operation-log{font-size:var(--font-ui-small);color:var(--text-muted);margin-top:8px}
+.ipynb-operation-log pre{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--font-ui-smaller)}
+.ipynb-dependency-tabs{justify-content:flex-start}
+.ipynb-dependency-tabs button[aria-selected=true]{background:var(--interactive-accent);color:var(--text-on-accent)}
+.ipynb-dependency-search input{width:100%}
+.ipynb-package-list:empty{border:0}
+.ipynb-package-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--background-modifier-border)}
+.ipynb-package-info a{font-size:var(--font-ui-small)}
+/* Remove settings-row spacing inside compact native controls, including theme overrides. */
+.modal-container .ipynb-environment-modal .ipynb-environment-toolbar .setting-item,
+.modal-container .ipynb-environment-modal .ipynb-kernel-row .setting-item,
+.modal-container .ipynb-dependency-modal .ipynb-dependency-tabs .setting-item,
+.modal-container .ipynb-dependency-modal .ipynb-package-row .setting-item{padding:0!important;border:0!important;min-height:0!important;min-block-size:0!important;block-size:auto!important;gap:0}
+.ipynb-environment-toolbar .setting-item-info,.ipynb-kernel-row .setting-item-info,.ipynb-dependency-tabs .setting-item-info,.ipynb-package-row .setting-item-info{display:none}
+.ipynb-environment-toolbar .setting-item-control,.ipynb-kernel-row .setting-item-control,.ipynb-dependency-tabs .setting-item-control,.ipynb-package-row .setting-item-control{padding:0;min-height:0;gap:8px}
+.ipynb-environment-toolbar .setting-item-control{justify-content:flex-end}
+.modal-container .ipynb-dependency-modal .ipynb-dependency-search .setting-item{padding:4px 0;border:0}
+.ipynb-dependency-search .setting-item-info{display:none}
+.ipynb-dependency-search .setting-item-control{width:100%;display:flex;gap:8px}
+.ipynb-dependency-search .setting-item-control input{flex:1;min-width:0}
+@media(max-width:560px){.ipynb-kernel-row{gap:8px;padding:10px;grid-template-columns:minmax(0,1fr) auto 20px}.ipynb-kernel-actions{flex-wrap:wrap;max-width:80px;justify-content:flex-end}.ipynb-package-row{padding:10px}.ipynb-environment-toolbar{flex-wrap:wrap}.ipynb-kernel-info strong,.ipynb-package-info strong{font-size:var(--font-ui-small)}}
+.ipynb-dependency-progress{display:block;width:100%;height:6px;margin:8px 0 12px;accent-color:var(--interactive-accent)}
+.ipynb-dependency-progress[hidden]{display:none}
+.ipynb-dependency-progress::-webkit-progress-bar{background:var(--background-modifier-border);border-radius:var(--radius-s)}
+.ipynb-dependency-progress::-webkit-progress-value{background:var(--interactive-accent);border-radius:var(--radius-s)}
+.ipynb-dependency-cancel[hidden]{display:none}
+.ipynb-package-row .setting-item-control{flex-wrap:wrap;justify-content:flex-end;max-width:180px}

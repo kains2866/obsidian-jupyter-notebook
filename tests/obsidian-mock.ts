@@ -9,3 +9,7 @@ export class Component{}
 export const MarkdownRenderer={render:async()=>{}};
 export function sanitizeHTMLToDom():any{return {}}
 export const Platform={isMobile:false,isDesktopApp:true};
+
+export class TFolder{path:string;constructor(path=''){this.path=path}}
+export class TFile{path:string;parent:TFolder|null;constructor(path='',parent:TFolder|null=null){this.path=path;this.parent=parent}}
+export function normalizePath(path:string){return path.replace(/\\/g,'/').replace(/\/+/g,'/').replace(/^\//,'').replace(/\/$/,'')}

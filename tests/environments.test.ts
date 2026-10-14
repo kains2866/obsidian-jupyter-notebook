@@ -43,3 +43,13 @@ it('仓库专用环境显示用途，不在工具栏显示设备UUID',()=>{
  expect(environmentName('/vault/.obsidian/ipynb-envs/0b4e6252-11ae-437d-9210-68e89a970e42/bin/python')).toBe('Python · 仓库环境');
  expect(environmentName('')).toBe('Python · 选择环境');
 });
+import {autoDetectEnvironments} from '../src/environments';
+it('explicit locator uses safe platform commands and validates returned paths',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'ipynb-locator-'));const python=join(root,'python3');
+ try{await writeFile(python,'');const calls:any[]=[];const found=await autoDetectEnvironments(undefined,async(file,args)=>{calls.push([file,args]);return {stdout:python+'\nrelative/python\n',stderr:''}},'darwin');expect(calls).toEqual([['which',['-a','python3']]]);expect(found.some(item=>item.python===python)).toBe(true);expect(found.some(item=>item.python==='relative/python')).toBe(false);
+ const windows:any[]=[];await autoDetectEnvironments(undefined,async(file,args)=>{windows.push([file,args]);return {stdout:'',stderr:''}},'win32');expect(windows).toEqual([['where.exe',['python']]])
+ }finally{await rm(root,{recursive:true,force:true})}
+});
+it('discovers uv interpreters and versioned PATH binaries',async()=>{const root=await mkdtemp(join(tmpdir(),'ipynb-uv-'));try{for(const file of ['.local/share/uv/python/cpython-3.13/bin/python','path/python3.14']){await mkdir(join(root,file,'..'),{recursive:true});await writeFile(join(root,file),'')}const rows=await discoverEnvironments(undefined,root,'darwin',join(root,'path'));expect(rows.some(row=>row.name==='uv: cpython-3.13')).toBe(true);expect(rows.some(row=>row.python.endsWith('python3.14'))).toBe(true)}finally{await rm(root,{recursive:true,force:true})}});
+import {belongsToEnvironmentDirectory} from '../src/environments';
+it('owned-directory matching includes interpreter aliases but not sibling environments',()=>{expect(belongsToEnvironmentDirectory('/vault/env/bin/python3','/vault/env/bin/python')).toBe(true);expect(belongsToEnvironmentDirectory('/vault/env-other/bin/python','/vault/env/bin/python')).toBe(false);expect(belongsToEnvironmentDirectory('C:\\vault\\env\\Scripts\\python3.exe','C:\\vault\\env\\Scripts\\python.exe')).toBe(true)});

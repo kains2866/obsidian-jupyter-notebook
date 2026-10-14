@@ -1,4 +1,4 @@
-import {access,link,lstat,mkdir,readFile,realpath,readdir,stat,unlink,writeFile} from 'node:fs/promises';
+import {access,link,lstat,mkdir,readFile,realpath,readdir,rm,stat,unlink,writeFile} from 'node:fs/promises';
 import {randomUUID} from 'node:crypto';
 import {homedir} from 'node:os';
 import {dirname,isAbsolute,join,relative,resolve,win32} from 'node:path';
@@ -63,9 +63,22 @@ export async function provisionVaultEnvironment(options:VaultEnvironmentOptions,
   const python=environmentPython(directory);
   if(exists){
    await validateOwnership(directory,deviceId,root);
-   try{await access(python)}catch{throw new Error('仓库环境不完整，缺少 Python。请手动检查此设备环境目录后重试；不会删除文件。')}
-   onProgress?.('验证现有仓库环境');
+   let missing=false;try{await access(python)}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;missing=true}
+   if(missing){
+    const original=await lstat(directory);
+    const authorize=async()=>{
+     const entry=await lstat(directory);
+     if(!entry.isDirectory()||entry.isSymbolicLink()||entry.dev!==original.dev||entry.ino!==original.ino||await realpath(directory)!==directory||await realpath(vaultRoot)!==root||await realpath(dirname(requested))!==parent)throw new Error('环境目录路径发生变化；不会修改。');
+     await validateOwnership(directory,deviceId,root);
+     const files=await readdir(directory);
+     if(files.length!==1||files[0]!=='owner.json')throw new Error('仓库环境不完整且包含已有文件；请手动检查，不会覆盖文件。');
+    };
+    await authorize();await validateBasePython(manager,basePython,directory);
+    onProgress?.('创建此设备的仓库虚拟环境');
+    await manager.resumeCreation(basePython,directory,authorize);
+   }else onProgress?.('验证现有仓库环境');
   }else{
+   await validateBasePython(manager,basePython,directory);
    onProgress?.('创建此设备的仓库虚拟环境');
    await manager.create(basePython,directory,async()=>{await writeFile(ownerFile,JSON.stringify({schema:1,deviceId,vaultRoot:root}),{encoding:'utf8',flag:'wx'})});
   }
@@ -79,6 +92,53 @@ export async function provisionVaultEnvironment(options:VaultEnvironmentOptions,
   if(!result.isolated||result.missing.length)throw new Error(`仓库环境验证未通过：${result.missing.join(', ')||'环境未隔离'}`);
   return python;
  }finally{provisioning.delete(directory)}
+}
+
+async function validateBasePython(manager:EnvironmentManager,python:string,directory:string):Promise<void>{
+ const inside=(path:string)=>{const offset=relative(directory,resolve(path));return !offset||(!offset.startsWith(`..${process.platform==='win32'?'\\':'/'}`)&&offset!=='..'&&!isAbsolute(offset))};
+ if(inside(python))throw new Error('基础 Python 不能位于待创建的环境目录内。');
+ const info=await manager.validate(python,[]);
+ for(const candidate of [python,info.executable,...(info.prefix?[info.prefix]:[])]){
+  if(inside(candidate))throw new Error('基础 Python 不能来自待创建的环境目录。');
+  try{if(inside(await realpath(candidate)))throw new Error('基础 Python 不能来自待创建的环境目录。')}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
+ }
+}
+
+/** Explicit, human-confirmed removal only; callers must stop and gate matching kernels first.
+ * Shares the provisioning lock so creation, installation and deletion cannot overlap.
+ */
+export async function removeVaultEnvironment(options:Pick<VaultEnvironmentOptions,'vaultRoot'|'configDir'|'deviceId'>):Promise<void>{
+ const requested=vaultEnvironmentDirectory(options.vaultRoot,options.configDir,options.deviceId);
+ const root=await realpath(options.vaultRoot);
+ let ancestor=dirname(requested);
+ while(true){
+  try{assertInsideVault(root,await realpath(ancestor));break}
+  catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;ancestor=dirname(ancestor)}
+ }
+ const parent=await realpath(dirname(requested));
+ assertInsideVault(root,parent);
+ const directory=join(parent,options.deviceId);
+ if(provisioning.has(directory))throw new Error('此设备仓库环境正在准备或删除，请稍候。');
+ provisioning.add(directory);
+ try{
+  const original=await lstat(directory);
+  if(!original.isDirectory()||original.isSymbolicLink())throw new Error('环境目录不是普通目录；不会删除此目录。');
+  const canonical=await realpath(directory);
+  assertInsideVault(root,canonical);
+  if(canonical!==directory)throw new Error('环境目录路径发生变化；不会删除。');
+  await validateOwnership(canonical,options.deviceId,root);
+  // Recheck canonical ancestors and ownership immediately before removal. Node's
+  // recursive rm removes child symlinks themselves without following their targets.
+  if(await realpath(options.vaultRoot)!==root||await realpath(dirname(requested))!==parent)throw new Error('仓库或环境目录路径发生变化；不会删除。');
+  await validateOwnership(canonical,options.deviceId,root);
+  const current=await lstat(canonical);
+  if(!current.isDirectory()||current.isSymbolicLink()||current.dev!==original.dev||current.ino!==original.ino||await realpath(canonical)!==canonical)throw new Error('环境目录路径发生变化；不会删除。');
+  await rm(canonical,{recursive:true,force:false});
+ }finally{provisioning.delete(directory)}
+}
+function assertInsideVault(root:string,path:string):void{
+ const offset=relative(root,path);
+ if(!offset||offset==='..'||offset.startsWith(`..${process.platform==='win32'?'\\':'/'}`)||isAbsolute(offset))throw new Error('环境目录通过符号链接逃逸仓库。');
 }
 
 async function validateOwnership(directory:string,deviceId:string,root:string):Promise<void>{
@@ -125,4 +185,10 @@ async function validateEnvironmentLocation(directory:string,info:Awaited<ReturnT
   }
  }
  for(const name of ['bin','Scripts','lib','Lib','lib64','include','Include'])await check(join(directory,name));
+}
+
+/** Hold the owned environment operation lock across package mutations. */
+export async function withVaultEnvironmentLease<T>(directory:string,operation:()=>Promise<T>):Promise<T>{
+ const key=resolve(directory);if(provisioning.has(key))throw new Error('此设备仓库环境正在准备或删除，请稍候。');
+ provisioning.add(key);try{return await operation()}finally{provisioning.delete(key)}
 }

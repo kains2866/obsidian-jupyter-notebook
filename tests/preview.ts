@@ -1,3 +1,4 @@
+import {createTranslator} from '../src/i18n';
 import {NotebookEditor} from '../src/editor';import {NotebookSession} from '../src/session';
 import type {Output} from '../src/notebook';
 const root=document.getElementById('app')!;
@@ -6,8 +7,9 @@ const session=new NotebookSession(disk);
 (window as any).simulateConflict=()=>{disk+=' '};
 const post=async(op:string,data:Record<string,unknown>={})=>{const response=await fetch('/kernel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...data})});const r=await response.json();if(!response.ok)throw new Error(r.message);return r};
 const actions:import('../src/editor').EditorActions={
+ translate:createTranslator(new URLSearchParams(location.search).get('lang')==='en'?'en':'zh'),
  save:async()=>{await session.save({read:async()=>disk,write:async text=>{disk=text;(window as any).savedNotebook=JSON.parse(text)}})},
- saveCopy:async()=>{},reload:async()=>{},
+ saveCopy:async()=>{},reload:async()=>{},confirm:async()=>true,
  run:async(index)=>{await session.run(index,{execute:async(code,emit)=>{const result=await post('execute',{code});result.outputs.forEach((o:Output)=>emit(o));return result}})},
  runAll:async()=>{for(let i=0;i<session.notebook.cells.length;i++)await session.run(i,{execute:async(code,emit)=>{const r=await post('execute',{code});r.outputs.forEach((o:Output)=>emit(o));return r}})},
  interrupt:async()=>{await post('interrupt')},restart:async()=>{await post('restart')},
@@ -18,4 +20,5 @@ const actions:import('../src/editor').EditorActions={
 const editor=new NotebookEditor(root,session,actions);
 (window as any).notebookEditor=editor;
 (window as any).notebookSession=session;
-(window as any).showReadOnly=()=>{editor.destroy();(window as any).notebookEditor=new NotebookEditor(root,session,{...actions,readOnly:true})};
+(window as any).showReadOnly=()=>{(window as any).notebookEditor.destroy();(window as any).notebookEditor=new NotebookEditor(root,session,{...actions,readOnly:true})};
+(window as any).refreshPreviewPreferences=()=>{const old=(window as any).notebookEditor;const state=old.captureState();const scroll=root.scrollTop;old.destroy();(window as any).notebookEditor=new NotebookEditor(root,session,actions,state);root.scrollTop=scroll};

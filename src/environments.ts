@@ -1,4 +1,4 @@
-export interface Environment {name:string;python:string;category?:'local'|'jupyter'}
+export interface Environment {name:string;python:string;category?:'local'|'jupyter'|'managed'}
 export async function discoverEnvironments(projectDir?:string,home?:string,platform=process.platform,pathValue=process.env.PATH||''):Promise<Environment[]>{
  const {access,readdir}=await import('node:fs/promises');const {join,win32}=await import('node:path');const {homedir}=await import('node:os');home=home||homedir();
  const pythonAt=(base:string)=>platform==='win32'?win32.join(base,'python.exe'):join(base,'bin','python');
@@ -11,6 +11,8 @@ export async function discoverEnvironments(projectDir?:string,home?:string,platf
   try{for(const entry of await readdir(join(home,base,'envs')))await add(`Conda: ${entry}`,pythonAt(join(home,base,'envs',entry)))}catch{/* Optional Conda installation. */}
  }
  try{for(const entry of await readdir(join(home,'.pyenv','versions')))await add(`pyenv: ${entry}`,pythonAt(join(home,'.pyenv','versions',entry)))}catch{/* Optional pyenv installation. */}
+ try{for(const entry of await readdir(join(home,'.local','share','uv','python')))await add(`uv: ${entry}`,pythonAt(join(home,'.local','share','uv','python',entry)))}catch{/* Optional uv-managed Python. */}
+ for(const directory of pathValue.split(platform==='win32'?';':':').filter(Boolean)){try{for(const name of await readdir(directory))if(/^python3\.\d+(?:\.exe)?$/.test(name))await add('PATH Python',platform==='win32'?win32.join(directory,name):join(directory,name))}catch{/* Optional PATH directory. */}}
  for(const dir of pathValue.split(platform==='win32'?';':':').filter(Boolean))for(const name of platform==='win32'?['python.exe','python3.exe']:['python3','python'])await add('PATH Python',platform==='win32'?win32.join(dir,name):join(dir,name));
  return result;
 }
@@ -48,4 +50,22 @@ export async function discoverJupyterEnvironments(
   for(const python of candidates){try{await access(python);if(!result.some(e=>e.python===python))result.push({name:`Jupyter: ${spec.display_name||key}`,python,category:'jupyter'});break}catch{/* Stale kernels are omitted. */}}
  }
  return result;
+}
+
+/** Explicit refresh uses execFile, never a shell command or PATH interpolation. */
+export async function autoDetectEnvironments(projectDir?:string,runner?:(file:string,args:string[])=>Promise<{stdout:string;stderr:string}>,platform=process.platform):Promise<Environment[]>{
+ const local=await discoverEnvironments(projectDir,undefined,platform);
+ if(!runner){const {execFile}=await import('node:child_process');runner=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{timeout:10000,maxBuffer:1024*1024},(error,stdout,stderr)=>error?reject(error):resolve({stdout,stderr})));}
+ try{const found=await runner(platform==='win32'?'where.exe':'which',platform==='win32'?['python']:['-a','python3']);
+  const {access}=await import('node:fs/promises');const {isAbsolute,win32}=await import('node:path');
+  for(const python of found.stdout.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)){if(!(platform==='win32'?win32.isAbsolute(python):isAbsolute(python)))continue;try{await access(python);if(!local.some(item=>item.python===python))local.push({name:'PATH Python',python,category:'local'})}catch{/* Stale executable. */}}
+ }catch{/* Standard discovery remains available if locator is absent. */}return local;
+}
+/** Compare owned directory boundaries, including python/python3 aliases. */
+export function belongsToEnvironmentDirectory(python:string,referencePython:string):boolean{
+ const windows=/^[a-z]:[\\/]/i.test(referencePython)||referencePython.startsWith('\\\\');
+ const normalize=(path:string)=>{const slashes=path.replaceAll('\\','/').replace(/\/+$/,'');return windows?slashes.toLowerCase():slashes};
+ const reference=normalize(referencePython);const directory=reference.replace(/\/(?:bin|scripts)\/[^/]+$/i,'');
+ if(directory===reference)return normalize(python)===reference;
+ return normalize(python).startsWith(directory+'/');
 }

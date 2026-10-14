@@ -28,6 +28,12 @@ export class EnvironmentManager{
    await mkdir(dirname(directory),{recursive:true});try{await mkdir(directory)}catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')throw new Error('目标目录已存在，请选择其他目录。');throw error}if(onReserved)await onReserved();await this.runner(basePython,['-m','venv',directory]);return environmentPython(directory);
   }catch(error){throw new Error(`创建环境失败：${String(error)}。若留下不完整目录，请手动检查并选择新目录重试。`)}finally{this.busy.delete(directory)}
  }
+ /** Only the vault ownership gate may authorize resuming a reserved directory. */
+ async resumeCreation(basePython:string,directory:string,authorize:()=>Promise<void>):Promise<string>{
+  if(this.busy.has(directory))throw new Error('此环境正在创建，请稍候。');this.busy.add(directory);
+  try{await authorize();await this.runner(basePython,['-m','venv',directory]);return environmentPython(directory)}
+  catch(error){throw new Error(`创建环境失败：${String(error)}。不会删除已有文件。`)}finally{this.busy.delete(directory)}
+ }
  async install(python:string,requirements?:string):Promise<void>{
   if(this.busy.has(python))throw new Error('此环境正在安装依赖，请稍候。');this.busy.add(python);
   try{const info=await this.validate(python,[]);if(!info.isolated)throw new Error('禁止修改系统 Python；请先创建仓库虚拟环境。');await this.runner(python,['-m','pip','install','jupyter_client','ipykernel',...(requirements?['-r',requirements]:[])])}catch(error){throw new Error(`依赖安装失败：${String(error)}。请检查网络和 pip 后重试。`)}finally{this.busy.delete(python)}

@@ -1,0 +1,13 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import {mkdtemp,mkdir,rm,writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+vi.mock('obsidian',()=>({Modal:class{},Notice:class{},PluginSettingTab:class{},Setting:class{},Platform:{}}));
+import {resolveManualPython} from '../src/settings';
+import {translateEnvironmentProgress} from '../src/environment-translations';
+import {createTranslator} from '../src/i18n';
+const created:string[]=[];afterEach(async()=>{for(const p of created.splice(0))await rm(p,{recursive:true,force:true})});
+it('resolves an environment directory or executable without executing it',async()=>{const dir=await mkdtemp(join(tmpdir(),'ipynb-path-'));created.push(dir);await mkdir(join(dir,'bin'));const python=join(dir,'bin','python');await writeFile(python,'');expect(await resolveManualPython(dir)).toBe(python);expect(await resolveManualPython(python)).toBe(python);await expect(resolveManualPython('relative')).rejects.toThrow('绝对路径')});
+it('accepts Windows installation root and virtual environment Scripts directory',async()=>{const dir=await mkdtemp(join(tmpdir(),'ipynb-path-'));created.push(dir);await mkdir(join(dir,'Scripts'));const python=join(dir,'Scripts','python.exe');await writeFile(python,'');expect(await resolveManualPython(dir,'win32')).toBe(python);const global=join(dir,'python.exe');await writeFile(global,'');expect(await resolveManualPython(dir,'win32')).toBe(global)});
+it('reports missing directory and interpreter instead of filling an invalid path',async()=>{const dir=await mkdtemp(join(tmpdir(),'ipynb-path-'));created.push(dir);await expect(resolveManualPython(dir)).rejects.toThrow('没有找到');await expect(resolveManualPython(join(dir,'missing'))).rejects.toThrow()});
+it('translates download counters and phases and preserves native tool logs',()=>{const t=createTranslator('en');expect(translateEnvironmentProgress('下载 uv：20 字节 / 100 字节',t)).toBe('Downloading uv: 20 / 100 bytes');expect(translateEnvironmentProgress('下载 uv：20 字节',t)).toBe('Downloading uv: 20 bytes');expect(translateEnvironmentProgress('仓库专用 Python 已就绪',t)).toBe('Vault Python is ready');expect(translateEnvironmentProgress('Collecting pandas',t)).toBe('Collecting pandas')});

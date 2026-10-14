@@ -1,2 +1,3 @@
+import type {NotebookPreferences} from "./preferences";
 /** Synced identity must never include device-local interpreter paths. */
-export function syncedEnvironmentSettings(settings:{vaultId:string;bridgePython:string;kernelPython:string}):{vaultId:string}{return {vaultId:settings.vaultId}}
+export function syncedEnvironmentSettings(settings:{vaultId:string;bridgePython:string;kernelPython:string}&Partial<NotebookPreferences>):{vaultId:string}&Partial<NotebookPreferences>{return {vaultId:settings.vaultId,...(settings.language?{language:settings.language}:{}),...(settings.outputOptions?{outputOptions:{...settings.outputOptions}}:{})}}

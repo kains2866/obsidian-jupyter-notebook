@@ -23,6 +23,6 @@ const assert=require('node:assert/strict');
  const manualAnchor=await page.evaluate(()=>{const r=document.getElementById('app');const n=[...r.querySelectorAll('.ipynb-cell')].find(e=>e.getBoundingClientRect().bottom>r.getBoundingClientRect().top+48);return {id:n.dataset.cellId,top:n.getBoundingClientRect().top}});
  await page.evaluate(()=>{const p=document.querySelector('.ipynb-markdown-preview');if(p)p.style.minHeight='600px'});await page.waitForTimeout(100);assert.ok(Math.abs((await page.locator(`[data-cell-id="${manualAnchor.id}"]`).evaluate(e=>e.getBoundingClientRect().top))-manualAnchor.top)<2,'手动滚动后异步 Markdown 高度变化保持位置');
  await page.evaluate(()=>{window.notebookSession.structure(window.originalNotebook);window.notebookEditor.renderCells()});
- await page.evaluate(()=>window.showReadOnly());assert.equal(await page.locator('button').count(),0);assert.equal(await page.locator('.cm-content[contenteditable="true"]').count(),0);assert.equal(await page.locator('.ipynb-markdown-preview').count(),1);
+ await page.evaluate(()=>window.showReadOnly());assert.equal(await page.locator('button:not(.ipynb-output-toggle)').count(),0);assert.equal(await page.locator('.cm-content[contenteditable="true"]').count(),0);assert.equal(await page.locator('.ipynb-markdown-preview').count(),1);
  console.log('PASS insertion, focus, pointer reorder, undo, markdown eye icon, theme tokens');
  }finally{await browser.close()}})().catch(e=>{console.error(e);process.exitCode=1});

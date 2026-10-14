@@ -73,6 +73,7 @@ export function assertUnchanged(original: string,current: string): void {
 export class NotebookHistory {
   private past: Notebook[]=[];private future: Notebook[]=[];
   constructor(public current: Notebook) {}
+  clear(): void {this.past=[];this.future=[];}
   update(next: Notebook): void {if(next===this.current)return;this.past=[...this.past.slice(-99),this.current];this.current=next;this.future=[];}
   replace(next: Notebook): void {this.current=next;}
   undo(): boolean {const prev=this.past.at(-1);if(!prev)return false;this.future=[this.current,...this.future];this.past=this.past.slice(0,-1);this.current=prev;return true;}

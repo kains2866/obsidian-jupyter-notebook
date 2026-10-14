@@ -1,10 +1,15 @@
+import {DEFAULT_OUTPUT_OPTIONS,cacheStreamAppend,outputBytes,exceedsOutputBudget,discardOldOutputs,type OutputOptions} from './output-policy';
 import {NotebookHistory,parseNotebook,serializeNotebook,assertUnchanged,editCell,applyOutput,sourceText,type Notebook,type Output} from './notebook';
 export interface Storage {read():Promise<string>;write(text:string,expected:string):Promise<void>}
 export interface Executor {execute(code:string,emit:(output:Output)=>void):Promise<{execution_count:number|null;status:string}>}
 export class NotebookSession {
  readonly history:NotebookHistory;
  private baseline:string;
- private saved:string;
+ private savedNotebook:Notebook;
+ outputOptions:OutputOptions;
+ outputWarning="";
+ private renderTimer?:ReturnType<typeof setTimeout>;
+ private scheduleChange():void{if(!this.renderTimer)this.renderTimer=setTimeout(()=>{this.renderTimer=undefined;this.onChange()},75)}
  private saving?:Promise<void>;
  running=false;
  runningIndex:number|null=null;
@@ -15,9 +20,10 @@ export class NotebookSession {
   return ()=>{if(released)return;released=true;this.transitions--;this.onChange()};
  }
  onChange:()=>void=()=>{};
- constructor(text:string){this.history=new NotebookHistory(parseNotebook(text));this.baseline=text;this.saved=serializeNotebook(this.notebook)}
+ constructor(text:string,options:Partial<OutputOptions>={},private hooks:{onWarning?:(message:string)=>void;onLimit?:()=>void|Promise<void>}={}){this.history=new NotebookHistory(parseNotebook(text));this.baseline=text;this.savedNotebook=this.notebook;this.outputOptions={...DEFAULT_OUTPUT_OPTIONS,...options}}
+ configureOutputOptions(options:Partial<OutputOptions>):void{this.outputOptions={...DEFAULT_OUTPUT_OPTIONS,...options};this.onChange()}
  get notebook():Notebook{return this.history.current}
- get dirty():boolean{return serializeNotebook(this.notebook)!==this.saved}
+ get dirty():boolean{return this.notebook!==this.savedNotebook}
  change(n:Notebook):void{this.history.update(n);this.onChange()}
  structure(n:Notebook):void{if(this.running||this.busy)throw new Error('运行时不能调整单元格结构。');this.change(n)}
  undo():void{if(this.running||this.busy)throw new Error('运行时不能撤销。');this.history.undo();this.onChange()}
@@ -26,13 +32,19 @@ export class NotebookSession {
   if(this.saving)return this.saving.then(()=>this.save(storage));
   const operation=(async()=>{
    if(!this.dirty)return;
-   const snapshot=serializeNotebook(this.notebook);
+   const savedNotebook=this.notebook;
+   const snapshot=serializeNotebook(savedNotebook);
    assertUnchanged(this.baseline,await storage.read());
    await storage.write(snapshot,this.baseline);
-   this.baseline=snapshot;this.saved=snapshot;this.onChange();
+   this.baseline=snapshot;this.savedNotebook=savedNotebook;this.onChange();
   })();
   this.saving=operation;
   return operation.finally(()=>{if(this.saving===operation)this.saving=undefined});
+ }
+ clearOutputs(index?:number,releaseHistory=this.outputOptions.releaseHistoryOnClear):void{
+  if(this.running||this.busy)throw new Error("运行时不能清除输出。");
+  const next={...this.notebook,cells:this.notebook.cells.map((cell,i)=>cell.cell_type==='code'&&(index===undefined||i===index)?{...cell,outputs:[],execution_count:null}:cell)};
+  this.history.update(next);if(releaseHistory)this.history.clear();this.onChange();
  }
  async run(index:number,kernel:Executor):Promise<string>{
   if(this.running||this.busy)throw new Error('内核正在运行。');
@@ -41,15 +53,25 @@ export class NotebookSession {
   const code=sourceText(cell);
   this.running=true;this.runningIndex=index;
   this.history.replace(editCell(this.notebook,index,{outputs:[],execution_count:null}));this.onChange();
-  let pendingClear=false;
+  let pendingClear=false;let limited=false;let warned=false;this.outputWarning="";
   try{
    const result=await kernel.execute(code,output=>{
+    if(limited)return;
     if(output.output_type==='clear_output' && output.wait){pendingClear=true;return}
     if(pendingClear){this.history.replace(editCell(this.notebook,index,{outputs:[]}));pendingClear=false}
-    this.history.replace(applyOutput(this.notebook,index,output));this.onChange();
+    const last=this.notebook.cells[index].outputs?.at(-1);
+    let candidate=applyOutput(this.notebook,index,output);
+    if(output.output_type==='stream'&&last?.output_type==='stream'&&last.name===output.name&&typeof last.text==='string')cacheStreamAppend(last,candidate.cells[index].outputs!.at(-1)!,output.text);
+    const oversized=outputBytes(output)>Math.min(this.outputOptions.warnCellMiB,this.outputOptions.warnNotebookMiB)*1048576;
+    if(exceedsOutputBudget(candidate,index,this.outputOptions)){
+     if(!warned){warned=true;this.outputWarning=this.outputOptions.hardLimit?'输出超过配额，已停止保留后续输出并请求中断。':'输出超过配额，当前输出仍保留。';this.hooks.onWarning?.(this.outputWarning)}
+     if(this.outputOptions.autoDiscardOld&&!oversized){candidate=discardOldOutputs(candidate,index,this.outputOptions,true);this.outputWarning='输出超过配额，已按设置移除旧输出。';this.hooks.onWarning?.(this.outputWarning)}
+     if((this.outputOptions.hardLimit||this.outputOptions.autoDiscardOld) && (oversized||!this.outputOptions.autoDiscardOld||exceedsOutputBudget(candidate,index,this.outputOptions))){limited=true;this.outputWarning='输出超过配额，已停止保留后续输出并请求中断。';this.hooks.onWarning?.(this.outputWarning);void Promise.resolve().then(()=>this.hooks.onLimit?.()).catch(error=>{this.outputWarning+=` ${String(error)}`;this.onChange()});this.scheduleChange();return}
+    }
+    this.history.replace(candidate);this.scheduleChange();
    });
    this.history.replace(editCell(this.notebook,index,{execution_count:result.execution_count}));
    return result.status;
-  }finally{this.running=false;this.runningIndex=null;this.onChange()}
+  }finally{if(this.renderTimer){clearTimeout(this.renderTimer);this.renderTimer=undefined}this.running=false;this.runningIndex=null;this.onChange()}
  }
 }

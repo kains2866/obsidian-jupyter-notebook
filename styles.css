@@ -15,13 +15,15 @@
 .ipynb-menu-panel{position:absolute;right:0;top:32px;z-index:8;min-width:144px;padding:5px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:6px;box-shadow:0 4px 16px #0002}
 .ipynb-menu-panel button{width:100%;justify-content:flex-start}
 .ipynb-menu-panel select{width:100%;margin:4px 0;padding:4px;background:var(--background-secondary);color:var(--text-normal);border:1px solid var(--background-modifier-border);border-radius:4px;font-size:12px}
-.ipynb-cell{position:relative;margin:0 0 16px;padding-left:42px;min-width:0}
+.ipynb-cell{position:relative;margin:0;padding-left:42px;min-width:0}
 .ipynb-cell-gutter{position:absolute;left:0;top:5px;width:34px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .ipynb-cell-gutter button{color:var(--interactive-accent)}
 .ipynb-count{font-family:var(--font-monospace);font-size:11px;color:var(--text-muted)}
 .ipynb-cell-body{border:1px solid var(--background-modifier-border);border-radius:5px;min-width:0}
 .ipynb-markdown-cell .ipynb-cell-body{border-color:transparent}
-.ipynb-code-cell:focus-within .ipynb-cell-body{border-color:var(--interactive-accent)}
+.ipynb-cell:has(.cm-editor):focus-within .ipynb-cell-body{border-color:var(--interactive-accent);box-shadow:0 0 0 1px var(--interactive-accent)}
+.ipynb-cell-tools-anchor{position:sticky;top:calc(var(--ipynb-toolbar-height,48px) + 14px);height:32px;z-index:3;pointer-events:none}
+.ipynb-cell-tools-anchor + .ipynb-cell-body{margin-top:-32px}
 .ipynb-cell-toolbar{position:absolute;right:8px;top:-13px;z-index:2;display:flex;gap:2px;align-items:center;padding:2px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s}
 .ipynb-cell:hover .ipynb-cell-toolbar,.ipynb-cell:focus-within .ipynb-cell-toolbar,.ipynb-cell-toolbar:has(details[open]){opacity:1;pointer-events:auto}
 .ipynb-code .cm-editor{min-height:46px;padding:8px 0;background:transparent}
@@ -36,10 +38,7 @@
 .ipynb-output table{border-collapse:collapse;font-size:13px}
 .ipynb-output th,.ipynb-output td{padding:5px 10px;border:1px solid var(--background-modifier-border)}
 .ipynb-error,.ipynb-stderr{color:var(--text-error)}
-.ipynb-markdown-preview{padding:8px 12px;line-height:1.65;overflow-wrap:anywhere;cursor:text}
-.ipynb-markdown-preview h1{font-size:1.8em;line-height:1.3;margin:12px 0}
-.ipynb-markdown-preview h2{font-size:1.4em;margin:14px 0 8px}
-.ipynb-markdown-preview p{margin:6px 0}
+.ipynb-markdown-preview{padding:8px 12px;overflow-wrap:anywhere;cursor:text}
 .ipynb-message{margin:12px 0 4px 42px;padding:10px 12px;border-left:1px solid var(--text-error);border-radius:3px;background:var(--background-secondary);font-size:12px}
 .ipynb-message[hidden]{display:none}
 .ipynb-message-heading{display:flex;align-items:center;gap:10px}
@@ -57,13 +56,13 @@
 .workspace-leaf-content[data-type="native-ipynb"] .view-content.ipynb-editor{padding:0 24px 40px;box-sizing:border-box}
 @media(max-width:650px){.workspace-leaf-content[data-type="native-ipynb"] .view-content.ipynb-editor{padding:0 8px 24px}}
 .ipynb-cell-list{position:relative}
-.ipynb-insert-gap{height:24px;display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 8px 42px}
-.ipynb-insert-gap button{opacity:0;transition:opacity .12s}
-.ipynb-insert-gap:hover button,.ipynb-insert-gap:focus-within button{opacity:1}
+.ipynb-insert-gap{height:14px;position:relative;display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 0 42px;z-index:3}
+.ipynb-insert-gap button{position:relative;opacity:0;pointer-events:none;transition:opacity .12s;background:var(--background-primary)}
+.ipynb-insert-gap:hover button,.ipynb-insert-gap:focus-within button{opacity:1;pointer-events:auto}
 .ipynb-drag-handle{touch-action:none;cursor:grab!important;color:var(--text-muted)!important}
 .ipynb-drag-ghost{position:fixed;z-index:100;pointer-events:none;max-width:360px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;padding:12px;background:var(--background-secondary);color:var(--text-normal);border:1px solid var(--interactive-accent);border-radius:5px;box-shadow:var(--shadow-s)}
 .ipynb-drop-line{position:absolute;height:2px;background:var(--interactive-accent);left:42px;right:0;z-index:10;pointer-events:none}
-@media(hover:none){.ipynb-insert-gap button{opacity:1}}
+@media(hover:none){.ipynb-insert-gap button{opacity:1;pointer-events:auto}}
 .ipynb-editor{overflow-anchor:none}
 .ipynb-drag-ghost{max-width:none;max-height:65vh;white-space:normal;padding:8px;overflow:hidden}
 .ipynb-drag-cell{margin:0;pointer-events:none}
@@ -82,3 +81,23 @@
 .ipynb-environment-path { font-family: var(--font-monospace); font-size: var(--font-smallest); color: var(--text-muted); }
 .ipynb-environment-warning { color: var(--text-muted); font-size: var(--font-small); }
 @media (max-width: 600px) { .ipynb-environment-section .setting-item-control { width: 100%; justify-content: flex-start; } }
+
+.ipynb-output[hidden]{display:none}
+.ipynb-output-toggle{margin-top:6px}
+.ipynb-output-item+.ipynb-output-item{margin-top:8px}
+
+.ipynb-properties { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--background-modifier-border); border-radius: 6px; color: var(--text-normal); }
+.ipynb-properties summary { cursor: pointer; color: var(--text-muted); }
+.ipynb-properties dl { display: grid; grid-template-columns: minmax(80px, 140px) minmax(0, 1fr); gap: 6px 12px; margin: 10px 0 0; }
+.ipynb-properties dt { color: var(--text-muted); }
+.ipynb-properties dd { margin: 0; overflow-wrap: anywhere; }
+
+.ipynb-cell-body:has(.ipynb-cell-hint){position:relative;padding-bottom:22px}
+.ipynb-cell-hint{position:absolute;right:10px;bottom:4px;font-size:10px;color:var(--text-faint);opacity:0;pointer-events:none}
+.ipynb-cell:hover .ipynb-cell-hint,.ipynb-cell:focus-within .ipynb-cell-hint{opacity:1}
+.ipynb-word-match{background:var(--text-selection);box-shadow:inset 0 -1px var(--interactive-accent)}
+.ipynb-code .cm-activeLineGutter{color:var(--text-normal);background:var(--background-secondary)}
+.ipynb-code .cm-matchingBracket{background:var(--text-selection);outline:1px solid var(--interactive-accent)}
+.ipynb-cell:not(:focus-within) .ipynb-word-match{background:transparent;box-shadow:none}
+
+.ipynb-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

@@ -1,164 +1,215 @@
+import {translateEnvironmentProgress} from './environment-translations';
 import {App,Modal,Notice,PluginSettingTab,Setting,Platform} from 'obsidian';
 import type NotebookPlugin from './main';
-import type {Environment} from './environments';
-export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string}
-export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:''};
+import {belongsToEnvironmentDirectory,type Environment} from './environments';
+import {createTranslator,type Translator,type LanguageSetting} from './i18n';
+import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
+import {probeKernelCatalog,type KernelCatalogRow} from './kernel-catalog';
+export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string;language:LanguageSetting;outputOptions:OutputOptions}
+export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:'',language:'auto',outputOptions:{...DEFAULT_OUTPUT_OPTIONS}};
 export class NotebookSettingsTab extends PluginSettingTab {
  constructor(app:App,private plugin:NotebookPlugin){super(app,plugin)}
+ private async updateSettings(next:NotebookSettings):Promise<void>{const previous=this.plugin.settings;this.plugin.settings=next;try{await this.plugin.saveSettings();this.plugin.onPreferencesChanged()}catch(error){this.plugin.settings=previous;new Notice(String(error));this.display()}}
  display():void{
-  this.containerEl.empty();this.containerEl.createEl('h2',{text:'Notebook 本机环境'});
-  if(Platform.isMobile){this.containerEl.createEl('p',{text:'移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。'});return}
-  this.containerEl.createEl('p',{text:'桥接环境需要 jupyter_client；运行环境需要 ipykernel。可以选择不同的 Python。当前版本仅在本机运行，iCloud 同步文件不会同步依赖。'});
-  new Setting(this.containerEl).setName('桥接 Python').setDesc('推荐填写专用虚拟环境的 Python 完整路径。').addText(t=>t.setValue(this.plugin.settings.bridgePython).onChange(async value=>{this.plugin.settings={...this.plugin.settings,bridgePython:value.trim()};await this.plugin.saveSettings()}));
-  new Setting(this.containerEl).setName('默认运行 Python').setDesc('新打开的 Notebook 默认使用该环境；已启动的内核需重新选择环境。').addText(t=>t.setValue(this.plugin.settings.kernelPython).onChange(async value=>{this.plugin.settings={...this.plugin.settings,kernelPython:value.trim()};await this.plugin.saveSettings()}));
+  const t=this.plugin.getTranslator();this.containerEl.empty();this.containerEl.createEl('h2',{text:t('Notebook 设置')});
+  new Setting(this.containerEl).setName(t('语言')).addDropdown(d=>d.addOption('auto',t('跟随 Obsidian')).addOption('zh','中文').addOption('en','English').setValue(this.plugin.settings.language).onChange(async value=>{await this.updateSettings({...this.plugin.settings,language:value as LanguageSetting});this.display()}));
+  if(Platform.isMobile){this.containerEl.createEl('p',{text:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')});return}
+  new Setting(this.containerEl).setName(t('默认内核')).setDesc(t('新打开的 Notebook 使用此环境；当前内核保持运行。')).addButton(b=>b.setButtonText(t('选择环境')).onClick(()=>EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})));
+  this.containerEl.createEl('h3',{text:t('输出管理')});
+  const toggle=(key:keyof OutputOptions,label:string)=>new Setting(this.containerEl).setName(t(label)).addToggle(control=>control.setValue(Boolean(this.plugin.settings.outputOptions[key])).onChange(async value=>{await this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:value}})}));
+  toggle('collapse','折叠长输出');toggle('lazyImages','延迟加载图片');toggle('hardLimit','启用输出硬限制');toggle('autoDiscardOld','自动丢弃旧输出');toggle('releaseHistoryOnClear','清空输出时释放撤销历史');
+  for(const [key,label] of [['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const)new Setting(this.containerEl).setName(t(label)).addText(control=>control.setValue(String(this.plugin.settings.outputOptions[key])).onChange(async value=>{const number=Number(value);if(!Number.isFinite(number)||number<=0)return;await this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:number}})}));
+  const advanced=this.containerEl.createEl('details');advanced.createEl('summary',{text:t('高级：手动 Python 路径')});
+  for(const [key,label] of [['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const)new Setting(advanced).setName(t(label)).addText(control=>control.setValue(this.plugin.settings[key]).onChange(async value=>{await this.updateSettings({...this.plugin.settings,[key]:value.trim()})}));
  }
+
 }
+export interface EnvironmentOperationHooks {before:()=>Promise<void>;after:()=>void}
 export interface EnvironmentPickerOptions {
  vaultId:string;vaultRoot?:string;configDir?:string;deviceId?:string;bridgePython?:string;
- onManagedCreated?:(environment:Environment)=>void|Promise<void>;
+ translate?:Translator;
+ onManagedCreated?:(environment:Environment)=>void|boolean|Promise<void|boolean>;
+ onBeforeUninstall?:()=>Promise<void>;
+ onAfterUninstall?:()=>void;
+ onUninstalled?:(environment:Environment)=>void|Promise<void>;
+ createOperationHooks?:(kind:'packages'|'uninstall')=>EnvironmentOperationHooks;
+ onBeforePackages?:()=>Promise<void>;
+ onAfterPackages?:()=>void;
 }
-/** Stable entry point shared by the toolbar and settings. */
 export class EnvironmentPicker {
- static async show(app:App,current:string,projectDir:string|undefined,choose:(environment:Environment)=>void|Promise<void>,options?:EnvironmentPickerOptions):Promise<void>{
+ static async show(app:App,current:string,projectDir:string|undefined,choose:(environment:Environment)=>void|boolean|Promise<void|boolean>,options?:EnvironmentPickerOptions):Promise<void>{
   new EnvironmentManagerModal(app,current,projectDir,choose,options).open();
  }
 }
-
-type PythonInfo={version:string;missing:string[];isolated:boolean};
+type ManagedOptions={vaultRoot:string;configDir:string;deviceId:string};
 export class EnvironmentManagerModal extends Modal {
- private closed=false;
- private busy=false;
- private probeGeneration=0;
- private selected='';
- private base='';
- private info:PythonInfo|undefined;
- private manager:import('./environment-manager').EnvironmentManager|undefined;
- private buttons:import('obsidian').ButtonComponent[]=[];
- private controls:(import('obsidian').DropdownComponent|import('obsidian').TextComponent)[]=[];
+ private t:Translator;
+ private list!:HTMLElement;
  private status!:HTMLElement;
- private managedStatus!:HTMLElement;
- private managedPath!:HTMLElement;
- private basePath!:HTMLElement;
- private baseText!:import('obsidian').TextComponent;
- private selectedPath!:HTMLElement;
- private environmentSelect!:import('obsidian').DropdownComponent;
- private baseSelect!:import('obsidian').DropdownComponent;
- private installButton!:import('obsidian').ButtonComponent;
- private useButton!:import('obsidian').ButtonComponent;
- private managedButton!:import('obsidian').ButtonComponent;
- private managedMode:'create'|'retry'|'use'|'blocked'='create';
- private vaultOptions:Required<Pick<EnvironmentPickerOptions,'vaultRoot'|'configDir'|'deviceId'>>|undefined;
- constructor(app:App,private current:string,private projectDir:string|undefined,private choose:(environment:Environment)=>void|Promise<void>,private options?:EnvironmentPickerOptions){super(app)}
+ private logs!:HTMLElement;
+ private catalog:KernelCatalogRow[]=[];
+ private managed:Environment|undefined;
+ private manual:Environment|undefined;
+ private managedMode:'install'|'repair'|'ready'|'blocked'='install';
+ private managedDescription='';
+ private managedVersion='';
+ private vaultOptions:ManagedOptions|undefined;
+ private manager:import('./environment-manager').EnvironmentManager|undefined;
+ private controls:import('obsidian').ButtonComponent[]=[];
+ private cancel!:import('obsidian').ButtonComponent;
+ private abort:AbortController|undefined;
+ private busy=false;
+ private closed=false;
+ constructor(app:App,private current:string,private projectDir:string|undefined,private choose:(environment:Environment)=>void|boolean|Promise<void|boolean>,private options?:EnvironmentPickerOptions){super(app);this.t=options?.translate||createTranslator('zh')}
  onOpen():void{
   this.contentEl.empty();this.modalEl.classList.add('ipynb-environment-modal');
-  this.contentEl.createEl('h2',{text:'选择 Notebook 环境'});
-  this.contentEl.createEl('p',{text:'已有本机 Python 可直接检测使用；仓库环境可一键创建并安装依赖。安装只在点击按钮后开始。'});
-  const managed=this.contentEl.createDiv({cls:'ipynb-environment-section ipynb-environment-managed'});
-  managed.createEl('h3',{text:'创建并安装仓库环境（推荐）'});
-  managed.createEl('p',{text:'本设备专用，保存于仓库配置目录。安装 jupyter_client、ipykernel 和仓库根目录 requirements.txt；其他设备需创建各自环境。'});
-  this.managedPath=managed.createEl('p',{text:'环境完整路径将在检查后显示。',cls:'ipynb-environment-path'});
-  this.managedStatus=managed.createEl('p',{text:'正在检查仓库环境…',cls:'ipynb-environment-status'});this.managedStatus.setAttribute('role','status');
-  new Setting(managed).setName('基础 Python').setDesc('用于创建虚拟环境；不要求已安装 Jupyter。').addDropdown(d=>{this.baseSelect=d;this.controls.push(d);d.addOption('','手动指定 / 未选择').setDisabled(true);d.onChange(value=>{if(this.busy||this.closed)return;this.base=value;this.baseText.setValue('');this.updateBasePath()})});
-  new Setting(managed).setName('其他基础解释器路径').addText(t=>{this.baseText=t;this.controls.push(t);t.setDisabled(true).setPlaceholder('/path/to/python3').onChange(value=>{if(this.busy||this.closed)return;this.base=value.trim();this.baseSelect.setValue('');this.updateBasePath()})});
-  this.basePath=managed.createEl('p',{text:'当前基础 Python：尚未选择',cls:'ipynb-environment-path'});
-  new Setting(managed).addButton(b=>{this.managedButton=b;this.buttons.push(b);b.setButtonText('创建并安装仓库环境').setCta().setDisabled(true).onClick(()=>this.action(this.managedStatus,()=>this.useManaged()))});
-  const existing=this.contentEl.createDiv({cls:'ipynb-environment-section'});
-  existing.createEl('h3',{text:'使用已有本机 Python / Jupyter 环境'});
-  new Setting(existing).setName('本机解释器').addDropdown(d=>{this.environmentSelect=d;this.controls.push(d);d.setDisabled(true);d.onChange(value=>{if(this.busy||this.closed)return;this.selected=value;void this.probeSelected()})});
-  this.selectedPath=existing.createEl('p',{cls:'ipynb-environment-path'});
-  this.status=existing.createEl('p',{text:'正在检测本机 Python…',cls:'ipynb-environment-status'});this.status.setAttribute('role','status');
-  new Setting(existing).addButton(b=>{this.useButton=b;this.buttons.push(b);b.setButtonText('使用选中环境').setCta().setDisabled(true).onClick(()=>this.action(this.status,async()=>{
-   if(!this.manager||!this.selected)throw new Error('请选择 Python 解释器。');const info=await this.manager.validate(this.selected,this.requiredModules());
-   if(info.missing.length)throw new Error(`缺少 ${info.missing.join('、')}，请先安装依赖。`);
-   await this.apply({name:'本机 Python',python:this.selected},this.choose);
-  }))}).addButton(b=>{this.installButton=b;this.buttons.push(b);b.setButtonText('为选中环境安装依赖').setDisabled(true).onClick(()=>this.action(this.status,async()=>{
-   if(!this.manager||!this.selected)throw new Error('请选择 Python 解释器。');const info=await this.manager.validate(this.selected);
-   if(!info.isolated)throw new Error('系统 Python 不会被修改，请创建仓库环境。');
-   this.status.setText('正在为选中隔离环境安装依赖…');await this.manager.install(this.selected);await this.probeSelected();
-  }))});
-  new Setting(existing).setName('其他解释器完整路径').addText(t=>{this.controls.push(t);t.setDisabled(true).setPlaceholder('/path/to/venv/bin/python').onChange(value=>{if(this.busy)return;this.selected=value.trim();this.environmentSelect.setValue('');void this.probeSelected()})});
-  void this.initialize().catch(error=>{if(!this.closed){this.status.setText(String(error));this.managedStatus.setText(String(error))}});
+  this.contentEl.createEl('h2',{text:this.t('选择 Notebook 环境')});
+  const toolbar=this.contentEl.createDiv({cls:'ipynb-environment-toolbar'});
+  this.addButton(toolbar,'管理依赖',()=>this.dependencies());
+  this.addButton(toolbar,'识别环境',()=>this.action(()=>this.initialize(true)));
+  this.list=this.contentEl.createDiv({cls:'ipynb-kernel-list'});
+  this.status=this.contentEl.createEl('p',{text:this.t('正在检测本机 Python…'),cls:'ipynb-environment-status'});this.status.setAttribute('role','status');this.status.setAttribute('aria-live','polite');
+  const details=this.contentEl.createEl('details',{cls:'ipynb-operation-log'});details.createEl('summary',{text:this.t('查看安装日志')});this.logs=details.createEl('pre');
+  new Setting(this.contentEl).addButton(b=>{this.cancel=b;b.setButtonText(this.t('取消')).setDisabled(true).onClick(()=>{this.abort?.abort();this.status.setText(this.t('正在取消，请等待当前步骤退出…'));b.setDisabled(true)})});
+  this.renderCatalog();void this.action(()=>this.initialize());
  }
- onClose():void{this.closed=true;this.probeGeneration++}
- private async initialize():Promise<void>{
-  const {EnvironmentManager}=await import('./environment-manager');this.manager=new EnvironmentManager();
-  const {discoverEnvironments,discoverJupyterEnvironments}=await import('./environments');
-  const local=await discoverEnvironments(this.options?.vaultRoot||this.projectDir);let kernels:Environment[]=[];let kernelWarning='';
-  if(this.options?.bridgePython){try{kernels=await discoverJupyterEnvironments(this.options.bridgePython)}catch(error){kernelWarning=`Jupyter 已注册内核未读取：${String(error)}`}}
-  if(this.closed)return;
-  const items=[...(this.current?[{name:'当前环境',python:this.current}]:[]),...local.map(e=>({...e,name:`本机 Python · ${e.name}`})),...kernels];
-  const unique=items.filter((e,i)=>items.findIndex(x=>x.python===e.python)===i);
-  this.selected=this.current||unique[0]?.python||'';this.base=this.selected;this.updateBasePath();
-  if(!unique.length){this.environmentSelect.addOption('','未检测到 Python');this.baseSelect.addOption('','请指定基础 Python')}
-  for(const e of unique){this.environmentSelect.addOption(e.python,e.name);this.baseSelect.addOption(e.python,e.name)}
-  this.environmentSelect.setValue(this.selected).setDisabled(!unique.length);this.baseSelect.setValue(this.base).setDisabled(!unique.length);
-  this.controls.forEach(c=>c.setDisabled(false));
-  await this.probeSelected();if(this.closed)return;
-  if(kernelWarning)this.contentEl.createEl('p',{text:kernelWarning,cls:'ipynb-environment-warning'});
-  const vaultRoot=this.options?.vaultRoot||this.projectDir;
-  if(!vaultRoot){this.managedMode='blocked';this.managedStatus.setText('当前仓库没有本机路径，无法创建环境。');return}
-  const {getDeviceId}=await import('./vault-environment');
-  this.vaultOptions={vaultRoot,configDir:this.options?.configDir||'.obsidian',deviceId:this.options?.deviceId||await getDeviceId()};
-  await this.inspectManaged();this.refreshButtons();
+ onClose():void{this.closed=true;this.abort?.abort()}
+ private addButton(parent:HTMLElement,label:string,click:()=>void|Promise<void>,disabled=false):void{
+  new Setting(parent).addButton(b=>{this.controls.push(b);b.setButtonText(this.t(label)).setDisabled(this.busy||disabled).onClick(click)});
  }
- private updateBasePath():void{this.basePath.setText(`当前基础 Python：${this.base||'尚未选择'}`)}
  private requiredModules():string[]{return this.options?.bridgePython?['ipykernel']:['jupyter_client','ipykernel']}
- private refreshButtons():void{
-  this.useButton.setDisabled(this.busy||!this.info||Boolean(this.info.missing.length));
-  this.installButton.setDisabled(this.busy||!this.info?.isolated||!this.info.missing.length);
-  this.managedButton.setDisabled(this.busy||!this.vaultOptions||this.managedMode==='blocked');
- }
- private async probeSelected():Promise<void>{
-  const generation=++this.probeGeneration;const python=this.selected;this.info=undefined;this.refreshButtons();
-  this.selectedPath.setText(python||'未选择解释器');
-  if(!python||!this.manager){this.status.setText('未检测到 Python。请安装 Python，或填写已有解释器路径。');return}
-  this.status.setText(`正在检查 Python 版本与 ${this.requiredModules().join('、')}…`);
-  try{const info=await this.manager.validate(python,this.requiredModules());if(this.closed||generation!==this.probeGeneration)return;
-   this.info=info;this.status.setText(`Python ${info.version} · ${info.missing.length?`缺少 ${info.missing.join('、')}${info.isolated?'，可点击安装依赖':'；系统 Python 不会被修改，请创建仓库环境'}`:`${this.requiredModules().join('、')} 已就绪，可直接使用`}`);
-  }catch(error){if(!this.closed&&generation===this.probeGeneration)this.status.setText(String(error))}
-  if(!this.closed&&generation===this.probeGeneration)this.refreshButtons();
+ private async initialize(refresh=false):Promise<void>{
+  const {EnvironmentManager}=await import('./environment-manager');this.manager=new EnvironmentManager();
+  const vaultRoot=this.options?.vaultRoot||this.projectDir;
+  if(vaultRoot){const {getDeviceId}=await import('./vault-environment');this.vaultOptions={vaultRoot,configDir:this.options?.configDir||'.obsidian',deviceId:this.options?.deviceId||await getDeviceId()}}
+  await this.inspectManaged();
+  const {discoverEnvironments,discoverJupyterEnvironments,autoDetectEnvironments}=await import('./environments');
+  const local=await (refresh?autoDetectEnvironments:discoverEnvironments)(vaultRoot);
+  let kernels:Environment[]=[];
+  if(this.options?.bridgePython){try{kernels=await discoverJupyterEnvironments(this.options.bridgePython)}catch(error){this.progress(this.t('Jupyter 已注册内核未读取：{error}',{error:String(error)}))}}
+  this.catalog=await probeKernelCatalog([...local,...kernels,...(this.current?[{name:this.t('当前环境'),python:this.current}]:[])],python=>this.manager!.validate(python,this.requiredModules()));
+  if(!this.closed){this.status.setText(this.t('环境识别完成。'));this.renderCatalog()}
  }
  private async inspectManaged():Promise<void>{
-  if(!this.vaultOptions)return;
-  const {vaultEnvironmentDirectory,inspectVaultEnvironment}=await import('./vault-environment');
-  const directory=vaultEnvironmentDirectory(this.vaultOptions.vaultRoot,this.vaultOptions.configDir,this.vaultOptions.deviceId);
-  this.managedPath.setText(directory);
-  this.managedStatus.setText('正在检查仓库环境版本与依赖…');
-  try{const result=await inspectVaultEnvironment(this.vaultOptions,this.manager);if(this.closed)return;
-   this.managedMode=result?(result.complete?'use':'retry'):'create';this.managedButton.setButtonText(result?(result.complete?'使用仓库环境':'安装/重试'):'创建并安装仓库环境');
-   this.managedStatus.setText(`仓库环境路径：${directory}。${result?(result.complete?`Python ${result.info?.version||''} · 已就绪，可直接使用。`:`未完成：${result.error||result.info?.missing.join('、')||'需要安装依赖'}，点击安装/重试。`):'尚未创建，点击按钮创建并安装依赖。'}`);
-  }catch(error){if(this.closed)return;this.managedMode='blocked';this.managedButton.setButtonText('仓库环境不可用');this.managedStatus.setText(`仓库环境路径：${directory}。${String(error)}。请检查目录；现有非插件环境不会被覆盖。`)}
+  this.managed=undefined;this.managedVersion='';
+  if(!this.vaultOptions){this.managedMode='blocked';this.managedDescription=this.t('当前仓库没有本机路径，无法创建环境。');return}
+  try{
+   const {inspectVaultEnvironment}=await import('./vault-environment');const result=await inspectVaultEnvironment(this.vaultOptions,this.manager);
+   this.managed=result?{name:'仓库环境',python:result.python,category:'managed'}:undefined;
+   this.managedMode=result?(result.complete?'ready':'repair'):'install';this.managedVersion=result?.info?.version||'';
+   this.managedDescription=result?.error||this.t(result?.complete?'已就绪，可直接使用':result?'需要修复':'尚未安装');
+  }catch(error){this.managedMode='blocked';this.managedDescription=String(error)}
  }
- private async useManaged():Promise<void>{
-  if(this.managedMode==='blocked')throw new Error('仓库环境目录不可用，请先检查目录归属。');
-  if(!this.vaultOptions||!this.manager)throw new Error('当前仓库环境尚未就绪。');
-  const {provisionVaultEnvironment,inspectVaultEnvironment}=await import('./vault-environment');let python:string;
-  if(this.managedMode==='use'){
-   const result=await inspectVaultEnvironment(this.vaultOptions,this.manager);if(!result?.complete)throw new Error('仓库环境需要修复，请重新打开窗口并点击安装/重试。');python=result.python;
-  }else{
-   if(!this.base)throw new Error('没有检测到 Python，请指定基础解释器。');
-   try{python=await provisionVaultEnvironment({...this.vaultOptions,basePython:this.base},this.manager,message=>{if(!this.closed)this.managedStatus.setText(message)})}
-   catch(error){if(!this.closed)await this.inspectManaged();throw error}
+ private renderCatalog():void{
+  if(this.closed)return;this.list.empty();this.controls=this.controls.slice(0,2);
+  const owned=this.list.createDiv({cls:'ipynb-kernel-row ipynb-kernel-owned'});
+  const info=owned.createDiv({cls:'ipynb-kernel-info'});info.createEl('strong',{text:this.t('仓库专用环境（本设备）')});
+  info.createEl('small',{text:this.t('在此仓库为本设备安装独立 Python 和 Notebook 依赖；其他设备分别安装自己的环境。')});
+  info.createEl('span',{text:[this.managedVersion?this.t('Python {version}',{version:this.managedVersion}):'',this.managedDescription].filter(Boolean).join(' · '),cls:'ipynb-kernel-version'});
+  const actions=owned.createDiv({cls:'ipynb-kernel-actions'});
+  if(this.managedMode!=='ready')this.addButton(actions,this.managedMode==='repair'?'修复':'安装',()=>this.action(()=>this.installManaged()),this.managedMode==='blocked');
+  if(this.managed)this.addButton(actions,'删除',()=>this.action(()=>this.uninstallManaged()));
+  this.radio(owned,this.managed?.python,'仓库专用环境（本设备）',this.managedMode!=='ready',()=>this.activateManaged());
+  for(const row of this.catalog.filter(row=>(!this.managed||!belongsToEnvironmentDirectory(row.python,this.managed.python))&&row.python!==this.manual?.python)){
+   const element=this.list.createDiv({cls:'ipynb-kernel-row'});const text=element.createDiv({cls:'ipynb-kernel-info'});
+   text.createEl('strong',{text:row.name});text.createEl('span',{text:row.version?this.t('Python {version}',{version:row.version}):this.t('不可用'),cls:'ipynb-kernel-version'});text.createEl('small',{text:row.python});
+   if(row.error||row.missing?.length)text.createEl('small',{text:row.error||this.t('缺少依赖：{modules}',{modules:row.missing!.join(', ')})});
+   this.radio(element,row.python,row.name,Boolean(row.error||row.missing?.length),()=>this.activate(row,this.choose));
   }
-  if(this.closed)return;
-  this.managedStatus.setText('依赖已就绪，正在使用仓库环境…');
-  await this.apply({name:'仓库环境',python},this.options?.onManagedCreated||this.choose);
+  const manual=this.list.createDiv({cls:'ipynb-kernel-row'});const manualText=manual.createDiv({cls:'ipynb-kernel-info'});manualText.createEl('strong',{text:this.t('未找到？手动选择目录')});
+  if(this.manual)manualText.createEl('small',{text:this.manual.python});this.addButton(manual,'手动选择',()=>this.manualPath());
+  this.radio(manual,this.manual?.python,'未找到？手动选择目录',!this.manual,()=>this.activate(this.manual!,this.choose));
  }
- private async apply(environment:Environment,choose:(environment:Environment)=>void|Promise<void>):Promise<void>{
-  if(this.closed)return;await choose(environment);if(!this.closed)this.close();
+ private radio(parent:HTMLElement,python:string|undefined,label:string,disabled:boolean,choose:()=>Promise<void>):void{
+  const radio=parent.createEl('input',{type:'radio',cls:'ipynb-kernel-radio'});radio.setAttribute('name','ipynb-kernel');radio.setAttribute('aria-label',this.t(label));radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));radio.disabled=this.busy||disabled;
+  if(radio.checked)(parent.children[0] as HTMLElement).createEl('span',{text:this.t('启用中'),cls:'ipynb-kernel-badge'});
+  radio.addEventListener('change',()=>{radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));return this.action(choose)});
  }
- private async action(status:HTMLElement,work:()=>Promise<void>):Promise<void>{
-  if(this.busy||this.closed)return;this.busy=true;this.buttons.forEach(b=>b.setDisabled(true));this.controls.forEach(c=>c.setDisabled(true));
-  try{await work()}catch(error){if(!this.closed){status.setText(String(error));new Notice(String(error))}}
-  finally{this.busy=false;if(!this.closed){this.controls.forEach(c=>c.setDisabled(false));this.refreshButtons()}}
+ private async activate(environment:Environment,choose:(environment:Environment)=>void|boolean|Promise<void|boolean>):Promise<void>{
+  if(!this.manager||this.closed)return;const info=await this.manager.validate(environment.python,this.requiredModules());
+  if(info.missing.length)throw new Error(this.t('缺少依赖：{modules}',{modules:info.missing.join(', ')}));
+  if(await choose(environment)!==false&&!this.closed){this.current=environment.python;this.status.setText(this.t('启用中：{name}',{name:this.t(environment.name)}))}
+ }
+ private async activateManaged():Promise<void>{
+  await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed)throw new Error(this.t('仓库环境需要修复。'));
+  await this.activate(this.managed,this.options?.onManagedCreated||this.choose);
+ }
+ private progress(message:string):void{
+  if(this.closed)return;const translated=translateEnvironmentProgress(message,this.t);this.status.setText(translated);this.logs.setText([this.logs.textContent,translated].filter(Boolean).join('\n').split('\n').slice(-150).join('\n'));
+ }
+ private async installManaged():Promise<void>{
+  if(!this.vaultOptions||this.managedMode==='blocked')throw new Error(this.t('仓库环境目录不可用，请先检查目录归属。'));
+  const {provisionStandaloneEnvironment}=await import('./managed-runtime');
+  const hooks=this.options?.createOperationHooks?.('packages')||{before:()=>this.options?.onBeforePackages?.()||Promise.resolve(),after:()=>this.options?.onAfterPackages?.()};
+  const controller=new AbortController();this.abort=controller;this.cancel.setDisabled(false);let python:string;
+  try{
+   await hooks.before();python=await provisionStandaloneEnvironment(this.vaultOptions,message=>this.progress(message),controller.signal);
+  }catch(error){await this.inspectManaged();throw error}finally{hooks.after();this.cancel.setDisabled(true);this.abort=undefined}
+  if(this.closed)return;if(controller.signal.aborted){await this.inspectManaged();return}
+  await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed||this.managed.python!==python)throw new Error(this.t('仓库环境需要修复。'));
+  await this.activate(this.managed,this.options?.onManagedCreated||this.choose);
+
+ }
+ private async uninstallManaged():Promise<void>{
+  if(!this.vaultOptions||!this.managed)return;
+  const environment=this.managed;const {vaultEnvironmentDirectory}=await import('./vault-environment');const directory=vaultEnvironmentDirectory(this.vaultOptions.vaultRoot,this.vaultOptions.configDir,this.vaultOptions.deviceId);
+  if(!await confirm(this.app,this.t('删除仓库专用环境'),this.t('将关闭使用此环境的内核、清除运行变量，并删除此设备的 Python 和依赖。Notebook 和依赖清单保留。目录：{path}',{path:directory}),this.t))return;
+  const {removeStandaloneEnvironment}=await import('./managed-runtime');
+  const hooks=this.options?.createOperationHooks?.('uninstall')||{before:()=>this.options?.onBeforeUninstall?.()||Promise.resolve(),after:()=>this.options?.onAfterUninstall?.()};
+  try{
+   await hooks.before();this.progress(this.t('正在删除仓库专用环境…'));
+   try{await removeStandaloneEnvironment(this.vaultOptions)}catch(error){
+    await this.inspectManaged();if(!this.managed&&this.managedMode!=='blocked'){if(belongsToEnvironmentDirectory(this.current,environment.python))this.current='';this.catalog=this.catalog.filter(row=>!belongsToEnvironmentDirectory(row.python,environment.python));await this.options?.onUninstalled?.(environment)}throw error;
+   }
+   if(belongsToEnvironmentDirectory(this.current,environment.python))this.current='';this.managed=undefined;await this.inspectManaged();this.catalog=this.catalog.filter(row=>!belongsToEnvironmentDirectory(row.python,environment.python));await this.options?.onUninstalled?.(environment);this.status.setText(this.t('环境已删除，可重新安装。'));
+  }finally{hooks.after()}
+
+ }
+ private async dependencies():Promise<void>{
+  if(this.busy)return;
+  await this.action(async()=>{await this.inspectManaged();if(this.managedMode!=='ready'||!this.vaultOptions){this.status.setText(this.t('请先安装仓库专用环境。'));return}
+   const {showDependencies}=await import('./dependency-modal');await showDependencies(this.app,{...this.vaultOptions,translate:this.t,onBeforePackages:this.options?.onBeforePackages,onAfterPackages:this.options?.onAfterPackages,createOperationHooks:this.options?.createOperationHooks,currentPython:this.current})});
+ }
+ private manualPath():void{
+  if(this.busy)return;
+  const t=this.t;const picker=this;
+  class ManualModal extends Modal {
+   private path='';private status!:HTMLElement;private generation=0;
+   onOpen():void{
+    this.contentEl.createEl('h3',{text:t('手动选择 Python 环境')});this.contentEl.createEl('p',{text:t('输入 Python 可执行文件或环境目录的完整路径。只验证和选择，不会修改此环境。')});
+    new Setting(this.contentEl).setName(t('解释器或目录')).addText(input=>input.setPlaceholder('/path/to/environment').onChange(value=>{this.path=value.trim();this.generation++}));
+    this.status=this.contentEl.createEl('p');this.status.setAttribute('role','status');
+    new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('验证并选择')).setCta().onClick(async()=>{
+     const generation=this.generation;b.setDisabled(true);
+     try{const python=await resolveManualPython(this.path);const info=await picker.manager!.validate(python,picker.requiredModules());if(info.missing.length)throw new Error(t('缺少依赖：{modules}',{modules:info.missing.join(', ')}));if(generation!==this.generation)return;
+      const environment={name:t('手动选择'),python};const accepted=await picker.choose(environment);if(accepted===false||generation!==this.generation||picker.closed)return;picker.manual=environment;picker.current=python;picker.renderCatalog();this.close();
+     }catch(error){this.status.setText(t(String(error)))}finally{b.setDisabled(false)}
+    }));
+   }
+   onClose():void{this.generation++}
+  }
+  new ManualModal(this.app).open();
+ }
+ private async action(work:()=>Promise<void>):Promise<void>{
+  if(this.busy||this.closed)return;this.busy=true;this.controls.forEach(button=>button.setDisabled(true));this.renderCatalog();
+  try{await work()}catch(error){if(!this.closed){this.status.setText(String(error));new Notice(String(error))}}
+  finally{this.busy=false;if(!this.closed){this.controls.forEach(button=>button.setDisabled(false));this.renderCatalog()}}
  }
 }
+export async function resolveManualPython(path:string,platform=process.platform):Promise<string>{
+ const {stat}=await import('node:fs/promises');const {isAbsolute,join}=await import('node:path');
+ if(!isAbsolute(path))throw new Error('请输入绝对路径。');const entry=await stat(path);
+ if(entry.isFile())return path;if(!entry.isDirectory())throw new Error('请选择 Python 文件或环境目录。');
+ const candidates=platform==='win32'?[join(path,'python.exe'),join(path,'Scripts','python.exe')]:[join(path,'bin','python'),join(path,'bin','python3')];
+ for(const python of candidates){try{if((await stat(python)).isFile())return python}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}}
+ throw new Error('此目录没有找到 Python 解释器。');
+}
 
-export function confirm(app:App,title:string,message:string):Promise<boolean>{
+export function confirm(app:App,title:string,message:string,t:Translator=createTranslator('zh')):Promise<boolean>{
  return new Promise(resolve=>{
   class ConfirmModal extends Modal{
    private accepted=false;
-   onOpen():void{this.contentEl.createEl('h3',{text:title});this.contentEl.createEl('p',{text:message});new Setting(this.contentEl).addButton(b=>b.setButtonText('取消').onClick(()=>this.close())).addButton(b=>b.setButtonText('确认').setCta().onClick(()=>{this.accepted=true;this.close()}))}
+   onOpen():void{this.contentEl.createEl('h3',{text:title});this.contentEl.createEl('p',{text:message});new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('确认')).setCta().onClick(()=>{this.accepted=true;this.close()}))}
    onClose():void{resolve(this.accepted)}
   }
   new ConfirmModal(app).open();

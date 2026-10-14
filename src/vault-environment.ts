@@ -30,7 +30,7 @@ export async function getDeviceId(file=localDeviceFile()):Promise<string>{
 async function readDeviceId(file:string):Promise<string>{
  const text=await readFile(file,'utf8');
  let value:unknown;try{value=JSON.parse(text)}catch{throw new Error('本机设备配置损坏，请检查 device.json。')}
- const id=(value as {deviceId?:unknown}|null)?.deviceId;validateDeviceId(id);return id;
+ const id=isRecord(value)?value.deviceId:undefined;validateDeviceId(id);return id;
 }
 export function vaultEnvironmentDirectory(vaultRoot:string,configDir:string,deviceId:string):string{
  validateDeviceId(deviceId);
@@ -143,9 +143,9 @@ function assertInsideVault(root:string,path:string):void{
 
 async function validateOwnership(directory:string,deviceId:string,root:string):Promise<void>{
  const file=join(directory,'owner.json');
- let owner:{schema?:unknown;deviceId?:unknown;vaultRoot?:unknown};
+ let owner:unknown;
  try{const stat=await lstat(file);if(!stat.isFile()||stat.isSymbolicLink())throw new Error('不是普通文件');owner=JSON.parse(await readFile(file,'utf8'))}catch{throw new Error('现有环境缺少有效所有权信息；不会采用或修改。请检查 owner.json。')}
- if(!owner||owner.schema!==1||owner.deviceId!==deviceId||owner.vaultRoot!==root)throw new Error('现有环境所有权与本机仓库不符；不会修改。');
+ if(!isRecord(owner)||owner.schema!==1||owner.deviceId!==deviceId||owner.vaultRoot!==root)throw new Error('现有环境所有权与本机仓库不符；不会修改。');
 }
 export interface VaultEnvironmentInspection{
  python:string;complete:boolean;
@@ -192,3 +192,5 @@ export async function withVaultEnvironmentLease<T>(directory:string,operation:()
  const key=resolve(directory);if(provisioning.has(key))throw new Error('此设备仓库环境正在准备或删除，请稍候。');
  provisioning.add(key);try{return await operation()}finally{provisioning.delete(key)}
 }
+
+function isRecord(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value)}

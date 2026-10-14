@@ -1,3 +1,5 @@
+import {requestAsFetch} from './http-request';
+import {setTimeout,clearTimeout} from 'node:timers';
 import {spawn} from 'node:child_process';
 import {realpath} from 'node:fs/promises';
 import {inspectVaultEnvironment,withVaultEnvironmentLease,vaultEnvironmentDirectory,type VaultEnvironmentOptions,type VaultEnvironmentInspection} from './vault-environment';
@@ -9,7 +11,7 @@ type Progress=(message:string)=>void;
 export interface PackageServiceDependencies{
  inspect:(options:Options)=>Promise<VaultEnvironmentInspection|null>;
  lease:<T>(options:Options,run:()=>Promise<T>)=>Promise<T>;
- fetch:typeof globalThis.fetch;
+ fetch:typeof window.fetch;
  run:(python:string,args:string[],progress?:Progress,signal?:AbortSignal)=>Promise<{stdout:string;stderr:string}>;
 }
 const ALIASES:Record<string,string>={sklearn:'scikit-learn',cv2:'opencv-python',pil:'pillow',yaml:'pyyaml',bs4:'beautifulsoup4',dotenv:'python-dotenv'};
@@ -47,7 +49,7 @@ export async function runPackageProcess(python:string,args:string[],progress?:Pr
   const timeout=setTimeout(()=>stop('依赖操作超时，请检查网络后重试。'),10*60*1000);timeout.unref?.();
   const cleanup=()=>{clearTimeout(timeout);if(killTimer)clearTimeout(killTimer);signal?.removeEventListener('abort',abort);};
   const consume=(chunk:Buffer,error:boolean)=>{const text=chunk.toString();if(error)stderr=(stderr+text).slice(-128*1024);else{stdout+=text;if(stdout.length>8*1024*1024){stop('依赖操作输出超过限制。');stdout=stdout.slice(-128*1024);}}for(const line of text.split(/\r?\n/))if(line.trim())progress?.(line.slice(0,1000));};
-  child.stdout.on('data',chunk=>consume(chunk,false));child.stderr.on('data',chunk=>consume(chunk,true));
+  child.stdout.on('data',(chunk:Buffer)=>consume(chunk,false));child.stderr.on('data',(chunk:Buffer)=>consume(chunk,true));
   child.once('error',error=>{if(settled)return;settled=true;cleanup();reject(error);});
   child.once('close',code=>{if(settled)return;settled=true;if(reason)kill(true);cleanup();if(reason||code!==0)reject(new Error(reason??`依赖操作失败 (${code})：${stderr.slice(-4000)||stdout.slice(-4000)}`));else resolve({stdout,stderr});});
   if(signal?.aborted)abort();
@@ -56,7 +58,7 @@ export async function runPackageProcess(python:string,args:string[],progress?:Pr
 export class PackageService{
  private readonly dependencies:PackageServiceDependencies;
  constructor(private readonly options:Options,dependencies:Partial<PackageServiceDependencies>={}){
-  this.dependencies={inspect:inspectVaultEnvironment,fetch:(...args)=>globalThis.fetch(...args),run:runPackageProcess,lease:async(options,run)=>{await this.requireEnvironment(options);return withVaultEnvironmentLease(await realpath(vaultEnvironmentDirectory(options.vaultRoot,options.configDir,options.deviceId)),run);},...dependencies};
+  this.dependencies={inspect:inspectVaultEnvironment,fetch:requestAsFetch,run:runPackageProcess,lease:async(options,run)=>{await this.requireEnvironment(options);return withVaultEnvironmentLease(await realpath(vaultEnvironmentDirectory(options.vaultRoot,options.configDir,options.deviceId)),run);},...dependencies};
  }
  private async requireEnvironment(options=this.options):Promise<VaultEnvironmentInspection>{const environment=await this.dependencies.inspect(options);if(!environment?.complete)throw new Error('请先安装或修复本设备的仓库环境。');return environment;}
  async search(query:string,signal?:AbortSignal):Promise<PackageCandidate[]>{

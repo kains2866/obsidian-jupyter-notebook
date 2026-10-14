@@ -4,7 +4,7 @@
   <p><strong>在你的知识库里，编写笔记、运行代码、保留结果。</strong></p>
   <p>
     <a href="release-archives/v0.6.5/"><img src="https://img.shields.io/badge/version-0.6.5-8B5CF6?style=flat-square" alt="版本 0.6.5" /></a>
-    <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.5%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.5 及以上" /></a>
+    <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 及以上" /></a>
     <a href="#yaml-属性与-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#平台与运行方式"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="桌面端编辑与运行" /></a>
     <a href="https://buymeacoffee.com/kains3772d"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=flat-square&amp;logo=buymeacoffee&amp;logoColor=000000" alt="Buy Me a Coffee" /></a>
@@ -15,6 +15,10 @@
 </div>
 
 ---
+
+## Overview
+
+Jupyter Notebook is a desktop plugin for Obsidian that edits and runs native `.ipynb` files. It combines Markdown cells, Python code, and saved outputs in one workspace. Select an existing local Python environment or create a device-specific vault environment, manage dependencies, and check imports while editing. Requires Obsidian 1.8.7 or later. [Read the full English documentation](README.en.md).
 
 在 Obsidian 中原生创建、编辑和运行 Jupyter Notebook。
 
@@ -53,7 +57,7 @@
 
 目前采用手动安装方式。
 
-1. 下载 [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5) 中的 ZIP 并解压，或下载独立 `main.js`、`manifest.json` 和 `styles.css`。
+1. 下载 [仓库归档 ZIP](release-archives/v0.6.5/jupyter-notebook-v0.6.5.zip) 并解压，或从 [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
 
    [历史安装包](release-archives) 仍使用旧 `obsidian-ipynb/` 目录及原清单，必须保留包内全部五个文件；不要按下方新版三文件步骤安装旧包。
 2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.5 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
@@ -276,3 +280,7 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 </details>
 
 <p align="center"><sub>Created by <a href="https://github.com/kains2866">Kains</a> · Obsidian Jupyter Notebook</sub></p>
+
+## 权限与网络
+
+桌面端需要读取本机解释器和本设备环境目录，并通过不启用 shell 的子进程运行 Python、pip 与安装工具。这些权限是运行 Notebook 和管理环境所必需的；仅运行可信 Notebook。安装由用户触发，工具包校验固定 SHA-256。云同步依赖清单会验证包名与固定版本，不执行任意路径或 URL。包查询采用 Obsidian 网络接口；取消会立即停止界面等待，但该接口不提供中止已发出请求的能力。uv 下载继续采用 Electron 流式接口，支持进度、取消与大小限制。

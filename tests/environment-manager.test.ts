@@ -47,3 +47,5 @@ it('本机配置只返回定义字段且拒绝错误类型',async()=>{
 it('验证拒绝无效模块和隔离状态',async()=>{
  const manager=new EnvironmentManager(async()=>({stdout:'{"executable":"/python","version":3,"missing":[4],"isolated":"yes"}',stderr:''}));await expect(manager.validate('/python')).rejects.toThrow('无效');
 });
+
+it('rejects non-object Python validation payloads',async()=>{for(const payload of ['null','[]','42']){const manager=new EnvironmentManager(async()=>({stdout:payload,stderr:''}));await expect(manager.validate('/python')).rejects.toThrow('无效结果')}});

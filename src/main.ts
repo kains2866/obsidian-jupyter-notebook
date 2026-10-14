@@ -14,7 +14,8 @@ export default class NotebookPlugin extends Plugin{
  private persistedLocal={bridgePython:'',kernelPython:''};
  deviceId="";
  async onload():Promise<void>{
-  const stored=await this.loadData();
+  const raw:unknown=await this.loadData();
+  const stored=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Record<string,unknown>:undefined;
   const vaultId=typeof stored?.vaultId==='string'&&/^[a-zA-Z0-9_-]+$/.test(stored.vaultId)?stored.vaultId:crypto.randomUUID();
   this.settings={...DEFAULT_SETTINGS,...normalizePreferences(stored),vaultId};
   if(!Platform.isMobile){
@@ -24,7 +25,7 @@ export default class NotebookPlugin extends Plugin{
    let local:{bridgePython?:string;kernelPython?:string}={};let localReadFailed=false;
    try{local=await readLocalEnvironmentSettings(vaultId)}catch(error){localReadFailed=true;new Notice(this.getTranslator()('本机环境配置无法读取，原文件已保留。请重新选择解释器。{error}',{error:String(error)}),10000)}
    this.persistedLocal={bridgePython:local.bridgePython||'',kernelPython:local.kernelPython||''};
-   if(!localReadFailed&&!local.bridgePython&&stored?.bridgePython&&stored?.kernelPython){
+   if(!localReadFailed&&!local.bridgePython&&typeof stored?.bridgePython==='string'&&typeof stored?.kernelPython==='string'){
     // Migrate an existing installation only when both interpreters work on this device.
     const manager=new EnvironmentManager();
     try{

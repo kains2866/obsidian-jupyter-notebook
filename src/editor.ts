@@ -83,25 +83,25 @@ export class NotebookEditor {
   root.addEventListener('keydown',this.onKeyDown);root.addEventListener('scroll',this.onScroll,{passive:true});
   session.onChange=()=>this.refresh();session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&(snapshot?snapshot.preview[index]:sourceText(cell).trim()))this.preview.add(this.cellIdentity(cell))});this.renderCells();if(snapshot){snapshot.selections.forEach((selection,index)=>{if(selection&&this.editors[index])this.editors[index].dispatch({selection:EditorSelection.fromJSON(selection)})});if(snapshot.focused>=0)this.focusCell(snapshot.focused)}
  }
- captureState():EditorSnapshot{return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.editors.map(editor=>editor?.state.selection.toJSON()),focused:this.editors.findIndex(editor=>editor?.hasFocus)}}
+ captureState():EditorSnapshot{return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.editors.map(editor=>editor?{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex}:undefined),focused:this.editors.findIndex(editor=>editor?.hasFocus)}}
  private onScroll=()=>{if(Math.abs(this.root.scrollTop-this.expectedScroll)>1){this.captureAnchor();this.expectedScroll=this.root.scrollTop}};
  private onKeyDown=(e:KeyboardEvent)=>{
   if(e.key==='Escape')this.cancelDrag();
   if(this.actions.readOnly)return;
   if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();void this.perform(()=>this.actions.save())}
  };
- private el(tag:string,cls:string,parent:HTMLElement):HTMLElement{const el=document.createElement(tag);el.className=cls;parent.append(el);return el}
+ private el(tag:keyof HTMLElementTagNameMap,cls:string,parent:HTMLElement):HTMLElement{return parent.createEl(tag,{cls})}
  private button(parent:HTMLElement,text:string,action:()=>unknown,title=text):HTMLButtonElement{
   const actionId=text; text=this.t(text);title=this.t(title);
-  const b=document.createElement('button');b.dataset.action=actionId;b.type='button';b.textContent=text;b.title=title;b.setAttribute('aria-label',text);b.addEventListener('click',()=>void this.perform(action));parent.append(b);return b;
+  const b=parent.createEl('button');b.dataset.action=actionId;b.type='button';b.textContent=text;b.title=title;b.setAttribute('aria-label',text);b.addEventListener('click',()=>void this.perform(action));parent.append(b);return b;
  }
- private icon(name:string):SVGSVGElement{
-  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.75');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');
+ private icon(name:string,parent:HTMLElement):SVGSVGElement{
+  const svg=parent.createSvg('svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.75');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');
   const paths:Record<string,string>={play:'M8 5l11 7-11 7z',save:'M5 3h12l4 4v14H3V3h2 M7 3v6h10V3 M7 21v-8h10v8',stop:'M6 6h12v12H6z',restart:'M3 10a9 9 0 1 1 2 8 M3 4v6h6',plus:'M12 5v14 M5 12h14',edit:'M4 20l4-1 12-12-3-3L5 16z',up:'M6 15l6-6 6 6',down:'M6 9l6 6 6-6',close:'M6 6l12 12 M18 6L6 18',eye:'M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12 M9 12a3 3 0 1 0 6 0a3 3 0 1 0-6 0',grip:'M9 5h.01 M15 5h.01 M9 12h.01 M15 12h.01 M9 19h.01 M15 19h.01',more:'M5 12h.01 M12 12h.01 M19 12h.01'};
-  const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',paths[name]??paths.more);svg.append(path);return svg;
+  const path=svg.createSvg('path');path.setAttribute('d',paths[name]??paths.more);svg.append(path);return svg;
  }
- private iconButton(parent:HTMLElement,label:string,icon:string,action:()=>unknown,withText=false):HTMLButtonElement{const b=this.button(parent,label,action);b.replaceChildren(this.icon(icon));if(withText){label=this.t(label);const span=document.createElement('span');span.textContent=label;b.append(span)}else b.classList.add('ipynb-icon-button');return b}
- private menu(parent:HTMLElement,label:string):HTMLElement{const details=this.el('details','ipynb-menu',parent);const summary=this.el('summary','ipynb-menu-trigger',details);summary.setAttribute('aria-label',this.t(label));summary.title=this.t(label);summary.append(this.icon('more'));const panel=this.el('div','ipynb-menu-panel',details);panel.addEventListener('click',event=>{if((event.target as HTMLElement).closest('button'))details.removeAttribute('open')});return panel}
+ private iconButton(parent:HTMLElement,label:string,icon:string,action:()=>unknown,withText=false):HTMLButtonElement{const b=this.button(parent,label,action);b.replaceChildren(this.icon(icon,b));if(withText){label=this.t(label);const span=b.createSpan();span.textContent=label;b.append(span)}else b.classList.add('ipynb-icon-button');return b}
+ private menu(parent:HTMLElement,label:string):HTMLElement{const details=this.el('details','ipynb-menu',parent);const summary=this.el('summary','ipynb-menu-trigger',details);summary.setAttribute('aria-label',this.t(label));summary.title=this.t(label);summary.append(this.icon('more',summary));details.addEventListener('toggle',()=>parent.classList.toggle('ipynb-menu-open',details.hasAttribute('open')));const panel=this.el('div','ipynb-menu-panel',details);panel.addEventListener('click',event=>{if((event.target as HTMLElement).closest('button'))details.removeAttribute('open')});return panel}
  async perform(action:()=>unknown):Promise<void>{try{this.showMessage('');await action()}catch(error){this.showMessage(error instanceof Error?error.message:String(error))}}
  showDependencyNotice(moduleName:string,external:boolean,manage:()=>Promise<void>,choose:()=>Promise<void>):void{
   this.message.replaceChildren();this.message.hidden=false;
@@ -141,22 +141,22 @@ export class NotebookEditor {
    this.button(menu,'在下方插入',()=>this.insertAt(index+1,'code'));
    if(cell.cell_type==='code')this.button(menu,'清除单元格输出',()=>this.clearOutputs(index));
    this.button(menu,'删除',()=>this.structure(()=>removeCell(this.session.notebook,index)));
-   const select=document.createElement('select');select.setAttribute('aria-label',this.t('单元格类型'));
-   for(const [value,label] of [['code','代码'],['markdown','Markdown'],['raw','Raw']]){const o=document.createElement('option');o.value=value;o.textContent=this.t(label);select.append(o)}
+   const select=menu.createEl('select');select.setAttribute('aria-label',this.t('单元格类型'));
+   for(const [value,label] of [['code','代码'],['markdown','Markdown'],['raw','Raw']]){const o=select.createEl('option');o.value=value;o.textContent=this.t(label);select.append(o)}
    select.value=cell.cell_type;select.disabled=this.session.running||this.session.busy;select.addEventListener('change',()=>void this.perform(()=>this.structure(()=>editCell(this.session.notebook,index,{cell_type:select.value as CellType}))));menu.append(select);
    }
    const body=this.el('div','ipynb-cell-body',node);
    if(cell.cell_type==='markdown'&&(this.actions.readOnly||this.preview.has(this.cellIdentity(cell)))){
-    const preview=this.el('div','ipynb-markdown-preview markdown-rendered',body);preview.tabIndex=0;const hint=this.el('span','ipynb-cell-hint',body);hint.id=`ipynb-hint-${crypto.randomUUID()}`;hint.textContent=this.t(this.actions.readOnly?'Markdown 预览':'Markdown 预览，按 Enter 编辑');preview.setAttribute('aria-labelledby',hint.id);preview.setAttribute('role','group');if(!this.actions.readOnly)preview.addEventListener('dblclick',event=>{if(!(event.target as Element).closest('a,button,input,textarea,select,summary'))this.editMarkdown(index)});preview.addEventListener('keydown',event=>{if(!this.actions.readOnly&&event.target===preview&&event.key==='Enter'){event.preventDefault();this.editMarkdown(index)}});void this.actions.markdown(sourceText(cell),preview).catch(error=>this.showMessage(String(error)));
+    body.classList.add('ipynb-preview-body');const preview=this.el('div','ipynb-markdown-preview markdown-rendered',body);preview.tabIndex=0;const hint=this.el('span','ipynb-cell-hint',body);hint.id=`ipynb-hint-${crypto.randomUUID()}`;hint.textContent=this.t(this.actions.readOnly?'Markdown 预览':'Markdown 预览，按 Enter 编辑');preview.setAttribute('aria-labelledby',hint.id);preview.setAttribute('role','group');if(!this.actions.readOnly)preview.addEventListener('dblclick',event=>{if(!(event.target as Element).closest('a,button,input,textarea,select,summary'))this.editMarkdown(index)});preview.addEventListener('keydown',event=>{if(!this.actions.readOnly&&event.target===preview&&event.key==='Enter'){event.preventDefault();this.editMarkdown(index)}});void this.actions.markdown(sourceText(cell),preview).catch(error=>this.showMessage(String(error)));
    }else{
-    const host=this.el('div','ipynb-code',body);
+    node.classList.add('ipynb-editable-cell');const host=this.el('div','ipynb-code',body);
     const editor=new EditorView({parent:host,state:EditorState.create({doc:sourceText(cell),extensions:[
      lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),bracketMatching(),wordHighlights,history(),syntaxHighlighting(semanticHighlight,{fallback:true}),EditorState.readOnly.of(!!this.actions.readOnly),EditorView.editable.of(!this.actions.readOnly),
      ...(cell.cell_type==='code'?[python()]:cell.cell_type==='markdown'?[markdown()]:[]),
      keymap.of([{key:'Shift-Enter',run:()=>{if(this.actions.readOnly)return false;void this.perform(async()=>{if(cell.cell_type==='code')await this.actions.run(index);else{this.preview.add(this.cellIdentity(cell));this.renderCells()}if(cell.cell_type==='code')this.focusCell(index+1)});return true}},indentWithTab,...defaultKeymap,...historyKeymap]),
      EditorView.lineWrapping,
      EditorView.updateListener.of(update=>{if(update.docChanged)this.session.change(editCell(this.session.notebook,index,{source:update.state.doc.toString()}))}),
-     EditorView.theme({'&':{fontSize:'13px'},'.cm-content':{fontFamily:'var(--font-monospace)',caretColor:'var(--caret-color, var(--text-normal))'},'.cm-cursor':{borderLeftColor:'var(--caret-color, var(--text-normal))'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'var(--text-selection)'},'.cm-content ::selection':{backgroundColor:'var(--text-selection)'},'.cm-scroller':{overflow:'auto'},'.cm-gutters':{backgroundColor:'var(--background-secondary)',border:'none'}}),
+     EditorView.theme({'&':{fontSize:'13px'},'.cm-content':{fontFamily:'var(--font-monospace)',caretColor:'var(--caret-color, var(--text-normal))'},'.cm-cursor':{borderLeftColor:'var(--caret-color, var(--text-normal))'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'var(--text-selection)'},'.cm-content ::selection':{backgroundColor:'var(--text-selection)'},'.cm-scroller':{overflow:'auto'},'.cm-gutters':{backgroundColor:'transparent',border:'none'}}),
     ]})});this.editors[index]=editor;
    }
    if(cell.cell_type==='code'&&!this.actions.readOnly)this.el('div','ipynb-import-status',body);
@@ -191,8 +191,8 @@ export class NotebookEditor {
   if(event.button!==0||this.session.running||this.session.busy)return;event.preventDefault();this.cancelDrag();
   const ghost=this.el('div','ipynb-drag-ghost',this.root);const clone=this.cellNodes[from].cloneNode(true) as HTMLElement;clone.classList.add('ipynb-drag-cell');clone.removeAttribute('data-index');clone.removeAttribute('data-cell-id');clone.querySelectorAll('[data-cell-id]').forEach(el=>el.removeAttribute('data-cell-id'));clone.querySelectorAll('[tabindex], [contenteditable]').forEach(el=>{el.removeAttribute('tabindex');el.setAttribute('contenteditable','false')});clone.querySelectorAll('button,select,input').forEach(el=>(el as HTMLButtonElement).disabled=true);ghost.style.width=`${this.cellNodes[from].getBoundingClientRect().width}px`;ghost.append(clone);
   const line=this.el('div','ipynb-drop-line',this.list);this.dragging={from,to:from,y:event.clientY,ghost,line,frame:0};
-  document.addEventListener('pointermove',this.dragMove);document.addEventListener('pointerup',this.dragEnd);document.addEventListener('pointercancel',this.dragCancel);document.addEventListener('keydown',this.dragKey);
-  this.dragMove(event);this.dragging.frame=requestAnimationFrame(this.dragTick);
+  this.root.ownerDocument.addEventListener('pointermove',this.dragMove);this.root.ownerDocument.addEventListener('pointerup',this.dragEnd);this.root.ownerDocument.addEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.addEventListener('keydown',this.dragKey);
+  this.dragMove(event);this.dragging.frame=this.root.win.requestAnimationFrame(this.dragTick);
  }
  private dragKey=(event:KeyboardEvent)=>{if(event.key==='Escape')this.cancelDrag()};
  private dragCancel=()=>this.cancelDrag();
@@ -202,9 +202,9 @@ export class NotebookEditor {
   drag.to=Math.max(0,slot>drag.from?slot-1:slot);
   const target=this.cellNodes[slot];const bounds=this.list.getBoundingClientRect();drag.line.style.top=`${(target?target.getBoundingClientRect().top:this.cellNodes.at(-1)!.getBoundingClientRect().bottom)-bounds.top}px`;
  }
- private dragTick=()=>{const drag=this.dragging;if(!drag)return;const bounds=this.root.getBoundingClientRect();const margin=60;const delta=drag.y<bounds.top+margin?-Math.min(18,(bounds.top+margin-drag.y)/3):drag.y>bounds.bottom-margin?Math.min(18,(drag.y-bounds.bottom+margin)/3):0;if(delta){this.root.scrollTop+=delta;this.updateDrop()}drag.frame=requestAnimationFrame(this.dragTick)};
+ private dragTick=()=>{const drag=this.dragging;if(!drag)return;const bounds=this.root.getBoundingClientRect();const margin=60;const delta=drag.y<bounds.top+margin?-Math.min(18,(bounds.top+margin-drag.y)/3):drag.y>bounds.bottom-margin?Math.min(18,(drag.y-bounds.bottom+margin)/3):0;if(delta){this.root.scrollTop+=delta;this.updateDrop()}drag.frame=this.root.win.requestAnimationFrame(this.dragTick)};
  private dragEnd=()=>{const drag=this.dragging;if(!drag)return;const {from,to}=drag;this.cancelDrag();if(from!==to)void this.perform(()=>this.structure(()=>moveCell(this.session.notebook,from,to)))};
- private cancelDrag():void{if(this.dragging){cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}document.removeEventListener('pointermove',this.dragMove);document.removeEventListener('pointerup',this.dragEnd);document.removeEventListener('pointercancel',this.dragCancel);document.removeEventListener('keydown',this.dragKey)}
+ private cancelDrag():void{if(this.dragging){this.root.win.cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}this.root.ownerDocument.removeEventListener('pointermove',this.dragMove);this.root.ownerDocument.removeEventListener('pointerup',this.dragEnd);this.root.ownerDocument.removeEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.removeEventListener('keydown',this.dragKey)}
  focusCell(index:number):void{this.editors[Math.min(index,this.session.notebook.cells.length-1)]?.focus()}
  setImportStatuses(statuses:ImportStatus[]):void{this.importStatuses=statuses;this.renderImportStatuses()}
  private renderImportStatuses():void{
@@ -226,7 +226,7 @@ export class NotebookEditor {
    const node=this.cellNodes[index];if(!node)return;
    if(!this.structureChanging&&!this.identities.has(cell))this.identities.set(cell,node.dataset.cellId!);
    const count=node.querySelector('.ipynb-count');if(count)count.textContent=cell.cell_type==='code'?`[${(this.session.running||this.session.busy)&&index===this.session.runningIndex?'*':cell.execution_count??' '}]`:'';
-   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,this.actions.sanitize,this.session.outputOptions,this.t);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
+   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
    node.querySelectorAll<HTMLButtonElement>('button').forEach(b=>{if(['运行单元格','上移','下移','在下方插入','删除','预览','编辑','清除单元格输出'].includes(b.dataset.action??''))b.disabled=(this.session.running||this.session.busy) || (b.dataset.action==='上移'&&index===0)||(b.dataset.action==='下移'&&index===this.session.notebook.cells.length-1)});
    const select=node.querySelector('select');if(select)select.disabled=(this.session.running||this.session.busy);
   });

@@ -1,3 +1,4 @@
+import {setTimeout,clearTimeout} from 'node:timers';
 /** optional contains unavailable imports guarded by an ImportError handler. */
 export interface CellImportCheck {modules:string[];missing:string[];optional?:string[];syntaxError?:boolean}
 export interface ImportCheckResult {cells:CellImportCheck[]}

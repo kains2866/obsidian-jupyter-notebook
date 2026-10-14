@@ -1,3 +1,4 @@
+import {setTimeout,clearTimeout} from 'node:timers';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
 type Output = Record<string, unknown>;

@@ -12,7 +12,7 @@ import {EnvironmentPicker,confirm} from './settings';
 import {environmentName,belongsToEnvironmentDirectory} from './environments';
 export const NOTEBOOK_VIEW='native-ipynb';
 export class NotebookView extends FileView{
- private importTimer?:ReturnType<typeof setTimeout>;private importController?:AbortController;private importGeneration=0;private importKey='';
+ private importTimer?:number;private importController?:AbortController;private importGeneration=0;private importKey='';
  private session?:NotebookSession;private editor?:NotebookEditor;
  private kernel?:KernelClient;private starting?:Promise<KernelClient>;
  private kernelPython:string;
@@ -52,11 +52,11 @@ export class NotebookView extends FileView{
   if(Platform.isMobile||this.disposed||!this.session)return;
   const cells=this.session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText);
   const key=JSON.stringify([this.kernelPython,this.file?.path,cells]);if(!force&&key===this.importKey)return;this.importKey=key;
-  clearTimeout(this.importTimer);this.importController?.abort();const generation=++this.importGeneration;
+  window.clearTimeout(this.importTimer);this.importController?.abort();const generation=++this.importGeneration;
   if(!cells.length){this.editor?.setImportStatuses?.([]);return}
   if(!this.kernelPython){this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'no-environment'})));return}
   this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'checking'})));
-  this.importTimer=setTimeout(()=>{void this.checkImports(cells,generation)},900);
+  this.importTimer=window.setTimeout(()=>{void this.checkImports(cells,generation)},900);
  }
  private async checkImports(cells:string[],generation:number):Promise<void>{
   if(this.disposed||generation!==this.importGeneration)return;
@@ -239,7 +239,7 @@ export class NotebookView extends FileView{
  async onUnloadFile(_file:TFile):Promise<void>{await this.dispose()}
  async onClose():Promise<void>{await this.dispose()}
  private async dispose():Promise<void>{
-  if(this.disposed)return;this.disposed=true;this.stopAll=true;clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;
+  if(this.disposed)return;this.disposed=true;this.stopAll=true;window.clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;
   const starting=this.starting;
   try{
    try{await this.kernel?.close();if(starting)await starting.catch(()=>{})}

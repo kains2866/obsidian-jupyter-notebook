@@ -18,7 +18,7 @@ export class EnvironmentManager{
  constructor(private runner:Runner=run){}
  async validate(python:string,modules:string[]=['jupyter_client','ipykernel']):Promise<{executable:string;version:string;missing:string[];isolated:boolean;prefix?:string}>{
   const script='import sys,json,importlib.util,os; print(json.dumps({"executable":sys.executable,"prefix":sys.prefix,"version":sys.version.split()[0],"isolated":sys.prefix!=sys.base_prefix or os.path.isdir(os.path.join(sys.prefix,"conda-meta")),"missing":[m for m in sys.argv[1:] if importlib.util.find_spec(m) is None]}))';
-  try{const result=await this.runner(python,['-c',script,...modules]);const value=JSON.parse(result.stdout.trim());if(!value||typeof value.executable!=='string'||typeof value.version!=='string'||typeof value.isolated!=='boolean'||(value.prefix!==undefined&&typeof value.prefix!=='string')||!Array.isArray(value.missing)||!value.missing.every((item:unknown)=>typeof item==='string'))throw new Error('Python 返回无效结果');return value}catch(error){throw new Error(`无法验证 Python ${python}。请检查解释器路径和执行权限。${String(error)}`)}
+  try{const result=await this.runner(python,['-c',script,...modules]);const value:unknown=JSON.parse(result.stdout.trim());if(!isRecord(value)||typeof value.executable!=='string'||typeof value.version!=='string'||typeof value.isolated!=='boolean'||(value.prefix!==undefined&&typeof value.prefix!=='string')||!isStringArray(value.missing))throw new Error('Python 返回无效结果');return {executable:value.executable,version:value.version,isolated:value.isolated,missing:value.missing,...(typeof value.prefix==='string'?{prefix:value.prefix}:{})}}catch(error){throw new Error(`无法验证 Python ${python}。请检查解释器路径和执行权限。${String(error)}`)}
  }
  async create(basePython:string,directory:string,onReserved?:()=>Promise<void>):Promise<string>{
   if(this.busy.has(directory))throw new Error('此环境正在创建，请稍候。');this.busy.add(directory);
@@ -41,8 +41,8 @@ export class EnvironmentManager{
 }
 /** Device-local settings: never place interpreter paths in synced plugin data. */
 export function parseLocalEnvironmentSettings(text:string):{bridgePython?:string;kernelPython?:string}{
- const value=JSON.parse(text);
- if(!value||typeof value!=='object'||Array.isArray(value)||(value.bridgePython!==undefined&&typeof value.bridgePython!=='string')||(value.kernelPython!==undefined&&typeof value.kernelPython!=='string'))throw new Error('本机环境配置无效，请重新选择解释器');
+ const value:unknown=JSON.parse(text);
+ if(!isRecord(value)||(value.bridgePython!==undefined&&typeof value.bridgePython!=='string')||(value.kernelPython!==undefined&&typeof value.kernelPython!=='string'))throw new Error('本机环境配置无效，请重新选择解释器');
  return {...(typeof value.bridgePython==='string'?{bridgePython:value.bridgePython}:{}),...(typeof value.kernelPython==='string'?{kernelPython:value.kernelPython}:{})};
 }
 export async function readLocalEnvironmentSettings(vaultId:string):Promise<{bridgePython?:string;kernelPython?:string}>{
@@ -56,3 +56,7 @@ export async function ensureRequirementsManifest(vaultRoot:string):Promise<strin
  try{await writeFile(file,'# Notebook bridge and kernel dependencies\njupyter_client\nipykernel\n',{encoding:'utf8',flag:'wx'})}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error}
  return file;
 }
+
+function isRecord(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value)}
+
+function isStringArray(value:unknown):value is string[]{return Array.isArray(value)&&value.every((item:unknown)=>typeof item==='string')}

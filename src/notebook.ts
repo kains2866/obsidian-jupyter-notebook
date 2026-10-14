@@ -1,3 +1,4 @@
+import {valueText} from './value-text';
 export type Output = Record<string, unknown> & {output_type: string};
 export type CellType = 'code' | 'markdown' | 'raw';
 export interface Cell extends Record<string, unknown> {
@@ -25,7 +26,7 @@ export function serializeNotebook(n: Notebook): string {
 }
 export function sourceText(c: Cell): string { return Array.isArray(c.source) ? c.source.join('') : c.source; }
 export function newCell(type: CellType): Cell {
-  return {id:globalThis.crypto.randomUUID().replaceAll('-',''),cell_type:type,metadata:{},source:'',...(type==='code'?{outputs:[],execution_count:null}:{})};
+  return {id:window.crypto.randomUUID().replaceAll('-',''),cell_type:type,metadata:{},source:'',...(type==='code'?{outputs:[],execution_count:null}:{})};
 }
 function checkIndex(n: Notebook,index: number): void {
   if (!Number.isInteger(index) || index < 0 || index >= n.cells.length) throw new Error('单元格位置无效。');
@@ -35,7 +36,7 @@ export function editCell(n: Notebook,index: number,patch: Partial<Cell>): Notebo
   let c={...n.cells[index],...patch};
   if (patch.cell_type && patch.cell_type !== n.cells[index].cell_type) {
     const {outputs,execution_count,...rest}=c;
-    c={...rest,...(patch.cell_type==='code'?{outputs:[],execution_count:null}:{})} as Cell;
+    c={...rest,...(patch.cell_type==='code'?{outputs:[],execution_count:null}:{})};
   }
   return {...n,cells:n.cells.map((old,i)=>i===index?c:old)};
 }
@@ -62,7 +63,7 @@ export function applyOutput(n: Notebook,index: number,o: Output): Notebook {
   }
   const last=outputs.at(-1);
   if(o.output_type==='stream' && last?.output_type==='stream' && last.name===o.name) {
-    const str=(t:unknown)=>Array.isArray(t)?t.join(''):String(t??'');
+    const str=(t:unknown)=>Array.isArray(t)?t.map(valueText).join(''):valueText(t);
     return editCell(n,index,{outputs:[...outputs.slice(0,-1),{...last,text:str(last.text)+str(o.text)}]});
   }
   return editCell(n,index,{outputs:[...outputs,o]});

@@ -26,6 +26,6 @@ export const environmentTranslations:Record<string,string>={
 /** Translate our download counters while keeping subprocess logs intact. */
 export function translateEnvironmentProgress(message:string,t:(text:string,values?:Record<string,string|number>)=>string):string{
  const download=/^下载 uv：(\d+) 字节(?: \/ (\d+) 字节)?$/.exec(message);
- if(download)return download[2]?t('下载 uv：{received} / {total} 字节',{received:download[1]!,total:download[2]}):t('下载 uv：{received} 字节',{received:download[1]!});
+ if(download)return download[2]?t('下载 uv：{received} / {total} 字节',{received:download[1],total:download[2]}):t('下载 uv：{received} 字节',{received:download[1]});
  return t(message);
 }

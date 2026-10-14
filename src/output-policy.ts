@@ -1,3 +1,4 @@
+import {valueText} from './value-text';
 import {editCell,type Notebook,type Output} from './notebook';
 export interface OutputOptions {warnCellMiB:number;warnNotebookMiB:number;hardLimit:boolean;autoDiscardOld:boolean;collapse:boolean;collapseHeight:number;lazyImages:boolean;releaseHistoryOnClear:boolean}
 export const DEFAULT_OUTPUT_OPTIONS:OutputOptions={warnCellMiB:50,warnNotebookMiB:200,hardLimit:false,autoDiscardOld:false,collapse:true,collapseHeight:600,lazyImages:true,releaseHistoryOnClear:false};
@@ -5,7 +6,7 @@ const sizes=new WeakMap<Output,number>();
 export function outputBytes(output:Output):number{let bytes=sizes.get(output);if(bytes===undefined){bytes=new TextEncoder().encode(JSON.stringify(output)).length;sizes.set(output,bytes)}return bytes}
 /** Reuse the previous stream size: serialize only the appended chunk, not its growing prefix. */
 export function cacheStreamAppend(previous:Output,next:Output,chunk:unknown):void{
- const text=(value:unknown):string=>Array.isArray(value)?value.join(''):String(value??'');
+ const text=(value:unknown):string=>Array.isArray(value)?value.map(valueText).join(''):valueText(value);
  const old=text(previous.text),added=text(chunk);
  const pair=/[\uD800-\uDBFF]$/.test(old)&&/^[\uDC00-\uDFFF]/.test(added);
  sizes.set(next,outputBytes(previous)+new TextEncoder().encode(JSON.stringify(added)).length-2-(pair?8:0));

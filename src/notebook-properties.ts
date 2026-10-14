@@ -1,4 +1,4 @@
-import {parseYaml,type Plugin,type TFile,type TAbstractFile} from 'obsidian';
+import {parseYaml,type Plugin,type TFile,type TAbstractFile,type EventRef} from 'obsidian';
 import {parseNotebook,sourceText,type Notebook} from './notebook';
 
 /** Read standard Markdown frontmatter without changing notebook metadata or cells. */
@@ -6,14 +6,14 @@ export function readNotebookProperties(notebook:Notebook,parser:(source:string)=
  const cell=notebook.cells.find(cell=>cell.cell_type==='markdown');if(!cell)return null;
  const match=/^(?:\uFEFF)?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(sourceText(cell));if(!match)return null;
  const parsed:unknown=parser(match[1]);if(parsed==null)return {};
- if(typeof parsed!=='object'||Array.isArray(parsed))throw new Error('Notebook YAML 属性必须是键值对象。');
+ if(!isRecord(parsed))throw new Error('Notebook YAML 属性必须是键值对象。');
  const seen=new Set<object>();
  const validate=(value:unknown):void=>{
   if(value===null||typeof value!=='object')return;
   if(seen.has(value))throw new Error('Notebook YAML 属性不能包含循环引用。');seen.add(value);
   if(!Array.isArray(value)&&Object.getPrototypeOf(value)!==Object.prototype&&Object.getPrototypeOf(value)!==null&&!(value instanceof Date))throw new Error('Notebook YAML 属性包含不支持的对象。');
   for(const [key,child]of Object.entries(value)){if(['__proto__','constructor','prototype'].includes(key))throw new Error('Notebook YAML 属性包含不安全字段。');validate(child)}seen.delete(value);
- };validate(parsed);return parsed as Record<string,unknown>;
+ };validate(parsed);return parsed;
 }
 export function parseNotebookProperties(notebook:Notebook):{properties:Record<string,unknown>|null;error?:string}{
  try{return {properties:readNotebookProperties(notebook)}}catch(error){return {properties:null,error:String(error)}}
@@ -32,15 +32,15 @@ export class NotebookDataviewBridge{
   this.owner.registerEvent(vault.on('create',changed));this.owner.registerEvent(vault.on('modify',changed));
   this.owner.registerEvent(vault.on('delete',file=>this.remove(file.path)));
   this.owner.registerEvent(vault.on('rename',(file,oldPath)=>{this.remove(oldPath);if(this.isNotebook(file))return this.refresh(file)}));
-  this.owner.registerEvent(metadataCache.on('dataview:api-ready' as any,()=>this.scan()));
+  const dataviewEvents:unknown=metadataCache;if(hasDataviewEvents(dataviewEvents))this.owner.registerEvent(dataviewEvents.on('dataview:api-ready',()=>void this.scan()));
   workspace.onLayoutReady(()=>void this.scan());this.owner.register(()=>this.dispose());
  }
  private isNotebook(file:{path:string}):file is TFile{return file.path.toLowerCase().endsWith('.ipynb')}
  private api():DataviewApi|undefined{
-  const app=this.owner.app as typeof this.owner.app&{plugins?:{plugins?:Record<string,{api?:unknown}>}};
-  const api=app.plugins?.plugins?.dataview?.api as DataviewApi|undefined;if(!api)return undefined;
-  const index=api.index;
-  if(!index||!(index.pages instanceof Map)||typeof index.finish!=='function'||typeof index.touch!=='function'||typeof index.trigger!=='function'||![index.tags,index.etags,index.links].every(x=>typeof x?.delete==='function')||typeof api.luxon?.DateTime?.fromMillis!=='function'){
+  const app:unknown=this.owner.app;
+  if(!isRecord(app)||!isRecord(app.plugins)||!isRecord(app.plugins.plugins)||!isRecord(app.plugins.plugins.dataview))return undefined;
+  const api=app.plugins.plugins.dataview.api;if(api==null)return undefined;
+  if(!isDataviewApi(api)){
    if(!this.warned){this.warned=true;this.warn('当前 Dataview 版本不支持 Notebook 属性索引，请更新 Dataview。')}return undefined;
   }return api;
  }
@@ -65,4 +65,16 @@ export class NotebookDataviewBridge{
  }
  private remove(path:string):void{this.versions.set(path,(this.versions.get(path)||0)+1);this.removeOwned(path)}
  dispose():void{this.disposed=true;for(const path of this.owned.keys())this.removeOwned(path);this.versions.clear()}
+}
+
+function isRecord(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value)}
+function hasDataviewEvents(value:unknown):value is {on(name:string,callback:()=>void):EventRef}{return isRecord(value)&&typeof value.on==='function'}
+function isDataviewApi(value:unknown):value is DataviewApi{
+ if(!isRecord(value)||!isRecord(value.index)||!isRecord(value.luxon)||!hasFromMillis(value.luxon.DateTime))return false;
+ const index=value.index;
+ return index.pages instanceof Map&&typeof index.finish==='function'&&typeof index.touch==='function'&&typeof index.trigger==='function'&&[index.tags,index.etags,index.links].every(item=>isRecord(item)&&typeof item.delete==='function')&&typeof value.luxon.DateTime.fromMillis==='function';
+}
+
+function hasFromMillis(value:unknown):value is {fromMillis(value:number):unknown}{
+ return value!==null&&(typeof value==='object'||typeof value==='function')&&'fromMillis' in value&&typeof value.fromMillis==='function';
 }

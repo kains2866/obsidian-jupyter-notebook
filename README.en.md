@@ -4,7 +4,7 @@
   <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
   <p>
     <a href="release-archives/v0.6.5/"><img src="https://img.shields.io/badge/version-0.6.5-8B5CF6?style=flat-square" alt="Version 0.6.5" /></a>
-    <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.5%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.5 or later" /></a>
+    <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 or later" /></a>
     <a href="#yaml-properties-and-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="Desktop editing and execution" /></a>
     <a href="https://buymeacoffee.com/kains3772d"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=flat-square&amp;logo=buymeacoffee&amp;logoColor=000000" alt="Buy Me a Coffee" /></a>
@@ -53,7 +53,7 @@ Version 0.6.5 is a desktop-only release being prepared for community directory s
 
 The plugin currently uses manual installation.
 
-1. Download and extract the ZIP from the [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5), or download the individual `main.js`, `manifest.json`, and `styles.css` assets.
+1. Download and extract the [archived ZIP](release-archives/v0.6.5/jupyter-notebook-v0.6.5.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5).
 
    [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
 2. Create a `jupyter-notebook` folder containing the three 0.6.5 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
@@ -276,3 +276,7 @@ Thank you for your support. Scan the appropriate original payment code below. Do
 </details>
 
 <p align="center"><sub>Created by <a href="https://github.com/kains2866">Kains</a> · Obsidian Jupyter Notebook</sub></p>
+
+## Permissions and network access
+
+Desktop execution inspects local interpreters and device-specific environment directories, and starts Python, pip, and installation-tool processes without enabling a shell. These permissions are required to run notebooks and manage environments. Run only notebooks you trust. Installation starts on explicit user action; the tool archive is checked against its pinned SHA-256. Synced managed requirements allow only validated package names and pinned versions, not arbitrary paths or URLs. Package queries use the Obsidian request transport. Cancellation stops waiting promptly, but that transport cannot abort an already-issued network request. uv downloads retain Electron streaming for progress, cancellation, and size limits.

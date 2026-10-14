@@ -38,16 +38,16 @@ export async function discoverJupyterEnvironments(
 ):Promise<Environment[]>{
  if(!bridgePython)return [];
  const {access}=await import('node:fs/promises');const {isAbsolute,join,win32}=await import('node:path');
- if(!runner){const {execFile}=await import('node:child_process');runner=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{timeout:15000,maxBuffer:1024*1024},(error,stdout,stderr)=>error?reject(error):resolve({stdout,stderr})));}
+ if(!runner){const {execFile}=await import('node:child_process');runner=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{timeout:15000,maxBuffer:1024*1024},(error,stdout,stderr)=>error?reject(new Error(error.message)):resolve({stdout,stderr})));}
  const output=await runner(bridgePython,['-c','import json; from jupyter_client.kernelspec import KernelSpecManager; print(json.dumps(KernelSpecManager().get_all_specs()))']);
- const specs:unknown=JSON.parse(output.stdout.trim());if(!specs||typeof specs!=='object'||Array.isArray(specs))throw new Error('Jupyter 内核列表无效');
+ const specs:unknown=JSON.parse(output.stdout.trim());if(!isRecord(specs))throw new Error('Jupyter 内核列表无效');
  const result:Environment[]=[];
  for(const [key,value] of Object.entries(specs)){
-  const spec=(value as {spec?:{language?:string;argv?:unknown[];display_name?:string}})?.spec;
-  if(spec?.language?.toLowerCase()!=='python'||typeof spec.argv?.[0]!=='string')continue;
-  const command=spec.argv[0];if(!/^(python(?:\d+(?:\.\d+)*)?(?:\.exe)?)$/i.test(command.replaceAll('\\','/').split('/').at(-1)||''))continue;
+  if(!isRecord(value)||!isRecord(value.spec))continue;const spec=value.spec;
+  if(typeof spec.language!=='string'||spec.language.toLowerCase()!=='python'||!Array.isArray(spec.argv))continue;
+  const command:unknown=spec.argv[0];if(typeof command!=='string')continue;if(!/^(python(?:\d+(?:\.\d+)*)?(?:\.exe)?)$/i.test(command.replaceAll('\\','/').split('/').at(-1)||''))continue;
   const path=platform==='win32'?win32:{isAbsolute,join};const candidates=path.isAbsolute(command)?[command]:pathValue.split(platform==='win32'?';':':').filter(Boolean).flatMap(dir=>[path.join(dir,command),...(platform==='win32'&&!command.endsWith('.exe')?[path.join(dir,command+'.exe')]:[])]);
-  for(const python of candidates){try{await access(python);if(!result.some(e=>e.python===python))result.push({name:`Jupyter: ${spec.display_name||key}`,python,category:'jupyter'});break}catch{/* Stale kernels are omitted. */}}
+  for(const python of candidates){try{await access(python);if(!result.some(e=>e.python===python))result.push({name:`Jupyter: ${(typeof spec.display_name==='string'&&spec.display_name)||key}`,python,category:'jupyter'});break}catch{/* Stale kernels are omitted. */}}
  }
  return result;
 }
@@ -55,7 +55,7 @@ export async function discoverJupyterEnvironments(
 /** Explicit refresh uses execFile, never a shell command or PATH interpolation. */
 export async function autoDetectEnvironments(projectDir?:string,runner?:(file:string,args:string[])=>Promise<{stdout:string;stderr:string}>,platform=process.platform):Promise<Environment[]>{
  const local=await discoverEnvironments(projectDir,undefined,platform);
- if(!runner){const {execFile}=await import('node:child_process');runner=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{timeout:10000,maxBuffer:1024*1024},(error,stdout,stderr)=>error?reject(error):resolve({stdout,stderr})));}
+ if(!runner){const {execFile}=await import('node:child_process');runner=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{timeout:10000,maxBuffer:1024*1024},(error,stdout,stderr)=>error?reject(new Error(error.message)):resolve({stdout,stderr})));}
  try{const found=await runner(platform==='win32'?'where.exe':'which',platform==='win32'?['python']:['-a','python3']);
   const {access}=await import('node:fs/promises');const {isAbsolute,win32}=await import('node:path');
   for(const python of found.stdout.split(/\r?\n/).map(line=>line.trim()).filter(Boolean)){if(!(platform==='win32'?win32.isAbsolute(python):isAbsolute(python)))continue;try{await access(python);if(!local.some(item=>item.python===python))local.push({name:'PATH Python',python,category:'local'})}catch{/* Stale executable. */}}
@@ -69,3 +69,5 @@ export function belongsToEnvironmentDirectory(python:string,referencePython:stri
  if(directory===reference)return normalize(python)===reference;
  return normalize(python).startsWith(directory+'/');
 }
+
+function isRecord(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value)}

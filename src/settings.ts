@@ -11,16 +11,16 @@ export class NotebookSettingsTab extends PluginSettingTab {
  constructor(app:App,private plugin:NotebookPlugin){super(app,plugin)}
  private async updateSettings(next:NotebookSettings):Promise<void>{const previous=this.plugin.settings;this.plugin.settings=next;try{await this.plugin.saveSettings();this.plugin.onPreferencesChanged()}catch(error){this.plugin.settings=previous;new Notice(String(error));this.display()}}
  display():void{
-  const t=this.plugin.getTranslator();this.containerEl.empty();this.containerEl.createEl('h2',{text:t('Notebook 设置')});
-  new Setting(this.containerEl).setName(t('语言')).addDropdown(d=>d.addOption('auto',t('跟随 Obsidian')).addOption('zh','中文').addOption('en','English').setValue(this.plugin.settings.language).onChange(async value=>{await this.updateSettings({...this.plugin.settings,language:value as LanguageSetting});this.display()}));
+  const t=this.plugin.getTranslator();this.containerEl.empty();new Setting(this.containerEl).setName(t('Notebook 设置')).setHeading();
+  new Setting(this.containerEl).setName(t('语言')).addDropdown(d=>d.addOption('auto',t('跟随 Obsidian')).addOption('zh','中文').addOption('en','English').setValue(this.plugin.settings.language).onChange(value=>{void this.updateSettings({...this.plugin.settings,language:value as LanguageSetting}).then(()=>this.display())}));
   if(Platform.isMobile){this.containerEl.createEl('p',{text:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')});return}
-  new Setting(this.containerEl).setName(t('默认内核')).setDesc(t('新打开的 Notebook 使用此环境；当前内核保持运行。')).addButton(b=>b.setButtonText(t('选择环境')).onClick(()=>EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})));
-  this.containerEl.createEl('h3',{text:t('输出管理')});
-  const toggle=(key:keyof OutputOptions,label:string)=>new Setting(this.containerEl).setName(t(label)).addToggle(control=>control.setValue(Boolean(this.plugin.settings.outputOptions[key])).onChange(async value=>{await this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:value}})}));
+  new Setting(this.containerEl).setName(t('默认内核')).setDesc(t('新打开的 Notebook 使用此环境；当前内核保持运行。')).addButton(b=>b.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}));
+  new Setting(this.containerEl).setName(t('输出管理')).setHeading();
+  const toggle=(key:keyof OutputOptions,label:string)=>new Setting(this.containerEl).setName(t(label)).addToggle(control=>control.setValue(Boolean(this.plugin.settings.outputOptions[key])).onChange(value=>{void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:value}})}));
   toggle('collapse','折叠长输出');toggle('lazyImages','延迟加载图片');toggle('hardLimit','启用输出硬限制');toggle('autoDiscardOld','自动丢弃旧输出');toggle('releaseHistoryOnClear','清空输出时释放撤销历史');
-  for(const [key,label] of [['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const)new Setting(this.containerEl).setName(t(label)).addText(control=>control.setValue(String(this.plugin.settings.outputOptions[key])).onChange(async value=>{const number=Number(value);if(!Number.isFinite(number)||number<=0)return;await this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:number}})}));
+  for(const [key,label] of [['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const)new Setting(this.containerEl).setName(t(label)).addText(control=>control.setValue(String(this.plugin.settings.outputOptions[key])).onChange(value=>{const number=Number(value);if(!Number.isFinite(number)||number<=0)return;void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:number}})}));
   const advanced=this.containerEl.createEl('details');advanced.createEl('summary',{text:t('高级：手动 Python 路径')});
-  for(const [key,label] of [['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const)new Setting(advanced).setName(t(label)).addText(control=>control.setValue(this.plugin.settings[key]).onChange(async value=>{await this.updateSettings({...this.plugin.settings,[key]:value.trim()})}));
+  for(const [key,label] of [['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const)new Setting(advanced).setName(t(label)).addText(control=>control.setValue(this.plugin.settings[key]).onChange(value=>{void this.updateSettings({...this.plugin.settings,[key]:value.trim()})}));
  }
 
 }
@@ -75,13 +75,13 @@ export class EnvironmentManagerModal extends Modal {
  }
  onClose():void{this.closed=true;this.abort?.abort()}
  private addButton(parent:HTMLElement,label:string,click:()=>void|Promise<void>,disabled=false):void{
-  new Setting(parent).addButton(b=>{this.controls.push(b);b.setButtonText(this.t(label)).setDisabled(this.busy||disabled).onClick(click)});
+  new Setting(parent).addButton(b=>{this.controls.push(b);b.setButtonText(this.t(label)).setDisabled(this.busy||disabled).onClick(()=>{void click()})});
  }
  private requiredModules():string[]{return this.options?.bridgePython?['ipykernel']:['jupyter_client','ipykernel']}
  private async initialize(refresh=false):Promise<void>{
   const {EnvironmentManager}=await import('./environment-manager');this.manager=new EnvironmentManager();
   const vaultRoot=this.options?.vaultRoot||this.projectDir;
-  if(vaultRoot){const {getDeviceId}=await import('./vault-environment');this.vaultOptions={vaultRoot,configDir:this.options?.configDir||'.obsidian',deviceId:this.options?.deviceId||await getDeviceId()}}
+  if(vaultRoot){const {getDeviceId}=await import('./vault-environment');this.vaultOptions={vaultRoot,configDir:this.options?.configDir||this.app.vault.configDir,deviceId:this.options?.deviceId||await getDeviceId()}}
   await this.inspectManaged();
   const {discoverEnvironments,discoverJupyterEnvironments,autoDetectEnvironments}=await import('./environments');
   const local=await (refresh?autoDetectEnvironments:discoverEnvironments)(vaultRoot);
@@ -105,14 +105,14 @@ export class EnvironmentManagerModal extends Modal {
   const owned=this.list.createDiv({cls:'ipynb-kernel-row ipynb-kernel-owned'});
   const info=owned.createDiv({cls:'ipynb-kernel-info'});info.createEl('strong',{text:this.t('仓库专用环境（本设备）')});
   info.createEl('small',{text:this.t('在此仓库为本设备安装独立 Python 和 Notebook 依赖；其他设备分别安装自己的环境。')});
-  info.createEl('span',{text:[this.managedVersion?this.t('Python {version}',{version:this.managedVersion}):'',this.managedDescription].filter(Boolean).join(' · '),cls:'ipynb-kernel-version'});
+  info.createSpan({text:[this.managedVersion?this.t('Python {version}',{version:this.managedVersion}):'',this.managedDescription].filter(Boolean).join(' · '),cls:'ipynb-kernel-version'});
   const actions=owned.createDiv({cls:'ipynb-kernel-actions'});
   if(this.managedMode!=='ready')this.addButton(actions,this.managedMode==='repair'?'修复':'安装',()=>this.action(()=>this.installManaged()),this.managedMode==='blocked');
   if(this.managed)this.addButton(actions,'删除',()=>this.action(()=>this.uninstallManaged()));
   this.radio(owned,this.managed?.python,'仓库专用环境（本设备）',this.managedMode!=='ready',()=>this.activateManaged());
   for(const row of this.catalog.filter(row=>(!this.managed||!belongsToEnvironmentDirectory(row.python,this.managed.python))&&row.python!==this.manual?.python)){
    const element=this.list.createDiv({cls:'ipynb-kernel-row'});const text=element.createDiv({cls:'ipynb-kernel-info'});
-   text.createEl('strong',{text:row.name});text.createEl('span',{text:row.version?this.t('Python {version}',{version:row.version}):this.t('不可用'),cls:'ipynb-kernel-version'});text.createEl('small',{text:row.python});
+   text.createEl('strong',{text:row.name});text.createSpan({text:row.version?this.t('Python {version}',{version:row.version}):this.t('不可用'),cls:'ipynb-kernel-version'});text.createEl('small',{text:row.python});
    if(row.error||row.missing?.length)text.createEl('small',{text:row.error||this.t('缺少依赖：{modules}',{modules:row.missing!.join(', ')})});
    this.radio(element,row.python,row.name,Boolean(row.error||row.missing?.length),()=>this.activate(row,this.choose));
   }
@@ -122,8 +122,8 @@ export class EnvironmentManagerModal extends Modal {
  }
  private radio(parent:HTMLElement,python:string|undefined,label:string,disabled:boolean,choose:()=>Promise<void>):void{
   const radio=parent.createEl('input',{type:'radio',cls:'ipynb-kernel-radio'});radio.setAttribute('name','ipynb-kernel');radio.setAttribute('aria-label',this.t(label));radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));radio.disabled=this.busy||disabled;
-  if(radio.checked)(parent.children[0] as HTMLElement).createEl('span',{text:this.t('启用中'),cls:'ipynb-kernel-badge'});
-  radio.addEventListener('change',()=>{radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));return this.action(choose)});
+  if(radio.checked)(parent.children[0] as HTMLElement).createSpan({text:this.t('启用中'),cls:'ipynb-kernel-badge'});
+  radio.addEventListener('change',()=>{radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));void this.action(choose)});
  }
  private async activate(environment:Environment,choose:(environment:Environment)=>void|boolean|Promise<void|boolean>):Promise<void>{
   if(!this.manager||this.closed)return;const info=await this.manager.validate(environment.python,this.requiredModules());
@@ -172,28 +172,31 @@ export class EnvironmentManagerModal extends Modal {
  }
  private manualPath():void{
   if(this.busy)return;
-  const t=this.t;const picker=this;
+  const t=this.t;
+  const validate=(python:string)=>this.manager!.validate(python,this.requiredModules());
+  const choose=(environment:Environment)=>this.choose(environment);
+  const accept=(environment:Environment):boolean=>{if(this.closed)return false;this.manual=environment;this.current=environment.python;this.renderCatalog();return true};
   class ManualModal extends Modal {
    private path='';private status!:HTMLElement;private generation=0;
    onOpen():void{
     this.contentEl.createEl('h3',{text:t('手动选择 Python 环境')});this.contentEl.createEl('p',{text:t('输入 Python 可执行文件或环境目录的完整路径。只验证和选择，不会修改此环境。')});
     new Setting(this.contentEl).setName(t('解释器或目录')).addText(input=>input.setPlaceholder('/path/to/environment').onChange(value=>{this.path=value.trim();this.generation++}));
     this.status=this.contentEl.createEl('p');this.status.setAttribute('role','status');
-    new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('验证并选择')).setCta().onClick(async()=>{
+    new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('验证并选择')).setCta().onClick(()=>{void (async()=>{
      const generation=this.generation;b.setDisabled(true);
-     try{const python=await resolveManualPython(this.path);const info=await picker.manager!.validate(python,picker.requiredModules());if(info.missing.length)throw new Error(t('缺少依赖：{modules}',{modules:info.missing.join(', ')}));if(generation!==this.generation)return;
-      const environment={name:t('手动选择'),python};const accepted=await picker.choose(environment);if(accepted===false||generation!==this.generation||picker.closed)return;picker.manual=environment;picker.current=python;picker.renderCatalog();this.close();
+     try{const python=await resolveManualPython(this.path);const info=await validate(python);if(info.missing.length)throw new Error(t('缺少依赖：{modules}',{modules:info.missing.join(', ')}));if(generation!==this.generation)return;
+      const environment={name:t('手动选择'),python};const accepted=await choose(environment);if(accepted===false||generation!==this.generation||!accept(environment))return;this.close();
      }catch(error){this.status.setText(t(String(error)))}finally{b.setDisabled(false)}
-    }));
+    })()}));
    }
    onClose():void{this.generation++}
   }
   new ManualModal(this.app).open();
  }
  private async action(work:()=>Promise<void>):Promise<void>{
-  if(this.busy||this.closed)return;this.busy=true;this.controls.forEach(button=>button.setDisabled(true));this.renderCatalog();
+  if(this.busy||this.closed)return;this.busy=true;this.controls.forEach(button=>{button.setDisabled(true)});this.renderCatalog();
   try{await work()}catch(error){if(!this.closed){this.status.setText(String(error));new Notice(String(error))}}
-  finally{this.busy=false;if(!this.closed){this.controls.forEach(button=>button.setDisabled(false));this.renderCatalog()}}
+  finally{this.busy=false;if(!this.closed){this.controls.forEach(button=>{button.setDisabled(false)});this.renderCatalog()}}
  }
 }
 export async function resolveManualPython(path:string,platform=process.platform):Promise<string>{

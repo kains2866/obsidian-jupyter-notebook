@@ -12,6 +12,9 @@ scope:
 
 ## [0.6.5] - 2026-10-14
 
+- 同版本审核修订：最低 Obsidian 版本设为 1.8.7，设置标题、窗口 DOM、异步回调、类型安全与主题 CSS 适配审核规范。
+- 主 README 添加英文介绍；增设官方 ESLint 检查和 GitHub Actions 来源证明，Release 仅保留三个标准附件，ZIP 位于仓库归档。
+
 - 准备商店标准三文件安装；Python 桥接与依赖检测脚本内嵌并按需恢复。
 - 根目录清单作为构建来源，统一 Jupyter Notebook 名称、jupyter-notebook ID、作者和赞助链接。
 - 添加 MIT 与版本兼容记录；商店版设为桌面专用，附旧 ID 迁移说明。

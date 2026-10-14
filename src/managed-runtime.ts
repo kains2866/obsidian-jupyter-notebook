@@ -1,3 +1,5 @@
+import {requestAsFetch} from './http-request';
+import {setTimeout,clearTimeout} from 'node:timers';
 import {execFile,spawn} from 'node:child_process';
 import {createHash,randomUUID} from 'node:crypto';
 import {chmod,copyFile,lstat,mkdir,mkdtemp,readFile,realpath,readdir,rename,rm,stat,writeFile} from 'node:fs/promises';
@@ -19,7 +21,7 @@ export function uvAsset(platform=process.platform,arch=process.arch):{name:strin
  const cpu=arch==='arm64'?'aarch64':arch==='x64'?'x86_64':null;
  const os=platform==='darwin'?'apple-darwin':platform==='linux'?'unknown-linux-gnu':platform==='win32'?'pc-windows-msvc':null;
  const key=`${cpu}-${os}`;if(!cpu||!os||!hashes[key])throw new Error('此操作系统或处理器不支持自动安装 Python。');
- return {name:`uv-${key}.${platform==='win32'?'zip':'tar.gz'}`,sha256:hashes[key]!};
+ return {name:`uv-${key}.${platform==='win32'?'zip':'tar.gz'}`,sha256:hashes[key]};
 }
 export type RuntimeRunner=(file:string,args:string[],options:{cwd:string;env:NodeJS.ProcessEnv;signal?:AbortSignal;progress?:(message:string)=>void})=>Promise<{stdout:string;stderr:string}>;
 export interface ManagedRuntimeOptions{vaultRoot:string;configDir:string;deviceId:string;run?:RuntimeRunner;download?:(url:string,progress?:((message:string)=>void),signal?:AbortSignal)=>Promise<Buffer>}
@@ -32,7 +34,7 @@ const run:RuntimeRunner=(file,args,options)=>new Promise((resolve,reject)=>{
  const terminate=()=>{
   if(!child.pid)return;
   if(process.platform==='win32')execFile('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{timeout:10000,maxBuffer:65536},()=>{});
-  else {try{process.kill(-child.pid,'SIGTERM')}catch{};const pid=child.pid;const timer=setTimeout(()=>{try{process.kill(-pid,'SIGKILL')}catch{}},1000);timer.unref?.()}
+  else {try{process.kill(-child.pid,'SIGTERM')}catch{/* Process may already have exited. */};const pid=child.pid;const timer=setTimeout(()=>{try{process.kill(-pid,'SIGKILL')}catch{/* Process may already have exited. */}},1000);timer.unref?.()}
  };
  const onAbort=()=>{canceled=true;terminate()};
  const timeout=setTimeout(()=>{failure='安装超时。';terminate()},15*60*1000);timeout.unref?.();
@@ -49,10 +51,10 @@ export function selectRuntimeFetch(electron?:ElectronNetwork):typeof fetch{
  const net=electron?.net??electron?.remote?.net;
  if(net)return net.fetch.bind(net);
  if(electron)throw new Error('Electron 下载接口不可用，请更新 Obsidian。');
- return fetch;
+ return requestAsFetch;
 }
 async function downloadBody(url:string,progress?:((message:string)=>void),signal?:AbortSignal):Promise<Buffer>{
- const transport=selectRuntimeFetch(process.versions.electron?require('electron') as ElectronNetwork:undefined);
+ const transport=selectRuntimeFetch(process.versions.electron?await import('electron'):undefined);
  const response=await transport(url,{signal});if(!response.ok||!response.body)throw new Error(`下载失败：HTTP ${response.status}`);
  const total=Number(response.headers.get('content-length'))||0;const reader=response.body.getReader();const parts:Uint8Array[]=[];let received=0,last=0;
  try{while(true){aborted(signal);const next=await reader.read();if(next.done)break;received+=next.value.length;if(received>64*1024*1024)throw new Error('下载文件超过安全大小限制。');parts.push(next.value);if(Date.now()-last>250){last=Date.now();progress?.(`下载 uv：${received} 字节${total?` / ${total} 字节`:''}`)}}}finally{await reader.cancel().catch(()=>{})}
@@ -62,11 +64,11 @@ async function downloadBody(url:string,progress?:((message:string)=>void),signal
 export async function downloadRuntimeAsset(url:string,progress?:((message:string)=>void),signal?:AbortSignal):Promise<Buffer>{
  aborted(signal);const controller=new AbortController();let timedOut=false;
  const relay=()=>controller.abort();signal?.addEventListener('abort',relay,{once:true});
- const timeout=setTimeout(()=>{timedOut=true;controller.abort()},120000);timeout.unref?.();
+ const timeout=window.setTimeout(()=>{timedOut=true;controller.abort()},120000);
  let rejectAbort:()=>void=()=>{};
  const stopped=new Promise<never>((_resolve,reject)=>{rejectAbort=()=>reject(new Error(timedOut?'下载超时，请检查网络后重试。':'安装已取消。'));controller.signal.addEventListener('abort',rejectAbort,{once:true})});
  try{return await Promise.race([downloadBody(url,progress,controller.signal),stopped])}
- finally{clearTimeout(timeout);signal?.removeEventListener('abort',relay);controller.signal.removeEventListener('abort',rejectAbort)}
+ finally{window.clearTimeout(timeout);signal?.removeEventListener('abort',relay);controller.signal.removeEventListener('abort',rejectAbort)}
 }
 function inside(root:string,path:string):boolean{const offset=relative(root,path);return !!offset&&offset!=='..'&&!offset.startsWith(`..${sep}`)&&!isAbsolute(offset)}
 async function ownedDirectory(options:ManagedRuntimeOptions,create:boolean):Promise<string|null>{
@@ -75,7 +77,7 @@ async function ownedDirectory(options:ManagedRuntimeOptions,create:boolean):Prom
  try{const entry=await lstat(directory);if(!entry.isDirectory()||entry.isSymbolicLink()||!inside(root,await realpath(directory)))throw new Error('运行时目录不是安全的普通目录。')}
  catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;if(!create)return null;await mkdir(dirname(directory),{recursive:true});await mkdir(directory);await writeFile(join(directory,'owner.json'),JSON.stringify({schema:1,deviceId:options.deviceId,vaultRoot:root}),{flag:'wx'});}
  const ownerFile=join(directory,'owner.json');const info=await lstat(ownerFile);if(!info.isFile()||info.isSymbolicLink())throw new Error('运行时缺少有效所有权信息。');
- const owner=JSON.parse(await readFile(ownerFile,'utf8'));if(owner.schema!==1||owner.deviceId!==options.deviceId||owner.vaultRoot!==root)throw new Error('运行时所有权与本设备仓库不符。');
+ const rawOwner:unknown=JSON.parse(await readFile(ownerFile,'utf8'));const owner=rawOwner&&typeof rawOwner==='object'?rawOwner as Record<string,unknown>:{};if(owner.schema!==1||owner.deviceId!==options.deviceId||owner.vaultRoot!==root)throw new Error('运行时所有权与本设备仓库不符。');
  // Never pass writable uv paths through foreign directory links.
  for(const name of ['tools','python','cache','bin']){try{const info=await lstat(join(directory,name));if(!info.isDirectory()||info.isSymbolicLink())throw new Error('运行时子目录不是安全的普通目录。')}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}}
  await validateRuntimeTree(directory);

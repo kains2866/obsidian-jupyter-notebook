@@ -8,8 +8,8 @@ export class NotebookSession {
  private savedNotebook:Notebook;
  outputOptions:OutputOptions;
  outputWarning="";
- private renderTimer?:ReturnType<typeof setTimeout>;
- private scheduleChange():void{if(!this.renderTimer)this.renderTimer=setTimeout(()=>{this.renderTimer=undefined;this.onChange()},75)}
+ private renderTimer?:number;
+ private scheduleChange():void{if(!this.renderTimer)this.renderTimer=window.setTimeout(()=>{this.renderTimer=undefined;this.onChange()},75)}
  private saving?:Promise<void>;
  running=false;
  runningIndex:number|null=null;
@@ -72,6 +72,6 @@ export class NotebookSession {
    });
    this.history.replace(editCell(this.notebook,index,{execution_count:result.execution_count}));
    return result.status;
-  }finally{if(this.renderTimer){clearTimeout(this.renderTimer);this.renderTimer=undefined}this.running=false;this.runningIndex=null;this.onChange()}
+  }finally{if(this.renderTimer){window.clearTimeout(this.renderTimer);this.renderTimer=undefined}this.running=false;this.runningIndex=null;this.onChange()}
  }
 }

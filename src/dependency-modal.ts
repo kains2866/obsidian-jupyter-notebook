@@ -40,9 +40,9 @@ export class DependencyModal extends Modal {
   this.modalEl.classList.add('ipynb-dependency-modal');this.contentEl.createEl('h2',{text:this.t('管理仓库依赖')});
   this.contentEl.createEl('p',{text:this.t('仅管理本设备的仓库专用环境；不会修改系统 Python 或其他环境。'),cls:'ipynb-environment-description'});
   const tabs=this.contentEl.createDiv({cls:'ipynb-dependency-tabs'});tabs.setAttribute('role','tablist');
-  for(const [value,label] of [['search','搜索安装'],['installed','已安装']] as const)new Setting(tabs).addButton(b=>{this.tabs.push(b);b.setButtonText(this.t(label));b.buttonEl.setAttribute('role','tab');b.buttonEl.setAttribute('aria-selected',String(this.tab===value));b.onClick(()=>{if(this.busy)return;this.tab=value;this.updateTabs();return this.read()})});
+  for(const [value,label] of [['search','搜索安装'],['installed','已安装']] as const)new Setting(tabs).addButton(b=>{this.tabs.push(b);b.setButtonText(this.t(label));b.buttonEl.setAttribute('role','tab');b.buttonEl.setAttribute('aria-selected',String(this.tab===value));b.onClick(()=>{if(this.busy)return;this.tab=value;this.updateTabs();void this.read()})});
   const search=this.contentEl.createDiv({cls:'ipynb-dependency-search'});
-  new Setting(search).addText(input=>{this.queryControl=input;input.setValue(this.queries.search).setPlaceholder(this.t('输入包名，例如 pandas')).onChange(value=>{this.queries[this.tab]=value.trim()})}).addButton(b=>{this.searchButton=b;b.setButtonText(this.t('搜索')).setDisabled(true).onClick(()=>{if(this.busy)return;return this.read()})});
+  new Setting(search).addText(input=>{this.queryControl=input;input.setValue(this.queries.search).setPlaceholder(this.t('输入包名，例如 pandas')).onChange(value=>{this.queries[this.tab]=value.trim()})}).addButton(b=>{this.searchButton=b;b.setButtonText(this.t('搜索')).setDisabled(true).onClick(()=>{if(this.busy)return;void this.read()})});
   this.instructions=this.contentEl.createEl('small',{text:this.t('按准确包名查询 PyPI，支持常用模块名映射；不执行自动安装。'),cls:'ipynb-environment-description'});
   this.results=this.contentEl.createDiv({cls:'ipynb-package-list'});
   this.status=this.contentEl.createEl('p',{text:this.t('正在检查仓库环境…'),cls:'ipynb-environment-status'});this.status.setAttribute('role','status');this.status.setAttribute('aria-live','polite');
@@ -62,7 +62,7 @@ export class DependencyModal extends Modal {
    const {PackageService}=await import('./package-service');this.service=new PackageService(this.options);this.ready=true;
    if(this.options.currentPython&&!belongsToEnvironmentDirectory(this.options.currentPython,owned.python)){
     this.contentEl.createEl('p',{text:this.t('当前 Notebook 使用外部环境。这里安装的依赖只用于仓库环境；切换内核后才会生效。'),cls:'ipynb-environment-warning'});
-    if(this.options.chooseManaged)new Setting(this.contentEl).addButton(b=>{this.switchButton=b;b.setButtonText(this.t('选择运行环境')).onClick(async()=>{if(this.busy||this.closed)return;this.close();try{await this.options.chooseManaged?.()}catch(error){new Notice(String(error))}})});
+    if(this.options.chooseManaged)new Setting(this.contentEl).addButton(b=>{this.switchButton=b;b.setButtonText(this.t('选择运行环境')).onClick(()=>{if(this.busy||this.closed)return;this.close();void Promise.resolve().then(()=>this.options.chooseManaged?.()).catch(error=>{new Notice(String(error))})})});
    }
    this.searchButton.setDisabled(false);await this.read();
   }catch(error){if(!this.closed)this.status.setText(String(error))}
@@ -94,21 +94,21 @@ export class DependencyModal extends Modal {
   if(item.projectUrl.startsWith('https://pypi.org/')){const link=info.createEl('a',{text:this.t('来源：PyPI'),href:item.projectUrl});link.setAttribute('target','_blank');link.setAttribute('rel','noopener noreferrer')}
   const installed=this.installedPackages.find(value=>normalizeName(value.name)===normalizeName(item.name));
   if(installed){
-   info.createEl('span',{text:this.t('已安装版本：{version}',{version:installed.version}),cls:'ipynb-kernel-badge'});
+   info.createSpan({text:this.t('已安装版本：{version}',{version:installed.version}),cls:'ipynb-kernel-badge'});
    if(installed.protected)info.createEl('small',{text:this.t('运行必需，无法单独删除。')});
    if(installed.requiredBy.length)info.createEl('small',{text:this.t('被这些依赖使用：{names}',{names:installed.requiredBy.join(', ')})});
-   new Setting(row).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('删除')).setDisabled(installed.protected).onClick(()=>{if(installed.protected)return;return this.mutate('uninstall',installed.name,undefined,installed.requiredBy)})}).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('重新安装')).setDisabled(installed.protected).onClick(()=>{if(installed.protected)return;return this.mutate('reinstall',installed.name,installed.version)})});
-  }else new Setting(row).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('安装')).onClick(()=>this.mutate('install',item.name,item.version))});
+   new Setting(row).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('删除')).setDisabled(installed.protected).onClick(()=>{if(installed.protected)return;void this.mutate('uninstall',installed.name,undefined,installed.requiredBy)})}).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('重新安装')).setDisabled(installed.protected).onClick(()=>{if(installed.protected)return;void this.mutate('reinstall',installed.name,installed.version)})});
+  }else new Setting(row).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('安装')).onClick(()=>{void this.mutate('install',item.name,item.version)})});
 
  }
  private installed(item:InstalledPackage):void{
   const row=this.results.createDiv({cls:'ipynb-package-row'});const info=row.createDiv({cls:'ipynb-package-info'});info.createEl('strong',{text:`${item.name} · ${item.version}`});
   if(item.protected)info.createEl('small',{text:this.t('运行必需，无法单独删除。')});
   if(item.requiredBy.length)info.createEl('small',{text:this.t('被这些依赖使用：{names}',{names:item.requiredBy.join(', ')})});
-  new Setting(row).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('卸载')).setDisabled(item.protected).onClick(()=>{if(item.protected)return;return this.mutate('uninstall',item.name,undefined,item.requiredBy)})});
+  new Setting(row).addButton(b=>{this.rowButtons.push(b);b.setButtonText(this.t('卸载')).setDisabled(item.protected).onClick(()=>{if(item.protected)return;void this.mutate('uninstall',item.name,undefined,item.requiredBy)})});
  }
  private setBusy(value:boolean):void{
-  this.busy=value;this.searchButton.setDisabled(value||!this.ready);this.queryControl.setDisabled(value);this.switchButton?.setDisabled(value);this.tabs.forEach(b=>b.setDisabled(value));if(value)this.rowButtons.forEach(b=>b.setDisabled(true));this.cancel.setDisabled(!value);
+  this.busy=value;this.searchButton.setDisabled(value||!this.ready);this.queryControl.setDisabled(value);this.switchButton?.setDisabled(value);this.tabs.forEach(b=>{b.setDisabled(value)});if(value)this.rowButtons.forEach(b=>{b.setDisabled(true)});this.cancel.setDisabled(!value);
  }
  private progress(message:string):void{
   if(this.closed)return;const translated=translateEnvironmentProgress(message,this.t);this.status.setText(translated);this.logs.setText([this.logs.textContent,translated].filter(Boolean).join('\n').split('\n').slice(-150).join('\n'));

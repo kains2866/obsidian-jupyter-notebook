@@ -27,7 +27,7 @@
 .modal-container .ipynb-environment-modal .ipynb-environment-toolbar .setting-item,
 .modal-container .ipynb-environment-modal .ipynb-kernel-row .setting-item,
 .modal-container .ipynb-dependency-modal .ipynb-dependency-tabs .setting-item,
-.modal-container .ipynb-dependency-modal .ipynb-package-row .setting-item{padding:0!important;border:0!important;min-height:0!important;min-block-size:0!important;block-size:auto!important;gap:0}
+.modal-container .ipynb-dependency-modal .ipynb-package-row .setting-item{padding:0;border:0;min-height:0;min-block-size:0;block-size:auto;gap:0}
 .ipynb-environment-toolbar .setting-item-info,.ipynb-kernel-row .setting-item-info,.ipynb-dependency-tabs .setting-item-info,.ipynb-package-row .setting-item-info{display:none}
 .ipynb-environment-toolbar .setting-item-control,.ipynb-kernel-row .setting-item-control,.ipynb-dependency-tabs .setting-item-control,.ipynb-package-row .setting-item-control{padding:0;min-height:0;gap:8px}
 .ipynb-environment-toolbar .setting-item-control{justify-content:flex-end}

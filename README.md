@@ -1,67 +1,63 @@
 <div align="center">
-  <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — 原生 Notebook、本机 Python、统一工作区" width="100%" />
+  <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — native notebooks, local Python, one workspace" width="100%" />
   <h1>Jupyter Notebook</h1>
-  <p><strong>在你的知识库里，编写笔记、运行代码、保留结果。</strong></p>
+  <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
   <p>
-    <a href="release-archives/v0.6.5/"><img src="https://img.shields.io/badge/version-0.6.5-8B5CF6?style=flat-square" alt="版本 0.6.5" /></a>
-    <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 及以上" /></a>
-    <a href="#yaml-属性与-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
-    <a href="#平台与运行方式"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="桌面端编辑与运行" /></a>
+    <a href="release-archives/v0.6.5/"><img src="https://img.shields.io/badge/version-0.6.5-8B5CF6?style=flat-square" alt="Version 0.6.5" /></a>
+    <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 or later" /></a>
+    <a href="#yaml-properties-and-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
+    <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="Desktop editing and execution" /></a>
     <a href="https://buymeacoffee.com/kains3772d"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=flat-square&amp;logo=buymeacoffee&amp;logoColor=000000" alt="Buy Me a Coffee" /></a>
-    <a href="https://ifdian.net/a/kains2866"><img src="https://img.shields.io/badge/Aifadian-support-946CE6?style=flat-square" alt="爱发电支持作者" /></a>
+    <a href="https://ifdian.net/a/kains2866"><img src="https://img.shields.io/badge/Aifadian-support-946CE6?style=flat-square" alt="Support on Aifadian" /></a>
   </p>
-  <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
-  <p><a href="#安装">安装</a> · <a href="#快速开始">快速开始</a> · <a href="CHANGELOG.md">更新记录</a> · <a href="#支持作者">支持作者</a></p>
+  <p><a href="README.zh-CN.md">简体中文</a> · <strong>English</strong></p>
+  <p><a href="#installation">Install</a> · <a href="#quick-start">Quick start</a> · <a href="CHANGELOG.md">Changelog</a> · <a href="#support">Support</a></p>
 </div>
 
 ---
 
-## Overview
+Create, edit, and run Jupyter Notebooks natively in Obsidian.
 
-Jupyter Notebook is a desktop plugin for Obsidian that edits and runs native `.ipynb` files. It combines Markdown cells, Python code, and saved outputs in one workspace. Select an existing local Python environment or create a device-specific vault environment, manage dependencies, and check imports while editing. Requires Obsidian 1.8.7 or later. [Read the full English documentation](README.en.md).
+**Jupyter Notebook** provides a dedicated cell editor for `.ipynb` files, bringing Markdown, Python code, and execution results into one workspace. Notebooks retain their standard file format: no conversion to Markdown or Markdown mirror files is required.
 
-在 Obsidian 中原生创建、编辑和运行 Jupyter Notebook。
+## Documentation
 
-**Jupyter Notebook** 为 `.ipynb` 文件提供独立的单元格编辑视图，将 Markdown、Python 代码及运行结果整合在同一工作区中。Notebook 保持标准文件格式，无需转换为 Markdown，也不会生成 Markdown 镜像。
+[Features](#features) · [Platforms](#platforms-and-execution) · [Installation](#installation) · [Quick start](#quick-start) · [Environments](#python-environments-and-dependencies) · [YAML & Dataview](#yaml-properties-and-dataview) · [Outputs](#outputs-and-file-saving) · [Limitations](#current-limitations) · [Development](#development-and-verification)
 
-## 文档导航
+## Features
 
-[主要功能](#主要功能) · [平台](#平台与运行方式) · [安装](#安装) · [快速开始](#快速开始) · [环境与依赖](#python-环境与依赖) · [YAML 与 Dataview](#yaml-属性与-dataview) · [输出与保存](#输出与文件保存) · [限制](#当前限制) · [开发](#开发与验证)
+- **Native Notebook editing**: create `.ipynb` files and edit Code, Markdown, and Raw cells, with drag-and-drop reordering, inline insertion, cell type switching, undo, and redo.
+- **Local Python execution**: run individual cells or all code cells in a shared kernel, with interrupt and restart controls.
+- **Environment and package management**: select an existing Python environment or create a vault-managed environment for the current device; search, install, uninstall, and reinstall packages.
+- **Dependency checks while editing**: detect `import` and `from … import …` statements, show missing modules in the relevant code cell, and provide installation and recheck actions.
+- **Markdown and theme integration**: use Obsidian's Markdown renderer and theme styles, with tables, fenced code blocks, wikilink navigation, tag search, and embedded previews.
+- **Notebook property queries**: read YAML properties from the first Markdown cell and query Notebooks through the optional Dataview plugin.
+- **Output and save protection**: display text, images, HTML tables, and errors; collapse or clear outputs; detect external changes before saving to prevent conflicting overwrites.
+- **Bilingual interface**: choose Chinese or English, or follow Obsidian's language setting.
 
-## 主要功能
+## Platforms and execution
 
-- **原生 Notebook 编辑**：创建 `.ipynb` 文件，编辑 Code、Markdown 和 Raw 单元格，支持拖动排序、就地插入、类型切换及撤销、重做。
-- **本机 Python 执行**：运行单个单元格或全部代码，共享内核变量，支持中断和重启。
-- **环境与依赖管理**：选择已有 Python 环境，或为当前设备创建仓库专用环境；支持依赖查询、安装、卸载和重新安装。
-- **编辑时依赖检查**：识别 `import` 与 `from … import …`，在代码块内提示缺失模块，并提供安装与重新检查入口。
-- **Markdown 与主题适配**：使用 Obsidian 的 Markdown 渲染与主题样式，支持表格、代码块、双链跳转、标签搜索和嵌入预览。
-- **Notebook 属性查询**：读取首个 Markdown 单元格中的 YAML 属性，通过可选的 Dataview 插件查询 Notebook。
-- **输出与保存保护**：显示文本、图片、HTML 表格及错误输出，提供输出折叠与清理；保存时检测外部修改，避免覆盖冲突。
-- **中英文界面**：支持中文、English，以及跟随 Obsidian 的语言设置。
-
-## 平台与运行方式
-
-| 使用场景 | 支持情况 |
+| Use case | Support |
 | --- | --- |
-| 桌面端查看、编辑和保存 Notebook | 支持 |
-| 桌面端本机 Python 执行 | 支持 |
-| 手机端 | 0.6.5 商店版为桌面专用；手机只读仅为旧版能力 |
-| 云同步仓库 | 文件须在本机可访问；每台电脑使用独立环境 |
-| 远程 Jupyter 服务 | 暂不支持 |
+| View, edit, and save Notebooks on desktop | Supported |
+| Run Python locally on desktop | Supported |
+| Mobile | The 0.6.5 store edition is desktop-only; mobile viewing belongs to earlier versions |
+| Cloud-synced vaults | Files must be accessible locally; each computer uses its own environment |
+| Remote Jupyter servers | Not currently supported |
 
-独立 Python 环境安装已在 **macOS Apple Silicon** 上完成实际验证。Windows 和 Linux 已覆盖平台与路径测试，尚未完成真机安装验证。
+Standalone Python installation has been verified on **macOS Apple Silicon**. Windows and Linux are covered by platform and path tests, but installation has not yet been verified on physical devices running those systems.
 
-## 安装
+## Installation
 
-0.6.5 为桌面专用发行版，正在准备商店上架。插件名称改为 **Jupyter Notebook**，ID 为 `jupyter-notebook`。升级前备份旧目录 `obsidian-ipynb`，停用旧插件后安装新插件；如需保留设置，可在 Obsidian 关闭时将旧目录的 `data.json` 复制到新目录。不要同时启用两个版本；不删除 `.obsidian/ipynb-envs/` 或 `.obsidian/ipynb-runtimes/`，然后重新选择并验证本机环境。标准安装只需三个文件，Python 脚本已内嵌并按需恢复。
+Version 0.6.5 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
 
-目前采用手动安装方式。
+The plugin currently uses manual installation.
 
-1. 下载 [仓库归档 ZIP](release-archives/v0.6.5/jupyter-notebook-v0.6.5.zip) 并解压，或从 [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
+1. Download and extract the [archived ZIP](release-archives/v0.6.5/jupyter-notebook-v0.6.5.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.5 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.5).
 
-   [历史安装包](release-archives) 仍使用旧 `obsidian-ipynb/` 目录及原清单，必须保留包内全部五个文件；不要按下方新版三文件步骤安装旧包。
-2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.5 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
-3. 确认插件目录包含以下三个文件：
+   [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
+2. Create a `jupyter-notebook` folder containing the three 0.6.5 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
+3. Confirm that the plugin directory contains these three files:
 
    ```text
    jupyter-notebook/
@@ -70,151 +66,151 @@ Jupyter Notebook is a desktop plugin for Obsidian that edits and runs native `.i
    └── styles.css
    ```
 
-4. 重载 Obsidian，在 **设置 → 第三方插件** 中启用 **Jupyter Notebook**。
-5. 打开或创建一个 `.ipynb` 文件，点击顶部 Python 按钮选择运行环境。
+4. Reload Obsidian and enable **Jupyter Notebook** under **Settings → Community plugins**.
+5. Open or create an `.ipynb` file, then click the Python button in the top toolbar to select an execution environment.
 
-如果文件列表不显示 `.ipynb`，请开启 **设置 → 文件与链接 → 检测所有文件扩展名**。其他插件若也注册了 `.ipynb` 文件视图，可能产生冲突，建议仅启用一个 Notebook 查看或编辑插件。
+If `.ipynb` files do not appear in the file explorer, enable **Settings → Files and links → Detect all file extensions**. Other plugins that register an `.ipynb` view may conflict with this plugin; enable only one Notebook viewer or editor at a time.
 
-## 快速开始
+## Quick start
 
-### 创建或打开 Notebook
+### Create or open a Notebook
 
-以下入口均可创建 Notebook：
+You can create a Notebook using any of these entry points:
 
-- 左侧工具栏中的 Notebook 图标。
-- 文件夹或文件的右键菜单：**新建 Jupyter Notebook**。
-- 命令面板：**Obsidian Jupyter Notebook: 新建 Jupyter Notebook**。
+- The Notebook icon in the left ribbon.
+- The **New Jupyter Notebook** action in a folder or file's context menu.
+- The **Obsidian Jupyter Notebook: New Jupyter Notebook** command in the command palette.
 
-右键入口在所选文件夹或文件所在目录创建 Notebook；其他入口遵循 Obsidian 的新文件位置设置。重名文件会自动编号，不覆盖已有文件。创建和查看 Notebook 不要求预先安装 Python。
+The context menu creates the Notebook in the selected folder or the selected file's parent directory. Other entry points follow Obsidian's new-file location setting. Conflicting names receive a numeric suffix, preserving existing files. Python is not required to create or view a Notebook.
 
-也可以将 [入门示例](examples/入门示例.ipynb) 复制到仓库中，测试代码运行、变量共享与输出显示。
+You can also copy the [getting-started example](examples/入门示例.ipynb) into your vault to try code execution, shared variables, and output rendering.
 
-### 选择运行环境
+### Select an execution environment
 
-点击 Notebook 顶部的 Python 按钮，选择以下一种方式：
+Click the Python button at the top of the Notebook and choose one of these options:
 
-- **仓库专用环境（推荐）**：下载独立 Python 3.12 并安装 Notebook 运行组件，不要求电脑已有 Python。
-- **已有本机环境**：从检测到的 Python、Conda、pyenv 或 Jupyter 环境中选择；也可手动指定目录或解释器路径。
+- **Vault-managed environment (recommended)**: download standalone Python 3.12 and install the Notebook runtime components. An existing Python installation is not required.
+- **Existing local environment**: select a detected Python, Conda, pyenv, or Jupyter environment, or specify a directory or interpreter path manually.
 
-列表显示版本、依赖状态和当前启用项。**识别环境**用于刷新列表，设置页可选择之后打开的 Notebook 默认使用的内核。
+The list shows each environment's version, dependency status, and whether it is active. Use **Detect environments** to refresh the list. The settings page lets you select the default kernel for Notebooks opened afterward.
 
-### 编辑与运行
+### Edit and run cells
 
-| 操作 | 方式 |
+| Action | How |
 | --- | --- |
-| 编辑 Markdown | 双击预览，或点击单元格的编辑图标 |
-| 预览 Markdown | 点击预览图标，或在编辑器中按 `Shift+Enter` |
-| 运行代码 | 点击单元格左侧运行按钮，或按 `Shift+Enter` |
-| 运行全部代码 | 点击顶部“运行全部” |
-| 保存 Notebook | 点击保存按钮，或按 `⌘/Ctrl+S` |
-| 调整单元格顺序 | 拖动左侧拖动柄，或使用上移、下移按钮 |
-| 添加单元格 | 悬停在单元格之间，选择代码或 Markdown |
+| Edit Markdown | Double-click its preview or click the cell's edit icon |
+| Preview Markdown | Click the preview icon or press `Shift+Enter` in the editor |
+| Run code | Click the run button to the left of the cell or press `Shift+Enter` |
+| Run all code cells | Click **Run all** in the top toolbar |
+| Save the Notebook | Click the save button or press `⌘/Ctrl+S` |
+| Reorder cells | Drag the left handle or use the move-up and move-down buttons |
+| Add a cell | Hover between cells and choose Code or Markdown |
 
-长块编辑时，单元格工具条会保持在顶部导航栏下方，并受到所属块边界约束。编辑边框、当前行、括号匹配和当前块内的同名词高亮使用主题颜色；同名词匹配不等同于 Python 语义引用分析。
+When editing a long cell, its toolbar stays below the top navigation bar and remains within that cell's boundaries. The editing border, active line, matching brackets, and same-word highlights within the current cell use theme colors. Same-word matching is not Python semantic reference analysis.
 
-## Python 环境与依赖
+## Python environments and dependencies
 
-### 仓库专用环境
+### Vault-managed environment
 
-每台设备拥有独立的 Python 运行时与虚拟环境，默认保存在仓库配置目录中：
+Each device has its own Python runtime and virtual environment, stored by default in the vault's configuration directory:
 
 ```text
-<仓库>/<配置目录>/
-├── ipynb-runtimes/<设备标识>/   # 安装工具、独立 Python 和缓存
-└── ipynb-envs/<设备标识>/       # 本设备虚拟环境
+<vault>/<configuration-directory>/
+├── ipynb-runtimes/<device-id>/   # Installation tool, standalone Python, and cache
+└── ipynb-envs/<device-id>/       # This device's virtual environment
 ```
 
-安装工具使用固定版本的官方 uv 下载包，并校验 SHA-256。安装不会修改系统 Python、系统 PATH 或注册表。设备标识和解释器启用路径保存在本机。
+The installer uses a pinned official uv release and verifies its SHA-256 checksum. Installation does not modify system Python, the system PATH, or the registry. The device identifier and active interpreter path are stored locally.
 
-同步仓库到另一台电脑后，应在该电脑创建自己的环境，不能直接复用其他设备的虚拟环境二进制文件。
+After syncing the vault to another computer, create an environment on that computer. Virtual environment binaries from another device cannot be reused directly.
 
-已有环境也可用于运行。桥接环境负责管理内核，需要 Python 3.10+ 和 `jupyter_client`；运行环境需要 `ipykernel` 及代码所用的第三方包。仓库专用环境会统一安装这些组件。
+Existing environments can also be used for execution. The bridge environment manages the kernel and requires Python 3.10+ and `jupyter_client`. The execution environment requires `ipykernel` and any third-party packages used by your code. A vault-managed environment installs these components together.
 
-### 安装与管理依赖
+### Install and manage packages
 
-环境窗口中的 **管理依赖** 仅操作本设备的仓库专用环境，不修改系统 Python 或用户选择的外部环境。
+**Manage dependencies** in the environment window operates only on the current device's vault-managed environment. It does not modify system Python or a selected external environment.
 
-- **搜索安装**：按准确的 PyPI 发行包名称查询，提供常用模块名称映射，例如 `sklearn` → `scikit-learn`。这不是全站模糊搜索。
-- **已安装**：显示当前仓库环境中的包和版本，搜索框仅筛选已安装列表。
-- **重新安装**：重新安装当前版本，不连带重新安装其他依赖。
-- **卸载保护**：Notebook 必需组件、其必需依赖，以及仍被其他包使用的依赖不能直接删除。
+- **Search and install**: look up an exact PyPI distribution name, with mappings for common module names such as `sklearn` → `scikit-learn`. This is not a fuzzy search across all of PyPI.
+- **Installed**: view packages and versions in the current vault environment. The search field filters only this installed list.
+- **Reinstall**: reinstall the current version without reinstalling other dependencies.
+- **Uninstall protection**: required Notebook components, their required dependencies, and packages still required by other packages cannot be removed directly.
 
-安装与卸载显示阶段、进度指示和日志。关闭依赖窗口会取消当前操作，不继续后台下载；已完成的部分可能保留，取消不保证回滚。
+Installation and uninstallation display stages, progress indicators, and logs. Closing the dependency window cancels the current operation rather than continuing downloads in the background. Completed changes may remain; cancellation does not guarantee a rollback.
 
-运行中的内核会阻止环境卸载或依赖变更。依赖变更可能关闭使用该环境的闲置内核，需要重新运行代码以恢复变量。
+An executing kernel prevents environment removal or package changes. Package changes may close idle kernels using that environment; run your code again to restore their variables.
 
-### 编辑时的依赖检测
+### Dependency checks while editing
 
-代码编辑停顿约 **900ms** 后，插件识别静态 `import` 与 `from … import …`，检查当前 Notebook 选择的 Python 环境。
+After a pause of approximately **900 ms** in code editing, the plugin detects static `import` and `from … import …` statements and checks the Python environment selected for the current Notebook.
 
-检测不会执行 Notebook 代码、导入用户模块或启动 Jupyter 内核。它会处理别名、多行导入、标准库、本地模块及部分可选导入；未完成的语法暂不下结论。
+The check does not execute Notebook code, import user modules, or start a Jupyter kernel. It handles aliases, multiline imports, standard-library modules, local modules, and some optional imports. Incomplete syntax does not produce a definitive result.
 
-缺失模块在对应代码块内提示，可进入依赖管理窗口查找发行包。切换环境、关闭依赖窗口后会重新检测，也可点击 **重新检查**。如果当前使用外部环境，安装到仓库环境的包不会改变外部环境，需要切换内核后使用。
+Missing modules are shown in the relevant code cell, with an action to search for the distribution in the dependency manager. Checks run again after switching environments or closing the dependency window, and can also be triggered using **Recheck**. If you are using an external environment, packages installed in the vault environment do not change that external environment; switch kernels to use them.
 
-静态检查仅判断根模块是否可发现，不能保证模块内部依赖或二进制扩展正常。动态导入与其他运行时错误仍以实际执行结果为准；执行后的缺库提醒会保留原始错误输出。
+Static checks determine only whether a root module is discoverable. They do not guarantee that its internal dependencies or binary extensions work. Dynamic imports and other runtime errors are determined by actual execution. Missing-dependency reminders shown after execution preserve the original error output.
 
-### 同步依赖与卸载环境
+### Sync dependencies and remove environments
 
-主动安装的包以固定版本写入仓库根目录的 `ipynb-requirements.txt`，用于其他设备创建环境时恢复依赖。已有 `requirements.txt` 不会被覆盖，创建环境时也会安装其中的项目依赖。
+Packages explicitly installed through the manager are recorded with pinned versions in `ipynb-requirements.txt` at the vault root. Other devices use this file to restore dependencies when creating an environment. An existing `requirements.txt` is not overwritten; its project dependencies are also installed during environment creation.
 
-托管清单仅支持准确包名、固定版本和注释，不接受 pip 参数、路径或 URL。包操作成功但清单写入失败时会明确提示，不自动回滚已完成的安装或卸载。
+The managed requirements file accepts only exact package names, pinned versions, and comments—not pip options, paths, or URLs. If a package operation succeeds but writing the requirements file fails, the plugin reports the failure without automatically rolling back the completed installation or removal.
 
-环境列表中的 **删除** 需要二次确认，仅清理归属验证通过的本设备环境。Notebook、其他设备环境和依赖清单会保留。卸载插件不会自动删除环境；如需完全清理，请先在插件中删除仓库环境。
+**Delete** in the environment list requires a second confirmation and removes only the current device's environment after verifying its ownership. Notebooks, other devices' environments, and requirements files are preserved. Uninstalling the plugin does not automatically remove its environments. To clean up completely, delete the vault environment through the plugin first.
 
-## YAML 属性与 Dataview
+## YAML properties and Dataview
 
-在第一个 Markdown 单元格开头添加 YAML：
+Add YAML at the start of the first Markdown cell:
 
 ```yaml
 ---
-title: Notebook 演示
+title: Notebook demo
 tags:
   - Python
   - Notebook
-status: 学习中
+status: Learning
 ---
 ```
 
-保存后，属性可由已启用的 Dataview 查询。例如，在 Markdown 单元格或普通笔记中添加：
+After saving, the properties can be queried by an enabled Dataview plugin. For example, add this to a Markdown cell or a regular note:
 
 ````markdown
 ```dataview
-TABLE title AS "标题", status AS "状态"
+TABLE title AS "Title", status AS "Status"
 FROM #Python
 ```
 ````
 
-Markdown 单元格的预览可以显示查询结果。插件通过内存适配提供 Notebook 属性索引，不修改 Obsidian 核心元数据缓存，也不接入原生 Properties 面板。Dataview 适配依赖其内部接口，已验证版本为 **0.5.68**；不兼容时会提示并安全跳过索引。
+Markdown cell previews can display query results. The plugin provides an in-memory adapter for indexing Notebook properties. It does not modify Obsidian's core metadata cache or integrate with the native Properties panel. The Dataview adapter relies on internal interfaces and has been verified with **0.5.68**. If incompatible, it reports the issue and safely skips indexing.
 
-Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导出到 Jupyter 或 VS Code 后，YAML 是普通 Markdown 内容，不影响 Python 执行；Dataview 查询仅在 Obsidian 与 Dataview 环境中生效。
+Notebooks retain standard nbformat structure, including unknown metadata and fields. When opened in Jupyter or VS Code, YAML remains ordinary Markdown content and does not affect Python execution. Dataview queries work only in an Obsidian environment with Dataview enabled.
 
-## 输出与文件保存
+## Outputs and file saving
 
-支持文本、PNG/JPEG 图片、经过净化的 HTML 表格以及错误输出。设置页提供输出折叠、清空、大小警示和可选限制。
+Supported outputs include text, PNG/JPEG images, sanitized HTML tables, and errors. Settings provide output collapsing, clearing, size warnings, and optional limits.
 
-- 超过 600px 的输出默认折叠。
-- 图片接近视口时加载，离屏时卸载显示节点；原始输出仍保存在 Notebook 中。
-- 默认在单元格输出达到 50MiB、Notebook 输出达到 200MiB 时警示。
-- 硬上限、自动丢弃旧输出和清空时释放撤销历史默认关闭。
+- Outputs taller than 600 px are collapsed by default.
+- Images load near the viewport and their display nodes are removed when offscreen. Original outputs remain stored in the Notebook.
+- Default warnings appear when cell outputs reach 50 MiB or Notebook outputs reach 200 MiB.
+- Hard limits, automatic removal of old outputs, and releasing undo history when clearing outputs are disabled by default.
 
-输出限额统计序列化数据大小，不代表 Obsidian 的总内存。完整单元格虚拟滚动尚未实现。清空输出不会清除内核变量；保存后，清空结果会写入文件。
+Output limits measure serialized data size, not Obsidian's total memory usage. Full cell virtualization has not yet been implemented. Clearing outputs does not clear kernel variables; saving writes the cleared outputs to the file.
 
-插件支持显式保存及关闭时保存，不会在每次键入后立即写入文件。保存前检查外部修改；发生冲突时拒绝覆盖。关闭时若无法保存原文件，会尝试写入 `.ipynb` 恢复副本并提示。
+The plugin supports explicit saving and saving on close. It does not write to disk after every keystroke. Before saving, it checks for external changes and refuses to overwrite conflicting content. If saving the original file on close fails, it attempts to write an `.ipynb` recovery copy and notifies you.
 
-## 当前限制
+## Current limitations
 
-- 代码编辑与运行目前面向 Python，不支持远程内核。
-- 暂不支持 Notebook widgets、JavaScript/SVG 富输出和交互式 stdin 输入。
-- 单元格附件数据保留，附件引用图片的预览支持有限。
-- 不提供 `.ipynb` 的 Obsidian 原生图谱、反链或 Properties 索引。
-- 单元格类型依据文件中的 `cell_type`，不会根据内容自动推断。误标为代码的 HTML 提示块可手动改为 Markdown。
-- 第三方主题仅针对原生阅读视图编写的特殊样式，可能需要额外适配。
+- Code editing and execution currently target Python. Remote kernels are not supported.
+- Notebook widgets, JavaScript/SVG rich outputs, and interactive stdin input are not currently supported.
+- Cell attachment data is preserved, but preview support for attachment-referenced images is limited.
+- `.ipynb` files are not integrated with Obsidian's native graph, backlinks, or Properties index.
+- Cell types follow the file's `cell_type` field rather than being inferred from content. HTML callouts incorrectly marked as code can be changed to Markdown manually.
+- Special third-party theme styles written exclusively for the native reading view may require additional adaptation.
 
-## 开发与验证
+## Development and verification
 
-项目使用 TypeScript、CodeMirror 6 和 esbuild；Python 桥接使用 `jupyter_client` 与 `ipykernel`。
+The project uses TypeScript, CodeMirror 6, and esbuild. The Python bridge uses `jupyter_client` and `ipykernel`.
 
-以下完整开发流程适用于 macOS/Linux。部分 Node 测试会调用项目 `.venv/bin/python`，因此应先准备 Python 测试环境，再运行测试：
+The complete development workflow below applies to macOS/Linux. Some Node tests invoke the project's `.venv/bin/python`, so prepare the Python test environment before running the tests:
 
 ```bash
 npm ci
@@ -227,15 +223,15 @@ npm run build
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-构建产物位于 `dist/`，包含安装所需的三个标准文件。
+Build outputs are written to `dist/`, including the three standard files required for store installation (the optional standalone Python helper copies are also built).
 
-Windows 的 Python 单元测试可使用 `.venv\Scripts\python.exe`；部分 Node 内核与集成测试仍使用 Unix 路径，需要适配后运行。
+On Windows, Python unit tests can use `.venv\Scripts\python.exe`. Some Node kernel and integration tests still use Unix paths and require adaptation before running.
 
-界面与集成验证脚本：
+UI and integration verification scripts:
 
 ```bash
 node tests/preview-server.mjs
-# 在另一个终端运行：
+# Run in another terminal:
 node tests/ui.e2e.cjs
 node tests/interactions.e2e.cjs
 node tests/outputs.e2e.cjs
@@ -244,36 +240,36 @@ node tests/mobile-bundle.cjs
 node tests/node-imports.cjs
 ```
 
-端到端脚本需要 Playwright，可通过 `PLAYWRIGHT_MODULE` 指定模块路径。离线环境创建测试为 `tests/vault-environment.integration.mjs`，需要本机 pip 缓存包含所需安装包。
+The end-to-end scripts require Playwright. Set `PLAYWRIGHT_MODULE` to specify its module path. The offline environment creation test is `tests/vault-environment.integration.mjs`; the local pip cache must contain the required installation packages.
 
-macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时仓库和配置目录。运行前应正常退出日常 Obsidian，避免多个实例共享 CLI 套接字；检测到已有连接时测试会停止。
+The real Obsidian test on macOS is `tests/obsidian.e2e.cjs`, which uses a separate temporary vault and configuration directory. Quit your regular Obsidian instance normally before running it to prevent multiple instances from sharing the CLI socket. The test stops if it detects an existing connection.
 
-## 版本历史
+## Version history
 
-功能变更见 [CHANGELOG](CHANGELOG.md)。历史安装包与 SHA-256 校验文件位于 [release-archives](release-archives/)；安装包归档提交不代表对应版本拥有完整的历史源码快照。
+See [CHANGELOG](CHANGELOG.md) for feature changes. Historical installation packages and SHA-256 checksums are available in [release-archives](release-archives/). Archive commits do not imply that a complete source snapshot exists for each historical version.
 
-## 支持作者
+## Support
 
-如果这个插件让你的 Notebook 工作流更顺手，欢迎支持后续开发。反馈问题、分享使用经验，同样是很好的支持方式。
+If this plugin makes your Notebook workflow easier, you can support its continued development. Bug reports and shared feedback are also welcome.
 
 <p align="center">
   <a href="https://buymeacoffee.com/kains3772d"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=for-the-badge&amp;logo=buymeacoffee&amp;logoColor=000000" alt="Buy Me a Coffee" /></a>
-  <a href="https://ifdian.net/a/kains2866"><img src="https://img.shields.io/badge/爱发电-支持作者-946CE6?style=for-the-badge" alt="爱发电支持作者" /></a>
+  <a href="https://ifdian.net/a/kains2866"><img src="https://img.shields.io/badge/Aifadian-support-946CE6?style=for-the-badge" alt="Support on Aifadian" /></a>
 </p>
 
 <details>
-<summary><strong>微信／支付宝支持</strong></summary>
+<summary><strong>Support via WeChat Pay or Alipay</strong></summary>
 
-感谢支持。请通过下方对应的原始收款码扫码；赞助不会解锁额外功能，也不是使用插件的条件。
+Thank you for your support. Scan the appropriate original payment code below. Donations do not unlock additional features and are not required to use the plugin.
 
 <table>
   <tr>
-    <th align="center">微信支付</th>
-    <th align="center">支付宝</th>
+    <th align="center">WeChat Pay</th>
+    <th align="center">Alipay</th>
   </tr>
   <tr>
-    <td align="center"><img src="docs/assets/wechat-qr.jpg" alt="作者微信收款码" width="220" /></td>
-    <td align="center"><img src="docs/assets/alipay-qr.jpg" alt="作者支付宝收款码" width="220" /></td>
+    <td align="center"><img src="docs/assets/wechat-qr.jpg" alt="Author's WeChat Pay code" width="220" /></td>
+    <td align="center"><img src="docs/assets/alipay-qr.jpg" alt="Author's Alipay code" width="220" /></td>
   </tr>
 </table>
 
@@ -281,6 +277,6 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 
 <p align="center"><sub>Created by <a href="https://github.com/kains2866">Kains</a> · Obsidian Jupyter Notebook</sub></p>
 
-## 权限与网络
+## Permissions and network access
 
-桌面端需要读取本机解释器和本设备环境目录，并通过不启用 shell 的子进程运行 Python、pip 与安装工具。这些权限是运行 Notebook 和管理环境所必需的；仅运行可信 Notebook。安装由用户触发，工具包校验固定 SHA-256。云同步依赖清单会验证包名与固定版本，不执行任意路径或 URL。包查询采用 Obsidian 网络接口；取消会立即停止界面等待，但该接口不提供中止已发出请求的能力。uv 下载继续采用 Electron 流式接口，支持进度、取消与大小限制。
+Desktop execution inspects local interpreters and device-specific environment directories, and starts Python, pip, and installation-tool processes without enabling a shell. These permissions are required to run notebooks and manage environments. Run only notebooks you trust. Installation starts on explicit user action; the tool archive is checked against its pinned SHA-256. Synced managed requirements allow only validated package names and pinned versions, not arbitrary paths or URLs. Package queries use the Obsidian request transport. Cancellation stops waiting promptly, but that transport cannot abort an already-issued network request. uv downloads retain Electron streaming for progress, cancellation, and size limits.

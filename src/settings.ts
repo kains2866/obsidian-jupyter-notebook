@@ -1,26 +1,64 @@
 import {translateEnvironmentProgress} from './environment-translations';
-import {App,Modal,Notice,PluginSettingTab,Setting,Platform} from 'obsidian';
+import {App,Modal,Notice,PluginSettingTab,Setting,Platform,type SettingDefinitionItem} from 'obsidian';
 import type NotebookPlugin from './main';
-import {belongsToEnvironmentDirectory,type Environment} from './environments';
+import {belongsToEnvironmentDirectory,translateEnvironmentName,type Environment} from './environments';
 import {createTranslator,type Translator,type LanguageSetting} from './i18n';
 import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {probeKernelCatalog,type KernelCatalogRow} from './kernel-catalog';
 export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string;language:LanguageSetting;outputOptions:OutputOptions}
 export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:'',language:'auto',outputOptions:{...DEFAULT_OUTPUT_OPTIONS}};
+const OUTPUT_TOGGLES=[['collapse','折叠长输出'],['lazyImages','延迟加载图片'],['hardLimit','启用输出硬限制'],['autoDiscardOld','自动丢弃旧输出'],['releaseHistoryOnClear','清空输出时释放撤销历史']] as const;
+const OUTPUT_NUMBERS=[['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const;
+const PYTHON_PATHS=[['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const;
+function isOutputKey(key:string):key is keyof OutputOptions{return OUTPUT_TOGGLES.some(([entry])=>entry===key)||OUTPUT_NUMBERS.some(([entry])=>entry===key)}
 export class NotebookSettingsTab extends PluginSettingTab {
  constructor(app:App,private plugin:NotebookPlugin){super(app,plugin)}
- private async updateSettings(next:NotebookSettings):Promise<void>{const previous=this.plugin.settings;this.plugin.settings=next;try{await this.plugin.saveSettings();this.plugin.onPreferencesChanged()}catch(error){this.plugin.settings=previous;new Notice(String(error));this.display()}}
- display():void{
+ private refreshSettings():void{
+  // Path B supports Obsidian 1.8.7; only call the 1.13 API when the runtime provides it.
+  const modern=this as unknown as {update?:()=>void};
+  if(typeof modern.update==='function')modern.update();else this.renderLegacy();
+ }
+ getSettingDefinitions():SettingDefinitionItem[]{
+  const t=this.plugin.getTranslator();
+  const language:SettingDefinitionItem={name:t('语言'),aliases:['language','语言'],control:{type:'dropdown',key:'language',defaultValue:'auto',options:{auto:t('跟随 Obsidian'),zh:'中文',en:'English'}}};
+  if(Platform.isMobile)return [language,{name:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')}];
+  return [{type:'group',heading:t('Notebook 设置'),items:[language,{name:t('默认内核'),desc:t('新打开的 Notebook 使用此环境；当前内核保持运行。'),aliases:['Python','kernel','内核'],render:setting=>{setting.addButton(button=>button.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}))}}]},
+   {type:'group',heading:t('输出管理'),items:[
+    ...OUTPUT_TOGGLES.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'toggle' as const,key:`outputOptions.${key}`,defaultValue:Boolean(DEFAULT_OUTPUT_OPTIONS[key])}})),
+    ...OUTPUT_NUMBERS.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'number' as const,key:`outputOptions.${key}`,defaultValue:Number(DEFAULT_OUTPUT_OPTIONS[key]),validate:(value:number)=>Number.isFinite(value)&&value>0?undefined:t('请输入大于零的有限数值。')}}))]},
+   {type:'group',heading:t('高级：手动 Python 路径'),items:PYTHON_PATHS.map(([key,label])=>({name:t(label),aliases:[key,'Python','解释器'],control:{type:'text' as const,key}}))}];
+ }
+ getControlValue(key:string):unknown{
+  if(key==='language'||key==='bridgePython'||key==='kernelPython')return this.plugin.settings[key];
+  const outputKey=key.slice('outputOptions.'.length);
+  if(key.startsWith('outputOptions.')&&isOutputKey(outputKey))return this.plugin.settings.outputOptions[outputKey];
+  return undefined;
+ }
+ async setControlValue(key:string,value:unknown):Promise<void>{
+  const settings=this.plugin.settings;
+  if(key==='language'){
+   if(value!=='auto'&&value!=='zh'&&value!=='en')return;
+   await this.updateSettings({...settings,language:value});this.refreshSettings();return;
+  }
+  if(key==='bridgePython'||key==='kernelPython'){if(typeof value==='string')await this.updateSettings({...settings,[key]:value.trim()});return}
+  if(!key.startsWith('outputOptions.'))return;
+  const outputKey=key.slice('outputOptions.'.length);if(!isOutputKey(outputKey))return;
+  if(OUTPUT_TOGGLES.some(([entry])=>entry===outputKey)?typeof value!=='boolean':typeof value!=='number'||!Number.isFinite(value)||value<=0)return;
+  await this.updateSettings({...settings,outputOptions:{...settings.outputOptions,[outputKey]:value}});
+ }
+ private async updateSettings(next:NotebookSettings):Promise<void>{const previous=this.plugin.settings;this.plugin.settings=next;try{await this.plugin.saveSettings();this.plugin.onPreferencesChanged()}catch(error){this.plugin.settings=previous;new Notice(this.plugin.getTranslator()(String(error)));this.refreshSettings()}}
+ display():void{this.renderLegacy()}
+ private renderLegacy():void{
   const t=this.plugin.getTranslator();this.containerEl.empty();new Setting(this.containerEl).setName(t('Notebook 设置')).setHeading();
-  new Setting(this.containerEl).setName(t('语言')).addDropdown(d=>d.addOption('auto',t('跟随 Obsidian')).addOption('zh','中文').addOption('en','English').setValue(this.plugin.settings.language).onChange(value=>{void this.updateSettings({...this.plugin.settings,language:value as LanguageSetting}).then(()=>this.display())}));
+  new Setting(this.containerEl).setName(t('语言')).addDropdown(d=>d.addOption('auto',t('跟随 Obsidian')).addOption('zh','中文').addOption('en','English').setValue(this.plugin.settings.language).onChange(value=>{void this.updateSettings({...this.plugin.settings,language:value as LanguageSetting}).then(()=>this.refreshSettings())}));
   if(Platform.isMobile){this.containerEl.createEl('p',{text:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')});return}
   new Setting(this.containerEl).setName(t('默认内核')).setDesc(t('新打开的 Notebook 使用此环境；当前内核保持运行。')).addButton(b=>b.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}));
   new Setting(this.containerEl).setName(t('输出管理')).setHeading();
   const toggle=(key:keyof OutputOptions,label:string)=>new Setting(this.containerEl).setName(t(label)).addToggle(control=>control.setValue(Boolean(this.plugin.settings.outputOptions[key])).onChange(value=>{void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:value}})}));
-  toggle('collapse','折叠长输出');toggle('lazyImages','延迟加载图片');toggle('hardLimit','启用输出硬限制');toggle('autoDiscardOld','自动丢弃旧输出');toggle('releaseHistoryOnClear','清空输出时释放撤销历史');
-  for(const [key,label] of [['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const)new Setting(this.containerEl).setName(t(label)).addText(control=>control.setValue(String(this.plugin.settings.outputOptions[key])).onChange(value=>{const number=Number(value);if(!Number.isFinite(number)||number<=0)return;void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:number}})}));
+  for(const [key,label] of OUTPUT_TOGGLES)toggle(key,label);
+  for(const [key,label] of OUTPUT_NUMBERS)new Setting(this.containerEl).setName(t(label)).addText(control=>control.setValue(String(this.plugin.settings.outputOptions[key])).onChange(value=>{const number=Number(value);if(!Number.isFinite(number)||number<=0)return;void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:number}})}));
   const advanced=this.containerEl.createEl('details');advanced.createEl('summary',{text:t('高级：手动 Python 路径')});
-  for(const [key,label] of [['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const)new Setting(advanced).setName(t(label)).addText(control=>control.setValue(this.plugin.settings[key]).onChange(value=>{void this.updateSettings({...this.plugin.settings,[key]:value.trim()})}));
+  for(const [key,label] of PYTHON_PATHS)new Setting(advanced).setName(t(label)).addText(control=>control.setValue(this.plugin.settings[key]).onChange(value=>{void this.updateSettings({...this.plugin.settings,[key]:value.trim()})}));
  }
 
 }
@@ -97,8 +135,8 @@ export class EnvironmentManagerModal extends Modal {
    const {inspectVaultEnvironment}=await import('./vault-environment');const result=await inspectVaultEnvironment(this.vaultOptions,this.manager);
    this.managed=result?{name:'仓库环境',python:result.python,category:'managed'}:undefined;
    this.managedMode=result?(result.complete?'ready':'repair'):'install';this.managedVersion=result?.info?.version||'';
-   this.managedDescription=result?.error||this.t(result?.complete?'已就绪，可直接使用':result?'需要修复':'尚未安装');
-  }catch(error){this.managedMode='blocked';this.managedDescription=String(error)}
+   this.managedDescription=result?.error?this.t(result.error):this.t(result?.complete?'已就绪，可直接使用':result?'需要修复':'尚未安装');
+  }catch(error){this.managedMode='blocked';this.managedDescription=this.t(String(error))}
  }
  private renderCatalog():void{
   if(this.closed)return;this.list.empty();this.controls=this.controls.slice(0,2);
@@ -112,23 +150,23 @@ export class EnvironmentManagerModal extends Modal {
   this.radio(owned,this.managed?.python,'仓库专用环境（本设备）',this.managedMode!=='ready',()=>this.activateManaged());
   for(const row of this.catalog.filter(row=>(!this.managed||!belongsToEnvironmentDirectory(row.python,this.managed.python))&&row.python!==this.manual?.python)){
    const element=this.list.createDiv({cls:'ipynb-kernel-row'});const text=element.createDiv({cls:'ipynb-kernel-info'});
-   text.createEl('strong',{text:row.name});text.createSpan({text:row.version?this.t('Python {version}',{version:row.version}):this.t('不可用'),cls:'ipynb-kernel-version'});text.createEl('small',{text:row.python});
-   if(row.error||row.missing?.length)text.createEl('small',{text:row.error||this.t('缺少依赖：{modules}',{modules:row.missing!.join(', ')})});
-   this.radio(element,row.python,row.name,Boolean(row.error||row.missing?.length),()=>this.activate(row,this.choose));
+   text.createEl('strong',{text:translateEnvironmentName(row.name,this.t)});text.createSpan({text:row.version?this.t('Python {version}',{version:row.version}):this.t('不可用'),cls:'ipynb-kernel-version'});text.createEl('small',{text:row.python});
+   if(row.error||row.missing?.length)text.createEl('small',{text:row.error?this.t(row.error):this.t('缺少依赖：{modules}',{modules:row.missing!.join(', ')})});
+   this.radio(element,row.python,translateEnvironmentName(row.name,this.t),Boolean(row.error||row.missing?.length),()=>this.activate(row,this.choose));
   }
   const manual=this.list.createDiv({cls:'ipynb-kernel-row'});const manualText=manual.createDiv({cls:'ipynb-kernel-info'});manualText.createEl('strong',{text:this.t('未找到？手动选择目录')});
   if(this.manual)manualText.createEl('small',{text:this.manual.python});this.addButton(manual,'手动选择',()=>this.manualPath());
   this.radio(manual,this.manual?.python,'未找到？手动选择目录',!this.manual,()=>this.activate(this.manual!,this.choose));
  }
  private radio(parent:HTMLElement,python:string|undefined,label:string,disabled:boolean,choose:()=>Promise<void>):void{
-  const radio=parent.createEl('input',{type:'radio',cls:'ipynb-kernel-radio'});radio.setAttribute('name','ipynb-kernel');radio.setAttribute('aria-label',this.t(label));radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));radio.disabled=this.busy||disabled;
+  const radio=parent.createEl('input',{type:'radio',cls:'ipynb-kernel-radio'});radio.setAttribute('name','ipynb-kernel');radio.setAttribute('aria-label',translateEnvironmentName(label,this.t));radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));radio.disabled=this.busy||disabled;
   if(radio.checked)(parent.children[0] as HTMLElement).createSpan({text:this.t('启用中'),cls:'ipynb-kernel-badge'});
   radio.addEventListener('change',()=>{radio.checked=Boolean(python&&(python===this.current||(python===this.managed?.python&&belongsToEnvironmentDirectory(this.current,python))));void this.action(choose)});
  }
  private async activate(environment:Environment,choose:(environment:Environment)=>void|boolean|Promise<void|boolean>):Promise<void>{
   if(!this.manager||this.closed)return;const info=await this.manager.validate(environment.python,this.requiredModules());
   if(info.missing.length)throw new Error(this.t('缺少依赖：{modules}',{modules:info.missing.join(', ')}));
-  if(await choose(environment)!==false&&!this.closed){this.current=environment.python;this.status.setText(this.t('启用中：{name}',{name:this.t(environment.name)}))}
+  if(await choose(environment)!==false&&!this.closed){this.current=environment.python;this.status.setText(this.t('启用中：{name}',{name:translateEnvironmentName(environment.name,this.t)}))}
  }
  private async activateManaged():Promise<void>{
   await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed)throw new Error(this.t('仓库环境需要修复。'));
@@ -195,7 +233,7 @@ export class EnvironmentManagerModal extends Modal {
  }
  private async action(work:()=>Promise<void>):Promise<void>{
   if(this.busy||this.closed)return;this.busy=true;this.controls.forEach(button=>{button.setDisabled(true)});this.renderCatalog();
-  try{await work()}catch(error){if(!this.closed){this.status.setText(String(error));new Notice(String(error))}}
+  try{await work()}catch(error){if(!this.closed){this.status.setText(this.t(String(error)));new Notice(this.t(String(error)))}}
   finally{this.busy=false;if(!this.closed){this.controls.forEach(button=>{button.setDisabled(false)});this.renderCatalog()}}
  }
 }

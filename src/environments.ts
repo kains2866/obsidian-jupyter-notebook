@@ -18,16 +18,16 @@ export async function discoverEnvironments(projectDir?:string,home?:string,platf
 }
 
 /** Paths remain in the environment chooser; the toolbar shows only a label. */
-export function environmentName(python: string): string {
- if(!python)return 'Python · 选择环境';
+export function environmentName(python: string,t:(text:string)=>string=text=>text): string {
+ if(!python)return t('Python · 选择环境');
  const normalized = python.replaceAll('\\', '/');
- if (!normalized.includes('/')) return 'Python · 默认';
+ if (!normalized.includes('/')) return t('Python · 默认');
  if (/^\/opt\/homebrew\/bin\//.test(normalized)) return 'Python · Homebrew';
- if (/^\/usr\/bin\//.test(normalized)) return 'Python · 系统';
+ if (/^\/usr\/bin\//.test(normalized)) return t('Python · 系统');
  const parts = normalized.split('/').filter(Boolean);
- if(parts.at(-4)==='ipynb-envs')return 'Python · 仓库环境';
+ if(parts.at(-4)==='ipynb-envs')return t('Python · 仓库环境');
  const label = ['bin','Scripts'].includes(parts.at(-2)||'') ? parts.at(-3) : parts.at(-2);
- return `Python · ${label || '自定义'}`;
+ return label?`Python · ${label}`:t('Python · 自定义');
 }
 
 /** Enumerate registered Python kernels through an already configured bridge, without a shell. */
@@ -71,3 +71,6 @@ export function belongsToEnvironmentDirectory(python:string,referencePython:stri
 }
 
 function isRecord(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value)}
+
+/** Translate only plugin-owned project labels; preserve arbitrary environment names. */
+export function translateEnvironmentName(name:string,t:(text:string,values?:Record<string,string|number>)=>string):string{const project=/^项目 (\.venv|venv)$/.exec(name);if(project)return t('项目 {name}',{name:project[1]});return ['系统 Python','当前环境','仓库环境','手动选择','仓库专用环境（本设备）','未找到？手动选择目录'].includes(name)?t(name):name}

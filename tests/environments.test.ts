@@ -55,3 +55,7 @@ import {belongsToEnvironmentDirectory} from '../src/environments';
 it('owned-directory matching includes interpreter aliases but not sibling environments',()=>{expect(belongsToEnvironmentDirectory('/vault/env/bin/python3','/vault/env/bin/python')).toBe(true);expect(belongsToEnvironmentDirectory('/vault/env-other/bin/python','/vault/env/bin/python')).toBe(false);expect(belongsToEnvironmentDirectory('C:\\vault\\env\\Scripts\\python3.exe','C:\\vault\\env\\Scripts\\python.exe')).toBe(true)});
 
 it('ignores malformed kernel specs without invoking unknown language methods',async()=>{const result=await discoverJupyterEnvironments('/bridge',async()=>({stdout:JSON.stringify({null:null,number:{spec:{language:42,argv:['python']}},array:{spec:[]}}),stderr:''}),'','darwin');expect(result).toEqual([])});
+
+import {translateEnvironmentName} from '../src/environments';
+import {createTranslator} from '../src/i18n';
+it('translates internal project and toolbar labels without changing custom environment names',()=>{const t=createTranslator('en');expect(translateEnvironmentName('项目 .venv',t)).toBe('Project .venv');expect(translateEnvironmentName('保存',t)).toBe('保存');expect(environmentName('/usr/bin/python3',t)).toBe('Python · System');expect(environmentName('/my/中文/bin/python',t)).toBe('Python · 中文')});

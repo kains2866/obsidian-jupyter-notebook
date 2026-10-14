@@ -1,4 +1,5 @@
 export const environmentTranslations:Record<string,string>={
+ '项目 {name}':'Project {name}','Python · 自定义':'Python · Custom',
  '取消卸载':'Cancel removal','取消重新安装':'Cancel reinstallation','依赖卸载进度':'Dependency removal progress','依赖重新安装进度':'Dependency reinstallation progress','准备重新安装依赖…':'Preparing dependency reinstallation…',
  '筛选已安装的依赖':'Filter installed packages','筛选本设备已安装的依赖，不会查询 PyPI。':'Filter packages installed on this device. This does not query PyPI.','未找到已安装的依赖。':'No installed packages match.','已安装版本：{version}':'Installed version: {version}','重新安装':'Reinstall','重新安装依赖':'Reinstall dependency','重新安装 {name} {version}？':'Reinstall {name} {version}?','重新安装完成。重新运行单元格即可。':'Reinstallation complete. Run the cell again.','正在重新安装依赖':'Reinstalling dependency',
  '准备安装依赖…':'Preparing dependency installation…','准备卸载依赖…':'Preparing dependency removal…','依赖安装进度':'Dependency installation progress','关闭此窗口会取消安装；已完成的部分可能保留。':'Closing this window cancels installation. Completed changes may remain.',

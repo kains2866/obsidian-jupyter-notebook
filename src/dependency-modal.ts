@@ -62,10 +62,10 @@ export class DependencyModal extends Modal {
    const {PackageService}=await import('./package-service');this.service=new PackageService(this.options);this.ready=true;
    if(this.options.currentPython&&!belongsToEnvironmentDirectory(this.options.currentPython,owned.python)){
     this.contentEl.createEl('p',{text:this.t('当前 Notebook 使用外部环境。这里安装的依赖只用于仓库环境；切换内核后才会生效。'),cls:'ipynb-environment-warning'});
-    if(this.options.chooseManaged)new Setting(this.contentEl).addButton(b=>{this.switchButton=b;b.setButtonText(this.t('选择运行环境')).onClick(()=>{if(this.busy||this.closed)return;this.close();void Promise.resolve().then(()=>this.options.chooseManaged?.()).catch(error=>{new Notice(String(error))})})});
+    if(this.options.chooseManaged)new Setting(this.contentEl).addButton(b=>{this.switchButton=b;b.setButtonText(this.t('选择运行环境')).onClick(()=>{if(this.busy||this.closed)return;this.close();void Promise.resolve().then(()=>this.options.chooseManaged?.()).catch(error=>{new Notice(this.t(String(error)))})})});
    }
    this.searchButton.setDisabled(false);await this.read();
-  }catch(error){if(!this.closed)this.status.setText(String(error))}
+  }catch(error){if(!this.closed)this.status.setText(this.t(String(error)))}
  }
  private async read():Promise<boolean>{
   if(!this.service||!this.ready||this.busy||this.closed)return false;
@@ -84,7 +84,7 @@ export class DependencyModal extends Modal {
     for(const item of matched)this.installed(item);
    }
    this.status.setText(this.t('查询完成。'));return true;
-  }catch(error){if(!this.closed&&generation===this.generation)this.status.setText(String(error));return false}
+  }catch(error){if(!this.closed&&generation===this.generation)this.status.setText(this.t(String(error)));return false}
  }
 
  private candidate(item:PackageCandidate):void{
@@ -125,7 +125,7 @@ export class DependencyModal extends Modal {
     if(kind==='reinstall')await this.service.reinstall(name,version,message=>this.progress(message),this.controller.signal);else if(kind==='install')await this.service.install(name,version,message=>this.progress(message),this.controller.signal);else await this.service.uninstall(name,message=>this.progress(message),this.controller.signal);
     if(!this.closed)this.status.setText(this.t(kind==='uninstall'?'卸载完成。':kind==='reinstall'?'重新安装完成。重新运行单元格即可。':'安装完成。重新运行单元格即可。'));
    }finally{hooks.after()}
-  }catch(error){if(!this.closed)this.status.setText(String(error))}
+  }catch(error){if(!this.closed)this.status.setText(this.t(String(error)))}
   finally{
    this.controller=undefined;this.cancelContainer.hidden=true;this.cancel.buttonEl.hidden=true;this.operationProgress.hidden=true;this.results.setAttribute('aria-busy','false');if(!this.closed){this.setBusy(false);const completion=this.status.textContent||'';const refreshed=await this.read();if(!this.closed)this.status.setText(refreshed?completion:[completion,this.status.textContent].filter(Boolean).join(' '))}else this.busy=false;
   }

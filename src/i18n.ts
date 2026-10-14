@@ -1,3 +1,4 @@
+import {errorTranslations,englishErrorTranslations} from './error-translations';
 import {importCheckTranslations} from './import-check-translations';
 import {environmentTranslations} from './environment-translations';
 import {outputTranslations} from './output-translations';
@@ -34,7 +35,39 @@ const common:Record<string,string>={
  'Python · 选择环境':'Python · Select kernel','Python · 仓库环境':'Python · Vault environment','Python · 默认':'Python · Default','Python · 系统':'Python · System',
 };
 export function resolveLanguage(setting:LanguageSetting='auto',locale='en'): 'zh'|'en'{return setting==='auto'?(locale.toLowerCase().startsWith('zh')?'zh':'en'):setting}
+const englishDictionary={...common,...outputTranslations,...environmentTranslations,...importCheckTranslations,...errorTranslations};
+const errorTemplates=compileTemplates(errorTranslations);
+const reverseErrorTemplates=compileTemplates(englishErrorTranslations);
+type ErrorTemplate={pattern:RegExp;keys:string[];translated:string};
+function compileTemplates(dictionary:Record<string,string>):ErrorTemplate[]{
+ return Object.entries(dictionary).filter(([source])=>/\{\w+\}/.test(source)).map(([source,translated])=>{
+  const keys:string[]=[];let pattern='';let offset=0;
+  for(const match of source.matchAll(/\{(\w+)\}/g)){
+   pattern+=escapePattern(source.slice(offset,match.index))+'([\\s\\S]*?)';keys.push(match[1]);offset=match.index+match[0].length;
+  }
+  return {pattern:new RegExp('^'+pattern+escapePattern(source.slice(offset))+'$'),keys,translated};
+ });
+}
+function escapePattern(value:string):string{return value.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}
 export function createTranslator(setting:LanguageSetting='auto',locale='en'):Translator{
  const english=resolveLanguage(setting,locale)==='en';
- return (text,values={})=>{const translated=english?(importCheckTranslations[text]??environmentTranslations[text]??outputTranslations[text]??common[text]??text):text;return translated.replace(/\{(\w+)\}/g,(match:string,key:unknown)=>typeof key==='string'&&values[key]!==undefined?String(values[key]):match)};
+ const translateError=(text:string,depth=0):string=>{
+  if(depth>=6)return text;
+  const dictionary=english?englishDictionary:englishErrorTranslations;const direct=Object.hasOwn(dictionary,text)?dictionary[text]:undefined;if(direct!==undefined)return direct;
+  if(text.startsWith('Error: '))return 'Error: '+translateError(text.slice(7),depth+1);
+  for(const template of english?errorTemplates:reverseErrorTemplates){
+   const match=template.pattern.exec(text);if(!match)continue;
+   const values:Record<string,string>={};template.keys.forEach((key,index)=>{const value=match[index+1];values[key]=key==='error'?translateError(value,depth+1):value});
+   return interpolate(template.translated,values);
+  }
+  return text;
+ };
+ return (text,values={})=>{
+  const translated=translateError(text);
+  const resolved=Object.fromEntries(Object.entries(values).map(([key,value])=>[key,key==='error'&&typeof value==='string'?translateError(value):value]));
+  return interpolate(translated,resolved);
+ };
+}
+function interpolate(text:string,values:Record<string,string|number>):string{
+ return text.replace(/\{(\w+)\}/g,(match:string,key:unknown)=>typeof key==='string'&&Object.hasOwn(values,key)&&values[key]!==undefined?String(values[key]):match);
 }

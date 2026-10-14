@@ -29,7 +29,7 @@ export class NotebookView extends FileView{
  async onLoadFile(file:TFile):Promise<void>{
   this.disposed=false;this.importKey='';
   const text=await this.app.vault.read(file);
-  try{this.loadNotebook(text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:String(error)});throw error}
+  try{this.loadNotebook(text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
  }
  private loadNotebook(text:string):void{
   const session=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});
@@ -42,7 +42,7 @@ export class NotebookView extends FileView{
    notebookChanged:()=>this.scheduleImportCheck(),retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
    readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
-   environment:()=>this.t(environmentName(this.kernelPython)),chooseEnvironment:()=>this.chooseEnvironment(),
+   environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
   },state);
@@ -115,7 +115,7 @@ export class NotebookView extends FileView{
  async saveCopy():Promise<void>{
   this.requireDesktop();
   if(!this.file||!this.session)return;
-  const path=this.file.path.replace(/\.ipynb$/i,` 副本 ${Date.now()}.ipynb`);
+  const path=this.file.path.replace(/\.ipynb$/i,` ${this.t('副本')} ${Date.now()}.ipynb`);
   await this.app.vault.create(path,serializeNotebook(this.session.notebook));new Notice(this.t('副本已保存：{path}',{path}));
  }
  private async reload():Promise<void>{
@@ -153,7 +153,7 @@ export class NotebookView extends FileView{
     client=new KernelClient(this.kernelBridgePython,this.kernelPython,bridge,this.projectDir());
     await client.start();if(this.disposed){await client.close();throw new Error(this.t('Notebook 已关闭。'))}
     this.kernel=client;return client;
-   }catch(error){await client?.close().catch(()=>{});throw new Error(this.t('无法启动 Python 内核：{error}',{error:error instanceof Error?error.message:String(error)})+'\n'+this.t('请检查桥接环境已安装 jupyter_client，运行环境已安装 ipykernel。'))}
+   }catch(error){await client?.close().catch(()=>{});throw new Error(this.t('无法启动 Python 内核：{error}',{error:this.t(error instanceof Error?error.message:String(error))})+'\n'+this.t('请检查桥接环境已安装 jupyter_client，运行环境已安装 ipykernel。'))}
    finally{this.starting=undefined}
   })();
   return this.starting;
@@ -243,12 +243,12 @@ export class NotebookView extends FileView{
   const starting=this.starting;
   try{
    try{await this.kernel?.close();if(starting)await starting.catch(()=>{})}
-   catch(error){new Notice(this.t('内核关闭异常：{error}，继续保存编辑。',{error:String(error)}),10000)}
+   catch(error){new Notice(this.t('内核关闭异常：{error}，继续保存编辑。',{error:this.t(String(error))}),10000)}
    if(this.session?.dirty&&!Platform.isMobile){
     try{await this.save()}
     catch(error){
-     try{await this.saveCopy();new Notice(this.t('原文件未覆盖，未保存编辑已写入副本。{error}',{error:String(error)}),10000)}
-     catch(copyError){this.disposed=false;new Notice(this.t('保存及恢复副本均失败，请保持 Notebook 打开并手动复制内容。{error}',{error:String(copyError)}),0);throw copyError}
+     try{await this.saveCopy();new Notice(this.t('原文件未覆盖，未保存编辑已写入副本。{error}',{error:this.t(String(error))}),10000)}
+     catch(copyError){this.disposed=false;new Notice(this.t('保存及恢复副本均失败，请保持 Notebook 打开并手动复制内容。{error}',{error:this.t(String(copyError))}),0);throw copyError}
     }
    }
   }catch(error){this.disposed=false;throw error}

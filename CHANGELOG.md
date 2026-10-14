@@ -2,13 +2,19 @@
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
 updated: 2026-10-14
-version: "0.6.5"
+version: "0.6.6"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.6.6] - 2026-10-14
+
+- README 使用标准 Markdown 一级标题 Jupyter Notebook，与 manifest.name 完全一致。
+- Markdown 中的 HTML div/alert 提示块增加主题背景与边框，适配成功、信息、警告和错误配色。
+- 保持桌面专用、标准三文件安装和 GitHub 构建来源证明。
 
 ## [0.6.5] - 2026-10-14
 

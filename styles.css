@@ -107,3 +107,29 @@
 .ipynb-import-label{overflow-wrap:anywhere}
 .ipynb-import-external,.ipynb-import-optional{flex-basis:100%;color:var(--text-muted)}
 .ipynb-import-status button{font-size:11px;padding:2px 6px;min-height:24px;color:var(--interactive-accent)}
+
+/* Jupyter HTML callouts and plain raw-HTML containers, scoped to Notebook previews. */
+.ipynb-markdown-preview .alert,
+.ipynb-markdown-preview .el-div > div:not(.callout),
+.ipynb-markdown-preview > div:not([class]) {
+  margin: 8px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s, 6px);
+  background: var(--background-secondary);
+  color: var(--text-normal);
+  overflow-wrap: anywhere;
+}
+.ipynb-markdown-preview .alert-success { --ipynb-html-color: var(--color-green, #22863a); }
+.ipynb-markdown-preview .alert-info { --ipynb-html-color: var(--color-blue, #2878b5); }
+.ipynb-markdown-preview .alert-warning { --ipynb-html-color: var(--color-orange, #a66a00); }
+.ipynb-markdown-preview .alert-danger { --ipynb-html-color: var(--color-red, #c03636); }
+.ipynb-markdown-preview .alert-success,
+.ipynb-markdown-preview .alert-info,
+.ipynb-markdown-preview .alert-warning,
+.ipynb-markdown-preview .alert-danger {
+  border-color: var(--ipynb-html-color);
+  background: color-mix(in srgb, var(--ipynb-html-color) 14%, var(--background-primary));
+}
+.ipynb-markdown-preview .alert > :first-child { margin-top: 0; }
+.ipynb-markdown-preview .alert > :last-child { margin-bottom: 0; }

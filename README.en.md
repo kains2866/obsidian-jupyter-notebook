@@ -1,4 +1,4 @@
-# English documentation
+# Jupyter Notebook
 
 The full English documentation is available in [README.md](README.md).
 

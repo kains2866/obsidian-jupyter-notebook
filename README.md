@@ -4,7 +4,7 @@
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — native notebooks, local Python, one workspace" width="100%" />
   <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
   <p>
-    <a href="release-archives/v0.6.6/"><img src="https://img.shields.io/badge/version-0.6.6-8B5CF6?style=flat-square" alt="Version 0.6.6" /></a>
+    <a href="release-archives/v0.6.7/"><img src="https://img.shields.io/badge/version-0.6.7-8B5CF6?style=flat-square" alt="Version 0.6.7" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 or later" /></a>
     <a href="#yaml-properties-and-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="Desktop editing and execution" /></a>
@@ -42,7 +42,7 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 | --- | --- |
 | View, edit, and save Notebooks on desktop | Supported |
 | Run Python locally on desktop | Supported |
-| Mobile | The 0.6.6 store edition is desktop-only; mobile viewing belongs to earlier versions |
+| Mobile | The 0.6.7 store edition is desktop-only; mobile viewing belongs to earlier versions |
 | Cloud-synced vaults | Files must be accessible locally; each computer uses its own environment |
 | Remote Jupyter servers | Not currently supported |
 
@@ -50,14 +50,14 @@ Standalone Python installation has been verified on **macOS Apple Silicon**. Win
 
 ## Installation
 
-Version 0.6.6 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
+Version 0.6.7 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
 
 The plugin currently uses manual installation.
 
-1. Download and extract the [archived ZIP](release-archives/v0.6.6/jupyter-notebook-v0.6.6.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.6 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.6).
+1. Download and extract the [archived ZIP](release-archives/v0.6.7/jupyter-notebook-v0.6.7.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.7 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.7).
 
    [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
-2. Create a `jupyter-notebook` folder containing the three 0.6.6 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
+2. Create a `jupyter-notebook` folder containing the three 0.6.7 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
 3. Confirm that the plugin directory contains these three files:
 
    ```text

@@ -19,6 +19,20 @@ def emit(request_id, event, **payload):
         print(json.dumps(dict(id=request_id, event=event, **payload)), flush=True)
 
 
+def stop_after_input():
+    # os.kill(SIGTERM) on Windows bypasses signal handlers and finally blocks.
+    # Shut down through Jupyter before waking the main request loop instead.
+    if os.name == 'nt':
+        try:
+            if manager is not None and manager.has_kernel:
+                manager.shutdown_kernel(now=True)
+        finally:
+            requests.put(None)
+    else:
+        requests.put(None)
+        os.kill(os.getpid(), signal.SIGTERM)
+
+
 def read_requests():
     pending = b""
     while True:
@@ -29,16 +43,14 @@ def read_requests():
             pending += chunk
             if len(pending) > MAX_LINE:
                 emit("", "error", message="Request exceeds 8 MiB limit")
-                requests.put(None)
-                os.kill(os.getpid(), signal.SIGTERM)
+                stop_after_input()
                 return
         if b"\n" in pending:
             line, pending = pending.split(b"\n", 1)
         else:
             line, pending = pending, b""
         if not line:
-            requests.put(None)
-            os.kill(os.getpid(), signal.SIGTERM)
+            stop_after_input()
             return
         request = None
         try:

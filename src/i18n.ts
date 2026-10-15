@@ -1,3 +1,4 @@
+import {workflowTranslations} from './workflow-translations';
 import {errorTranslations,englishErrorTranslations} from './error-translations';
 import {importCheckTranslations} from './import-check-translations';
 import {environmentTranslations} from './environment-translations';
@@ -35,7 +36,7 @@ const common:Record<string,string>={
  'Python · 选择环境':'Python · Select kernel','Python · 仓库环境':'Python · Vault environment','Python · 默认':'Python · Default','Python · 系统':'Python · System',
 };
 export function resolveLanguage(setting:LanguageSetting='auto',locale='en'): 'zh'|'en'{return setting==='auto'?(locale.toLowerCase().startsWith('zh')?'zh':'en'):setting}
-const englishDictionary={...common,...outputTranslations,...environmentTranslations,...importCheckTranslations,...errorTranslations};
+const englishDictionary={...common,...workflowTranslations,...outputTranslations,...environmentTranslations,...importCheckTranslations,...errorTranslations};
 const errorTemplates=compileTemplates(errorTranslations);
 const reverseErrorTemplates=compileTemplates(englishErrorTranslations);
 type ErrorTemplate={pattern:RegExp;keys:string[];translated:string};

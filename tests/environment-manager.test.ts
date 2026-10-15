@@ -49,3 +49,18 @@ it('验证拒绝无效模块和隔离状态',async()=>{
 });
 
 it('rejects non-object Python validation payloads',async()=>{for(const payload of ['null','[]','42']){const manager=new EnvironmentManager(async()=>({stdout:payload,stderr:''}));await expect(manager.validate('/python')).rejects.toThrow('无效结果')}});
+it('Linux ignores relative XDG data roots instead of writing under the application cwd',()=>{
+ expect(managedEnvironmentDirectory('vault-id','linux','/home/学习 用户',{XDG_DATA_HOME:'relative-data'})).toBe('/home/学习 用户/.local/share/obsidian-ipynb/environments/vault-id');
+ expect(managedEnvironmentDirectory('vault-id','linux','/home/a',{XDG_DATA_HOME:'/data/笔记'})).toBe('/data/笔记/obsidian-ipynb/environments/vault-id');
+});
+it('validation ignores cwd and PYTHONPATH hooks without importing candidate modules',async()=>{
+ const {execFile}=await import('node:child_process');const {promisify}=await import('node:util');const {writeFile,access}=await import('node:fs/promises');const {resolve}=await import('node:path');const root=await mkdtemp(join(tmpdir(),'env-probe-'));const marker=join(root,'executed');
+ try{
+  const code=`open(${JSON.stringify(marker)}, 'w').write('executed')`;
+  await writeFile(join(root,'sitecustomize.py'),code);await writeFile(join(root,'probe_module.py'),code);
+  const python=resolve('.venv/bin/python');const run=promisify(execFile);
+  const manager=new EnvironmentManager((file,args)=>run(file,args,{cwd:root,env:{...process.env,PYTHONPATH:root}}));
+  expect((await manager.validate(python,['probe_module'])).missing).toEqual(['probe_module']);
+  await expect(access(marker)).rejects.toThrow();
+ }finally{await rm(root,{recursive:true,force:true})}
+});

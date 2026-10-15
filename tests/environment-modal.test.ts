@@ -87,3 +87,21 @@ it('uses the vault configuration directory when environment options omit configD
  await EnvironmentPicker.show({vault:{configDir:'.custom-config'}} as any,'',undefined,state.choose,{vaultId:'v',vaultRoot:'/vault',deviceId:'device'});await settle();
  expect(state.inspect).toHaveBeenCalledWith(expect.objectContaining({configDir:'.custom-config'}),expect.anything());
 });
+
+it('checks selected Python without execution or provisioning and shows static evidence',async()=>{
+ await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();state.validate.mockClear();await button('检查环境').click();await settle();
+ expect(state.validate).toHaveBeenCalledWith('/local/python',['jupyter_client','ipykernel']);expect(state.provision).not.toHaveBeenCalled();expect(state.choose).not.toHaveBeenCalled();expect(allText(state.modal.contentEl)).toContain('尚未验证 Notebook 执行');
+});
+it('repair refuses external Python and requires confirmation for the owned environment',async()=>{
+ state.inspect.mockResolvedValue({python:'/managed/python',complete:false,info:{version:'3.12',missing:['ipykernel']}});
+ await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();await button('修复环境').click();await settle();expect(state.provision).not.toHaveBeenCalled();expect(allText(state.modal.contentEl)).toContain('外部或系统环境仅检查');
+ await EnvironmentPicker.show({} as any,'/managed/python',undefined,state.choose,options);await settle();const work=button('修复环境').click();await settle();expect(state.provision).not.toHaveBeenCalled();await button('取消').click();await work;expect(state.provision).not.toHaveBeenCalled();
+});
+it('copies diagnostics only on explicit click through the owning window clipboard',async()=>{
+ const writeText=vi.fn().mockResolvedValue(undefined);await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();const picker=state.modal;picker.contentEl.ownerDocument={defaultView:{navigator:{clipboard:{writeText}}}};
+ await button('检查环境').click();await settle();expect(writeText).not.toHaveBeenCalled();await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('诊断仅保存在本地'));expect(state.provision).not.toHaveBeenCalled();
+});
+it('failed downloads replace stale checks with copyable sanitized network diagnostics',async()=>{
+ const writeText=vi.fn().mockResolvedValue(undefined);await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();const picker=state.modal;picker.contentEl.ownerDocument={defaultView:{navigator:{clipboard:{writeText}}}};
+ await button('检查环境').click();await settle();state.provision.mockRejectedValue(new Error('CERTIFICATE_VERIFY_FAILED https://user:secret@host/ token=abc'));await button('安装').click();await settle();expect(allText(picker.contentEl)).toContain('网络问题');expect(allText(picker.contentEl)).toContain('CERTIFICATE_VERIFY_FAILED');await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('CERTIFICATE_VERIFY_FAILED'));expect(writeText.mock.calls[0][0]).not.toContain('secret');expect(writeText.mock.calls[0][0]).not.toContain('token=abc');
+});

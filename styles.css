@@ -133,3 +133,8 @@
 }
 .ipynb-markdown-preview .alert > :first-child { margin-top: 0; }
 .ipynb-markdown-preview .alert > :last-child { margin-bottom: 0; }
+
+.ipynb-import-status[hidden]{display:none}
+.ipynb-status[data-kernel-state="busy"],.ipynb-status[data-kernel-state="starting"]{color:var(--interactive-accent);font-weight:600}
+
+.ipynb-cell-pending{min-height:180px;contain:layout style}

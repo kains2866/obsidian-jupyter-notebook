@@ -1,6 +1,6 @@
 import {execFile} from 'node:child_process';
 import {access,mkdir,readFile,writeFile,rename} from 'node:fs/promises';
-import {dirname,join,win32} from 'node:path';
+import {dirname,isAbsolute,join,win32} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {homedir} from 'node:os';
 export type Runner=(file:string,args:string[])=>Promise<{stdout:string;stderr:string}>;
@@ -8,7 +8,7 @@ const run:Runner=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{
 export function managedEnvironmentDirectory(vaultId:string,platform=process.platform,home=homedir(),env:NodeJS.ProcessEnv=process.env):string{
  if(!/^[a-zA-Z0-9_-]+$/.test(vaultId))throw new Error('无效仓库标识');
  const path=platform==='win32'?win32: {join};
- const base=platform==='win32'?(env.LOCALAPPDATA||path.join(home,'AppData','Local')):platform==='darwin'?join(home,'Library','Application Support'):(env.XDG_DATA_HOME||join(home,'.local','share'));
+ const base=platform==='win32'?(env.LOCALAPPDATA||path.join(home,'AppData','Local')):platform==='darwin'?join(home,'Library','Application Support'):(env.XDG_DATA_HOME&&isAbsolute(env.XDG_DATA_HOME)?env.XDG_DATA_HOME:join(home,'.local','share'));
  return path.join(base,'obsidian-ipynb','environments',vaultId);
 }
 export function environmentPython(directory:string,platform=process.platform):string{return platform==='win32'?win32.join(directory,'Scripts','python.exe'):join(directory,'bin','python')}
@@ -18,7 +18,7 @@ export class EnvironmentManager{
  constructor(private runner:Runner=run){}
  async validate(python:string,modules:string[]=['jupyter_client','ipykernel']):Promise<{executable:string;version:string;missing:string[];isolated:boolean;prefix?:string}>{
   const script='import sys,json,importlib.util,os; print(json.dumps({"executable":sys.executable,"prefix":sys.prefix,"version":sys.version.split()[0],"isolated":sys.prefix!=sys.base_prefix or os.path.isdir(os.path.join(sys.prefix,"conda-meta")),"missing":[m for m in sys.argv[1:] if importlib.util.find_spec(m) is None]}))';
-  try{const result=await this.runner(python,['-c',script,...modules]);const value:unknown=JSON.parse(result.stdout.trim());if(!isRecord(value)||typeof value.executable!=='string'||typeof value.version!=='string'||typeof value.isolated!=='boolean'||(value.prefix!==undefined&&typeof value.prefix!=='string')||!isStringArray(value.missing))throw new Error('Python 返回无效结果');return {executable:value.executable,version:value.version,isolated:value.isolated,missing:value.missing,...(typeof value.prefix==='string'?{prefix:value.prefix}:{})}}catch(error){throw new Error(`无法验证 Python ${python}。请检查解释器路径和执行权限。${String(error)}`)}
+  try{const result=await this.runner(python,['-I','-c',script,...modules]);const value:unknown=JSON.parse(result.stdout.trim());if(!isRecord(value)||typeof value.executable!=='string'||typeof value.version!=='string'||typeof value.isolated!=='boolean'||(value.prefix!==undefined&&typeof value.prefix!=='string')||!isStringArray(value.missing))throw new Error('Python 返回无效结果');return {executable:value.executable,version:value.version,isolated:value.isolated,missing:value.missing,...(typeof value.prefix==='string'?{prefix:value.prefix}:{})}}catch(error){throw new Error(`无法验证 Python ${python}。请检查解释器路径和执行权限。${String(error)}`)}
  }
  async create(basePython:string,directory:string,onReserved?:()=>Promise<void>):Promise<string>{
   if(this.busy.has(directory))throw new Error('此环境正在创建，请稍候。');this.busy.add(directory);

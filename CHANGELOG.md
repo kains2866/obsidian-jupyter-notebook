@@ -1,14 +1,23 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-14
-version: "0.6.6"
+updated: 2026-10-15
+version: "0.6.7"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.6.7] - 2026-10-15
+
+- 修复 Win/Linux 路径与内核退出问题。
+- 增加首次运行信任确认。
+- 增加环境检查、修复、诊断复制及故障分类。
+- 区分静态检测与实际执行成功，隐藏正常依赖提示。
+- 显示内核忙碌、停止状态，提供变量清理入口。
+- 大型 Notebook 按视口延迟挂载编辑器和输出，保留选区与撤销能力。
 
 ## [0.6.6] - 2026-10-14
 

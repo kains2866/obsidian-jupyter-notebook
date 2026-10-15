@@ -6,7 +6,7 @@ import {syntaxHighlighting,HighlightStyle,bracketMatching} from '@codemirror/lan
 import {tags} from '@lezer/highlight';
 import {python} from '@codemirror/lang-python';
 import {markdown} from '@codemirror/lang-markdown';
-import {newCell,insertCell,removeCell,moveCell,editCell,sourceText,type CellType} from './notebook';
+import {newCell,insertCell,removeCell,moveCell,editCell,sourceText,type CellType,type Cell} from './notebook';
 import type {NotebookSession} from './session';
 import {OutputRenderer} from './outputs';
 import {createTranslator,type Translator} from './i18n';
@@ -35,11 +35,17 @@ export interface EditorActions {
  retryImports?():void;
  installImport?(module:string):Promise<void>;
  externalKernel?():boolean;
+ kernelState?():'stopped'|'starting'|'busy'|'idle';
+ lastExecution?():'success'|'error'|undefined;
+ clearVariables?():Promise<void>;
 }
 export interface ImportStatus {modules:string[];missing:string[];optional?:string[];syntaxError?:boolean;state?:'checking'|'no-environment'|'error'}
 export interface EditorSnapshot {preview:boolean[];selections:({ranges:{anchor:number;head:number}[];main:number}|undefined)[];focused:number}
 export class NotebookEditor {
  private importStatuses:ImportStatus[]=[];
+ private cellObserver?:IntersectionObserver;
+ private pendingCells=new Map<number,()=>void>();
+ private savedSelections=new Map<string,NonNullable<EditorSnapshot['selections'][number]>>();
  private editors:EditorView[]=[];
  private cellNodes:HTMLElement[]=[];
  private toolbar!:HTMLElement;private message!:HTMLElement;private list!:HTMLElement;
@@ -58,6 +64,7 @@ export class NotebookEditor {
  private t:Translator;
  private lastOutputWarning="";
  constructor(private root:HTMLElement,private session:NotebookSession,private actions:EditorActions,snapshot?:EditorSnapshot){
+  snapshot?.selections.forEach((selection,index)=>{const cell=session.notebook.cells[index];if(selection&&cell)this.savedSelections.set(this.cellIdentity(cell),selection)});
   this.t=actions.translate??createTranslator('zh');
   root.classList.add('ipynb-editor');root.replaceChildren();
   this.toolbar=this.el('div','ipynb-toolbar',root);
@@ -72,6 +79,7 @@ export class NotebookEditor {
   this.button(more,'撤销',()=>this.historyChange(()=>session.undo()));
   this.button(more,'重做',()=>this.historyChange(()=>session.redo()));
   this.button(more,'清除全部输出',()=>this.clearOutputs());
+  if(actions.clearVariables)this.button(more,'清理运行变量',()=>actions.clearVariables!());
   this.environmentLabel=this.button(this.toolbar,actions.environment(),()=>actions.chooseEnvironment());
   this.environmentLabel.classList.add('ipynb-environment');
   }
@@ -81,9 +89,11 @@ export class NotebookEditor {
   const measureToolbar=()=>root.style.setProperty('--ipynb-toolbar-height',`${this.toolbar.getBoundingClientRect().height||48}px`);
   measureToolbar();this.toolbarObserver=new ResizeObserver(measureToolbar);this.toolbarObserver.observe(this.toolbar);
   root.addEventListener('keydown',this.onKeyDown);root.addEventListener('scroll',this.onScroll,{passive:true});
-  session.onChange=()=>this.refresh();session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&(snapshot?snapshot.preview[index]:sourceText(cell).trim()))this.preview.add(this.cellIdentity(cell))});this.renderCells();if(snapshot){snapshot.selections.forEach((selection,index)=>{if(selection&&this.editors[index])this.editors[index].dispatch({selection:EditorSelection.fromJSON(selection)})});if(snapshot.focused>=0)this.focusCell(snapshot.focused)}
+  session.onChange=()=>this.refresh();session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&(snapshot?snapshot.preview[index]:sourceText(cell).trim()))this.preview.add(this.cellIdentity(cell))});this.renderCells();if(snapshot){snapshot.selections.forEach((selection,index)=>{if(selection&&this.editors[index])this.editors[index].dispatch({selection:EditorSelection.fromJSON(this.clampSelection(selection,this.editors[index].state.doc.length))})});if(snapshot.focused>=0)this.focusCell(snapshot.focused)}
  }
- captureState():EditorSnapshot{return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.editors.map(editor=>editor?{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex}:undefined),focused:this.editors.findIndex(editor=>editor?.hasFocus)}}
+ private rememberSelections():void{this.editors.forEach((editor,index)=>{const id=this.cellNodes[index]?.dataset.cellId;if(editor&&id)this.savedSelections.set(id,{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex})})}
+ private clampSelection(selection:NonNullable<EditorSnapshot['selections'][number]>,length:number):NonNullable<EditorSnapshot['selections'][number]>{return {...selection,ranges:selection.ranges.map(range=>({anchor:Math.max(0,Math.min(length,range.anchor)),head:Math.max(0,Math.min(length,range.head))}))}}
+ captureState():EditorSnapshot{this.rememberSelections();return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.session.notebook.cells.map(cell=>this.savedSelections.get(this.cellIdentity(cell))),focused:this.editors.findIndex(editor=>editor?.hasFocus)}}
  private onScroll=()=>{if(Math.abs(this.root.scrollTop-this.expectedScroll)>1){this.captureAnchor();this.expectedScroll=this.root.scrollTop}};
  private onKeyDown=(e:KeyboardEvent)=>{
   if(e.key==='Escape')this.cancelDrag();
@@ -120,13 +130,19 @@ export class NotebookEditor {
  private editMarkdown(index:number):void{this.preview.delete(this.cellIdentity(this.session.notebook.cells[index]));this.renderCells();this.focusCell(index)}
  private structure(make:()=>ReturnType<typeof insertCell>):void{if(this.actions.readOnly)return;this.captureAnchor();this.structureChanging=true;try{this.session.structure(make())}finally{this.structureChanging=false}this.preview.clear();this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&sourceText(cell).trim())this.preview.add(this.cellIdentity(cell))});this.renderCells()}
  renderCells():void{
+  this.rememberSelections();this.cellObserver?.disconnect();this.pendingCells.clear();
+  const deferred=this.session.notebook.cells.length>200&&typeof IntersectionObserver!=='undefined';
+  if(deferred)this.cellObserver=new IntersectionObserver(entries=>{let mounted=false;for(const entry of entries){if(entry.isIntersecting){const index=Number((entry.target as HTMLElement).dataset.index);mounted=this.mountCell(index)||mounted}}if(mounted)this.refresh()},{root:this.root,rootMargin:'600px'});
   this.captureAnchor();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();
   this.cancelDrag();this.anchorObserver?.disconnect();this.actions.clearMarkdown?.();this.editors.forEach(editor=>editor.destroy());this.editors=[];this.cellNodes=[];this.list.replaceChildren();
   if(this.session.notebook.cells.length===0){const empty=this.el('div','ipynb-empty',this.list);empty.textContent=this.t('空 Notebook · 添加一个代码单元格开始。')}
   this.session.notebook.cells.forEach((cell,index)=>{
-   if(!this.actions.readOnly)this.insertionGap(index);
+   const gap=!this.actions.readOnly?this.el('div','ipynb-insert-gap',this.list):undefined;
    const node=this.el('section','ipynb-cell',this.list);const cellLabel=this.el('span','ipynb-sr-only',node);cellLabel.id=`ipynb-cell-label-${crypto.randomUUID()}`;cellLabel.textContent=this.t('单元格 {index}',{index:index+1});node.setAttribute('role','group');node.setAttribute('aria-labelledby',cellLabel.id);node.dataset.index=String(index);node.dataset.cellId=this.cellIdentity(cell);this.cellNodes.push(node);
    node.classList.add(`ipynb-${cell.cell_type}-cell`);
+   const mount=()=>{
+   const cell=this.session.notebook.cells[index];
+   if(gap)this.insertionGap(index,gap);
    const gutter=this.el('div','ipynb-cell-gutter',node);
    if(!this.actions.readOnly&&cell.cell_type==='code')this.iconButton(gutter,'运行单元格','play',()=>this.actions.run(index));
    const count=this.el('span','ipynb-count',gutter);count.textContent=cell.cell_type==='code'?`[${cell.execution_count??' '}]`:'';
@@ -157,10 +173,12 @@ export class NotebookEditor {
      EditorView.lineWrapping,
      EditorView.updateListener.of(update=>{if(update.docChanged)this.session.change(editCell(this.session.notebook,index,{source:update.state.doc.toString()}))}),
      EditorView.theme({'&':{fontSize:'13px'},'.cm-content':{fontFamily:'var(--font-monospace)',caretColor:'var(--caret-color, var(--text-normal))'},'.cm-cursor':{borderLeftColor:'var(--caret-color, var(--text-normal))'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'var(--text-selection)'},'.cm-content ::selection':{backgroundColor:'var(--text-selection)'},'.cm-scroller':{overflow:'auto'},'.cm-gutters':{backgroundColor:'transparent',border:'none'}}),
-    ]})});this.editors[index]=editor;
+    ]})});this.editors[index]=editor;const selection=this.savedSelections.get(this.cellIdentity(cell));if(selection)editor.dispatch({selection:EditorSelection.fromJSON(this.clampSelection(selection,editor.state.doc.length))});
    }
    if(cell.cell_type==='code'&&!this.actions.readOnly)this.el('div','ipynb-import-status',body);
    this.el('div','ipynb-output',body);
+   };
+   if(deferred&&index>2){node.classList.add('ipynb-cell-pending');node.style.minHeight=`${this.estimateCellHeight(cell)}px`;this.pendingCells.set(index,mount);this.cellObserver!.observe(node)}else mount();
   });
   if(!this.actions.readOnly)this.insertionGap(this.session.notebook.cells.length);
   this.restoreAnchor();this.anchorObserver=new ResizeObserver(()=>{if(Math.abs(this.root.scrollTop-this.expectedScroll)>1)this.captureAnchor();else this.restoreAnchor()});this.anchorObserver.observe(this.list);
@@ -181,8 +199,8 @@ export class NotebookEditor {
   else this.root.scrollTop=this.anchor.scroll;
   this.expectedScroll=this.root.scrollTop;
  }
- private insertionGap(index:number):void{
-  const gap=this.el('div','ipynb-insert-gap',this.list);gap.dataset.index=String(index);
+ private insertionGap(index:number,existing?:HTMLElement):void{
+  const gap=existing??this.el('div','ipynb-insert-gap',this.list);gap.dataset.index=String(index);
   for(const [type,label] of [['code','添加代码'],['markdown','添加 Markdown']] as const)this.iconButton(gap,label,'plus',()=>{
    this.insertAt(index,type);
   },true);
@@ -205,11 +223,18 @@ export class NotebookEditor {
  private dragTick=()=>{const drag=this.dragging;if(!drag)return;const bounds=this.root.getBoundingClientRect();const margin=60;const delta=drag.y<bounds.top+margin?-Math.min(18,(bounds.top+margin-drag.y)/3):drag.y>bounds.bottom-margin?Math.min(18,(drag.y-bounds.bottom+margin)/3):0;if(delta){this.root.scrollTop+=delta;this.updateDrop()}drag.frame=this.root.win.requestAnimationFrame(this.dragTick)};
  private dragEnd=()=>{const drag=this.dragging;if(!drag)return;const {from,to}=drag;this.cancelDrag();if(from!==to)void this.perform(()=>this.structure(()=>moveCell(this.session.notebook,from,to)))};
  private cancelDrag():void{if(this.dragging){this.root.win.cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}this.root.ownerDocument.removeEventListener('pointermove',this.dragMove);this.root.ownerDocument.removeEventListener('pointerup',this.dragEnd);this.root.ownerDocument.removeEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.removeEventListener('keydown',this.dragKey)}
- focusCell(index:number):void{this.editors[Math.min(index,this.session.notebook.cells.length-1)]?.focus()}
+ private estimateCellHeight(cell:Cell):number{
+  const source=sourceText(cell);const sourceHeight=Math.max(54,(source.split('\n').length+Math.ceil(source.length/100))*20);
+  let outputHeight=0;for(const output of cell.outputs??[]){const data=output.data as Record<string,unknown>|undefined;const text=typeof output.text==='string'?output.text:Array.isArray(output.text)?output.text.join(''):'';if(text)outputHeight+=text.split('\n').length*18;else if(typeof data?.['text/html']==='string')outputHeight+=((data['text/html'].match(/<tr[ >]/gi)?.length??4)+1)*28;else outputHeight+=180}
+  if(this.session.outputOptions.collapse)outputHeight=Math.min(outputHeight,this.session.outputOptions.collapseHeight);
+  return sourceHeight+outputHeight+32;
+ }
+ private mountCell(index:number):boolean{const mount=this.pendingCells.get(index);if(!mount)return false;this.pendingCells.delete(index);const node=this.cellNodes[index];this.cellObserver?.unobserve(node);node.classList.remove('ipynb-cell-pending');node.style.removeProperty('min-height');mount();return true}
+ focusCell(index:number):void{const target=Math.min(index,this.session.notebook.cells.length-1);if(this.mountCell(target))this.refresh();this.editors[target]?.focus()}
  setImportStatuses(statuses:ImportStatus[]):void{this.importStatuses=statuses;this.renderImportStatuses()}
  private renderImportStatuses():void{
-  let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const status=this.importStatuses[codeIndex++];const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-import-status');if(!host)return;host.replaceChildren();if(!status||(!status.modules.length&&!status.state&&!status.syntaxError&&!status.optional?.length))return;host.setAttribute('aria-live','polite');
-   const text=status.state==='no-environment'?'选择环境后检查依赖':status.state==='checking'?'正在检查依赖…':status.state==='error'?'依赖检查失败，请重试':status.syntaxError?'代码尚未完整，暂不检查依赖':status.missing.length?this.t('缺少模块：{module}',{module:status.missing.join(', ')}):'依赖就绪';this.el('span','ipynb-import-label',host).textContent=this.t(text);host.classList.toggle('is-missing',!!status.missing.length);
+  let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const status=this.importStatuses[codeIndex++];const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-import-status');if(!host)return;host.replaceChildren();host.classList.remove('is-missing');host.hidden=true;if(!status||(!status.state&&!status.syntaxError&&!status.missing.length&&!status.optional?.length))return;host.hidden=false;host.setAttribute('aria-live','polite');
+   const text=status.state==='no-environment'?'选择环境后检查依赖':status.state==='checking'?'正在检查依赖…':status.state==='error'?'依赖检查失败，请重试':status.syntaxError?'代码尚未完整，暂不检查依赖':status.missing.length?this.t('缺少模块：{module}',{module:status.missing.join(', ')}):'检测未发现缺失';this.el('span','ipynb-import-label',host).textContent=this.t(text);host.classList.toggle('is-missing',!!status.missing.length);
    for(const module of status.missing)this.button(host,this.t('查找并安装依赖')+' · '+module,()=>this.actions.installImport?.(module)??Promise.resolve());
    if(status.missing.length&&this.actions.externalKernel?.())this.el('span','ipynb-import-external',host).textContent=this.t('当前使用外部环境。依赖只安装到仓库环境，安装后需切换环境。');
    if(status.state==='error'||status.missing.length)this.button(host,'重新检查',()=>{this.actions.retryImports?.()});
@@ -218,7 +243,12 @@ export class NotebookEditor {
  }
  refresh():void{
   this.actions.notebookChanged?.();this.renderImportStatuses();
-  this.status.textContent=`${(this.session.running||this.session.busy)?this.t('运行中')+' · ':''}${this.t(this.session.dirty?'未保存':'已保存')}`;if(this.session.outputWarning!==this.lastOutputWarning){this.lastOutputWarning=this.session.outputWarning;if(this.lastOutputWarning)this.showMessage(this.t(this.lastOutputWarning))};
+  const kernelState=this.actions.kernelState?.()??((this.session.running||this.session.busy)?'busy':'stopped');
+  const stateLabel={stopped:'内核已停止',starting:'内核启动中',busy:'内核运行中',idle:'内核空闲'}[kernelState];
+  const execution=this.actions.lastExecution?.();
+  this.status.textContent=[this.t(stateLabel),execution?this.t(execution==='success'?'已实际运行成功':'上次运行失败'):undefined,this.t(this.session.dirty?'未保存':'已保存')].filter(Boolean).join(' · ');
+  this.status.dataset.kernelState=kernelState;
+  this.toolbar.querySelectorAll<HTMLButtonElement>('button').forEach(button=>{if(button.dataset.action==='清理运行变量')button.disabled=kernelState!=='idle'||this.session.running||this.session.busy});if(this.session.outputWarning!==this.lastOutputWarning){this.lastOutputWarning=this.session.outputWarning;if(this.lastOutputWarning)this.showMessage(this.t(this.lastOutputWarning))};
   if(this.environmentLabel){this.environmentLabel.textContent=this.actions.environment();this.environmentLabel.setAttribute('aria-label',this.actions.environment());this.environmentLabel.title=this.actions.environment();}
   if(this.session.running||this.session.busy)this.cancelDrag();
   this.root.querySelectorAll<HTMLButtonElement>('.ipynb-insert-gap button,.ipynb-drag-handle').forEach(b=>b.disabled=this.session.running||this.session.busy);
@@ -232,5 +262,5 @@ export class NotebookEditor {
   });
   if(this.lastRunning!==(this.session.running||this.session.busy)){this.lastRunning=(this.session.running||this.session.busy);}
  }
- destroy():void{this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor.destroy());this.session.onChange=()=>{};this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
+ destroy():void{this.cellObserver?.disconnect();this.pendingCells.clear();this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor.destroy());this.session.onChange=()=>{};this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
 }

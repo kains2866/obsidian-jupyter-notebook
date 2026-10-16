@@ -93,3 +93,8 @@ it('内核启动期间修改源代码不会执行未经本次确认的代码',as
 
 it('新的实际执行异常不会保留上次成功标记',async()=>{const {view}=setup();view.lastExecution='success';view.getKernel=async()=>({execute:async()=>{throw new Error('bridge terminated')}});await expect(view.run(0)).rejects.toThrow('bridge terminated');expect(view.lastExecution).toBeUndefined()});
 it('dead bridge shows stopped and clears its previous successful execution status',async()=>{const {view}=setup();await view.onLoadFile(view.file);view.kernel={isAlive:false};view.lastExecution='success';expect(view.editor.actions.kernelState()).toBe('stopped')});
+it('Markdown outputs use their own disposable renderer without treating YAML as notebook properties',async()=>{
+ const {view}=setup();const {MarkdownRenderer}=await import('obsidian');const render=vi.spyOn(MarkdownRenderer,'render');const remove=vi.spyOn(view,'removeChild');const parent={addEventListener(){}};
+ const source='---\ntitle: Output\n---\n|a|b|\n|---|---|\n|1|2|';
+ const output=view.renderOutputMarkdown(source,parent);await output.ready;expect(render).toHaveBeenLastCalledWith(view.app,source,parent,'测试.ipynb',expect.anything());output.dispose();output.dispose();expect(remove).toHaveBeenCalledOnce();render.mockRestore();
+});

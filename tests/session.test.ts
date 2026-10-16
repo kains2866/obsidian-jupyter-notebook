@@ -18,3 +18,12 @@ it('写入失败后允许重试且不清除修改',async()=>{const s=new Noteboo
 it('执行状态标记准确的单元格，结束后清除',async()=>{const s=new NotebookSession(initial);s.structure(insertCell(s.notebook,1,newCell('code')));await s.run(1,{execute:async()=>{expect(s.runningIndex).toBe(1);return {status:'ok',execution_count:1}}});expect(s.runningIndex).toBeNull()});
 it('清除输出默认可以撤销，显式释放历史后不能恢复',()=>{const s=new NotebookSession(initial);s.change(editCell(s.notebook,0,{outputs:[{output_type:'stream',text:'old'}]}));s.clearOutputs();expect(s.notebook.cells[0].outputs).toEqual([]);s.undo();expect(s.notebook.cells[0].outputs).toHaveLength(1);s.clearOutputs(undefined,true);s.undo();expect(s.notebook.cells[0].outputs).toEqual([])});
 it('输出配额默认只警告；硬限制停止保存后续输出且只中断一次',async()=>{const warnings:string[]=[];let limits=0;const s=new NotebookSession(initial,{warnCellMiB:0.00001,hardLimit:true},{onWarning:m=>warnings.push(m),onLimit:()=>{limits++}});await s.run(0,{execute:async(_,emit)=>{emit({output_type:'stream',text:'large output'});emit({output_type:'stream',text:'more'});return {status:'ok',execution_count:1}}});expect(limits).toBe(1);expect(warnings.length).toBeGreaterThan(0);expect(s.outputWarning).toBeTruthy();expect(s.notebook.cells[0].outputs).toEqual([])});
+it('records per-cell elapsed seconds for successful and failed executions without losing metadata',async()=>{
+ const {vi}=await import('vitest');const clock=vi.spyOn(performance,'now');let now=100;clock.mockImplementation(()=>now);
+ try{const s=new NotebookSession(initial);s.change(editCell(s.notebook,0,{metadata:{custom:{keep:true}}}));
+ await s.run(0,{execute:async()=>{now=450;expect(s.executionSeconds(0)).toBeCloseTo(.35);return {status:'ok',execution_count:1}}});expect(s.executionSeconds(0)).toBeCloseTo(.35);expect(s.notebook.cells[0].metadata.custom).toEqual({keep:true});
+ const saved=JSON.stringify(s.notebook);expect(new NotebookSession(saved).executionSeconds(0)).toBeCloseTo(.35);
+ await expect(s.run(0,{execute:async()=>{now=1000;throw new Error('failed')}})).rejects.toThrow();expect(s.executionSeconds(0)).toBeCloseTo(.55);
+ s.clearOutputs();expect(s.executionSeconds(0)).toBeUndefined();
+ }finally{clock.mockRestore()}
+});

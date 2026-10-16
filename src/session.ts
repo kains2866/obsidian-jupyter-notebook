@@ -9,6 +9,7 @@ export class NotebookSession {
  outputOptions:OutputOptions;
  outputWarning="";
  private renderTimer?:number;
+ private executionStartedAt?:number;
  private scheduleChange():void{if(!this.renderTimer)this.renderTimer=window.setTimeout(()=>{this.renderTimer=undefined;this.onChange()},75)}
  private saving?:Promise<void>;
  running=false;
@@ -43,15 +44,20 @@ export class NotebookSession {
  }
  clearOutputs(index?:number,releaseHistory=this.outputOptions.releaseHistoryOnClear):void{
   if(this.running||this.busy)throw new Error("运行时不能清除输出。");
-  const next={...this.notebook,cells:this.notebook.cells.map((cell,i)=>cell.cell_type==='code'&&(index===undefined||i===index)?{...cell,outputs:[],execution_count:null}:cell)};
+  const next={...this.notebook,cells:this.notebook.cells.map((cell,i)=>cell.cell_type==='code'&&(index===undefined||i===index)?{...cell,metadata:withoutDuration(cell.metadata),outputs:[],execution_count:null}:cell)};
   this.history.update(next);if(releaseHistory)this.history.clear();this.onChange();
+ }
+ executionSeconds(index:number):number|undefined{
+  if(this.running&&this.runningIndex===index&&this.executionStartedAt!==undefined)return Math.max(0,(performance.now()-this.executionStartedAt)/1000);
+  const metadata=this.notebook.cells[index]?.metadata['obsidian-jupyter-notebook'] as {duration_seconds?:unknown}|undefined;const duration=metadata?.duration_seconds;
+  return typeof duration==='number'&&Number.isFinite(duration)&&duration>=0?duration:undefined;
  }
  async run(index:number,kernel:Executor):Promise<string>{
   if(this.running||this.busy)throw new Error('内核正在运行。');
   const cell=this.notebook.cells[index];
   if(!cell || cell.cell_type!=='code')return 'ok';
   const code=sourceText(cell);
-  this.running=true;this.runningIndex=index;
+  this.running=true;this.runningIndex=index;this.executionStartedAt=performance.now();
   this.history.replace(editCell(this.notebook,index,{outputs:[],execution_count:null}));this.onChange();
   let pendingClear=false;let limited=false;let warned=false;this.outputWarning="";
   try{
@@ -72,6 +78,11 @@ export class NotebookSession {
    });
    this.history.replace(editCell(this.notebook,index,{execution_count:result.execution_count}));
    return result.status;
-  }finally{if(this.renderTimer){window.clearTimeout(this.renderTimer);this.renderTimer=undefined}this.running=false;this.runningIndex=null;this.onChange()}
+  }finally{const current=this.notebook.cells[index];const existing=current.metadata['obsidian-jupyter-notebook'];const metadata=existing&&typeof existing==='object'&&!Array.isArray(existing)?existing:{};this.history.replace(editCell(this.notebook,index,{metadata:{...current.metadata,'obsidian-jupyter-notebook':{...metadata,duration_seconds:this.executionSeconds(index)}}}));this.executionStartedAt=undefined;if(this.renderTimer){window.clearTimeout(this.renderTimer);this.renderTimer=undefined}this.running=false;this.runningIndex=null;this.onChange()}
  }
+}
+
+function withoutDuration(metadata:Record<string,unknown>):Record<string,unknown>{
+ const value=metadata['obsidian-jupyter-notebook'];if(!value||typeof value!=='object'||Array.isArray(value))return metadata;
+ const {duration_seconds,...other}=value as Record<string,unknown>;return {...metadata,'obsidian-jupyter-notebook':other};
 }

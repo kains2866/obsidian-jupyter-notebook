@@ -96,3 +96,41 @@ test('optional output callback and missing payload do not settle requests', asyn
   await withFixture('print(json.dumps(dict(id=r["id"],event="output",output={"text":"ignored"})),flush=True)\nprint(json.dumps(dict(id=r["id"],event="ready")),flush=True)', async client => { await client.start(); });
   await withFixture('print(json.dumps(dict(id=r["id"],event="output")),flush=True)', async client => { await expect(client.start()).rejects.toThrow('Invalid kernel event'); });
 });
+test('real stdin supports Unicode, blank input, sequential prompts and passwords', async () => {
+ const python=resolve('.venv/bin/python'); const client=new KernelClient(python,python,resolve('python/kernel_bridge.py'));
+ try { await client.start(); const prompts: unknown[]=[]; const values=['你好','', 'secret']; const outputs: Record<string,unknown>[]=[];
+ const result=await client.execute('a=input("Name: ")\nb=input("Blank: ")\nimport getpass\nc=getpass.getpass("Password: ")\nprint(a,repr(b),len(c))',o=>outputs.push(o),async request=>{prompts.push(request);return values.shift()!;});
+ expect(result.status).toBe('ok'); expect(prompts).toEqual([{prompt:'Name: ',password:false},{prompt:'Blank: ',password:false},{prompt:'Password: ',password:true}]); expect(outputs.some(o=>String(o.text).includes("你好 '' 6"))).toBe(true);
+ } finally {await client.close();}
+},20000);
+test('cancelled stdin interrupts and pending input closes on interrupt and close',async()=>{
+ const python=resolve('.venv/bin/python');const client=new KernelClient(python,python,resolve('python/kernel_bridge.py'));
+ try {await client.start();expect((await client.execute('input("cancel")',()=>{},async()=>null)).status).toBe('error');
+ for(const action of ['interrupt','close'] as const){let shown!:()=>void;const ready=new Promise<void>(r=>shown=r);let aborted=false;
+ const run=client.execute('input("wait")',()=>{},async(_request,signal)=>{shown();return await new Promise<null>(r=>signal.addEventListener('abort',()=>{aborted=true;r(null);}));});
+ const settled=run.catch(()=>null);await ready;await client[action]();await settled;expect(aborted).toBe(true);}
+ }finally{await client.close();}
+},20000);
+test('stdin without a callback cancels, restart aborts a stale reply',async()=>{
+ const python=resolve('.venv/bin/python');const client=new KernelClient(python,python,resolve('python/kernel_bridge.py'));
+ try {await client.start();expect((await client.execute('input("missing")',()=>{})).status).toBe('error');
+ let shown!:()=>void;const ready=new Promise<void>(r=>shown=r);let answer!:(value:string)=>void;let signal!:AbortSignal;
+ const running=client.execute('input("stale")',()=>{},async(_request,inputSignal)=>{signal=inputSignal;shown();return new Promise<string>(r=>answer=r);});const rejected=expect(running).rejects.toThrow('restarted');await ready;await client.restart();await rejected;expect(signal.aborted).toBe(true);answer('stale');
+ const prompts: string[]=[];expect((await client.execute('print(input("fresh"))',()=>{},async request=>{prompts.push(request.prompt);return 'fresh';})).status).toBe('ok');expect(prompts).toEqual(['fresh']);
+ }finally{await client.close();}
+},20000);
+test('input handler failure rejects execution without exposing handler details',async()=>{
+ await withFixture('print(json.dumps(dict(id=r["id"],event="input_request",token="one",prompt="Prompt",password=False) if r["op"]=="execute" else dict(id=r["id"],event="ready")),flush=True)',async client=>{
+ await client.start();await expect(client.execute('',()=>{},async()=>{throw new Error('private input');})).rejects.toThrow('Kernel error');expect(client.isAlive).toBe(false);
+ });
+});
+test('failed cancellation interrupt rejects execution instead of leaving it pending',async()=>{
+ await withFixture('print(json.dumps(dict(id=r["id"],event="input_request",token="one",prompt="Prompt",password=False) if r["op"]=="execute" else dict(id=r["id"],event="error",message="interrupt failed") if r["op"]=="interrupt" else dict(id=r["id"],event="ready")),flush=True)',async client=>{
+ await client.start();await expect(client.execute('',()=>{},async()=>null)).rejects.toThrow('Kernel error');expect(client.isAlive).toBe(false);
+ });
+});
+test('overlapping input requests fail protocol and abort the existing dialog',async()=>{
+ await withFixture('print(json.dumps(dict(id=r["id"],event="ready")),flush=True) if r["op"]!="execute" else [print(json.dumps(dict(id=r["id"],event="input_request",token=token,prompt="Prompt",password=False)),flush=True) for token in ["one","two"]]',async client=>{
+ await client.start();let calls=0;let signal!:AbortSignal;await expect(client.execute('',()=>{},async(_request,s)=>{calls++;signal=s;return await new Promise<null>(resolve=>s.addEventListener('abort',()=>resolve(null)));})).rejects.toThrow('Invalid kernel event');expect(calls).toBe(1);expect(signal.aborted).toBe(true);
+ });
+});

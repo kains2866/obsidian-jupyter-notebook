@@ -1,9 +1,13 @@
 export const workflowTranslations:Record<string,string>={
+ 'Python 输入':'Python input','请输入内容。':'Enter a value.','输入内容':'Input value','取消并中断':'Cancel and interrupt','提交':'Submit',
+ 'Markdown 输出渲染失败：{error}':'Markdown output rendering failed: {error}',
+ '{seconds} 秒':'{seconds} s','运行时间：{seconds} 秒':'Execution time: {seconds} s',
  '本机 Notebook 信任记录损坏。':'Local notebook trust records are damaged.',
  '本机 Notebook 信任记录超过大小限制。':'Local notebook trust records exceed the size limit.',
  '无效 Notebook 信任记录。':'Invalid notebook trust record.',
  '清理运行变量':'Clear runtime variables','检测未发现缺失':'No missing dependencies detected',
  '内核已停止':'Kernel stopped','内核启动中':'Kernel starting','内核运行中':'Kernel busy','内核空闲':'Kernel idle',
+ '运行成功':'Execution succeeded','运行失败':'Execution failed','尚未运行':'Not run yet',
  '已实际运行成功':'Last execution succeeded','上次运行失败':'Last execution failed',
  '检查环境':'Check environment','修复环境':'Repair environment','复制诊断信息':'Copy diagnostics',
  '请先选择或安装环境。':'Choose or install an environment first.',

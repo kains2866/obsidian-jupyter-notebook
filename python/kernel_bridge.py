@@ -5,11 +5,15 @@ import queue
 import signal
 import sys
 import threading
+import uuid
 from jupyter_client import KernelManager
 
 MAX_LINE = 8 * 1024 * 1024
 write_lock = threading.Lock()
 requests = queue.Queue()
+input_replies = queue.Queue()
+input_lock = threading.Lock()
+active_input = None
 manager = None
 client = None
 
@@ -34,6 +38,7 @@ def stop_after_input():
 
 
 def read_requests():
+    global active_input
     pending = b""
     while True:
         while b"\n" not in pending:
@@ -62,8 +67,15 @@ def read_requests():
             if request.get('op') == 'interrupt':
                 if manager is None or not manager.has_kernel:
                     raise ValueError('Kernel is not running')
+                with input_lock:
+                    active_input = None
                 manager.interrupt_kernel()
                 emit(request['id'], 'ready')
+            elif request.get('op') == 'input_reply':
+                value = request.get('value')
+                if not isinstance(value, str) or len(value) > 65536:
+                    raise ValueError('Invalid input reply')
+                input_replies.put(request)
             else:
                 requests.put(request)
         except Exception as error:
@@ -71,11 +83,31 @@ def read_requests():
 
 
 def execute(request):
-    msg_id = client.execute(request.get('code', ''), allow_stdin=False)
+    global active_input
+    msg_id = client.execute(request.get('code', ''), allow_stdin=True)
     count = None
     while True:
         try:
-            message = client.get_iopub_msg(timeout=1)
+            stdin = client.get_stdin_msg(timeout=0)
+        except queue.Empty:
+            stdin = None
+        if stdin and stdin.get('parent_header', {}).get('msg_id') == msg_id and stdin.get('msg_type') == 'input_request':
+            token = uuid.uuid4().hex
+            with input_lock:
+                active_input = (request['id'], token)
+            content = stdin['content']
+            emit(request['id'], 'input_request', token=token, prompt=content.get('prompt', ''), password=bool(content.get('password', False)))
+        while True:
+            try:
+                response = input_replies.get_nowait()
+            except queue.Empty:
+                break
+            with input_lock:
+                if active_input == (response['id'], response.get('token')):
+                    client.input(response['value'])
+                    active_input = None
+        try:
+            message = client.get_iopub_msg(timeout=0.05)
         except queue.Empty:
             if not manager.is_alive():
                 raise RuntimeError('Kernel exited while executing')
@@ -89,6 +121,8 @@ def execute(request):
         elif kind in ('stream', 'display_data', 'execute_result', 'error', 'clear_output', 'update_display_data'):
             emit(request['id'], 'output', output=dict(output_type=kind, **content))
         elif kind == 'status' and content['execution_state'] == 'idle':
+            with input_lock:
+                active_input = None
             break
     while True:
         reply = client.get_shell_msg(timeout=30)

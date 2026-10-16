@@ -1,9 +1,11 @@
 import {setTimeout,clearTimeout} from 'node:timers';
 import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
+export interface KernelInputRequest { prompt: string; password: boolean }
+type InputHandler = (request: KernelInputRequest, signal: AbortSignal) => Promise<string | null>;
 type Output = Record<string, unknown>;
-type Reply = { id: string; event: string; output?: Output; execution_count?: number | null; status?: string; message?: string };
-type Pending = { resolve: (reply: Reply) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; onOutput?: (output: Output) => void };
+type Reply = { id: string; event: string; output?: Output; execution_count?: number | null; status?: string; message?: string; prompt?: string; password?: boolean; token?: string };
+type Pending = { resolve: (reply: Reply) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout>; onOutput?: (output: Output) => void; onInput?: InputHandler; controller?: AbortController; inputToken?: string };
 
 export class KernelClient {
   onStateChange?: () => void;
@@ -41,18 +43,20 @@ export class KernelClient {
     await this.request('start', { python: this.kernelPython, ...(this.cwd ? { cwd: this.cwd } : {}) });
   }
 
-  execute(code: string, onOutput: (output: Output) => void): Promise<{ execution_count: number | null; status: string }> {
+  execute(code: string, onOutput: (output: Output) => void, onInput?: InputHandler): Promise<{ execution_count: number | null; status: string }> {
     const generation = this.generation;
     const execution = this.executionQueue.then(async () => {
       if (generation !== this.generation) throw new Error('Kernel restarted');
-      const reply = await this.request('execute', { code }, onOutput, 24 * 60 * 60 * 1000);
+      const reply = await this.request('execute', { code }, onOutput, 24 * 60 * 60 * 1000, onInput);
       return { execution_count: reply.execution_count ?? null, status: reply.status ?? 'error' };
     });
     this.executionQueue = execution.catch(() => undefined);
     return execution;
   }
 
-  async interrupt(): Promise<void> { await this.request('interrupt'); }
+  async interrupt(): Promise<void> {
+    for (const pending of this.pending.values()) pending.controller?.abort();
+    await this.request('interrupt'); }
   async restart(): Promise<void> {
     if (this.closed) throw new Error('Kernel client is closed');
     this.generation += 1;
@@ -99,7 +103,7 @@ export class KernelClient {
     void this.stopProcess().catch(cleanupError => { this.diagnostics = String(cleanupError); });
   }
 
-  private request(op: string, payload: Output = {}, onOutput?: (output: Output) => void, timeout = 45000): Promise<Reply> {
+  private request(op: string, payload: Output = {}, onOutput?: (output: Output) => void, timeout = 45000, onInput?: InputHandler): Promise<Reply> {
     const child = this.process;
     if (!child || child.exitCode !== null || child.signalCode !== null || (this.closed && op !== 'shutdown' && op !== 'interrupt')) return Promise.reject(new Error('Kernel bridge is not running'));
     const id = String(++this.sequence);
@@ -113,7 +117,7 @@ export class KernelClient {
       const timer = setTimeout(() => {
         if (this.process === child) this.protocolFailure(new Error(`Kernel ${op} timed out`));
       }, timeout);
-      this.pending.set(id, { resolve, reject, timer, onOutput });
+      this.pending.set(id, { resolve, reject, timer, onOutput, onInput, ...(op === 'execute' ? {controller: new AbortController()} : {}) });
       child.stdin.write(message, error => {
         if (error) this.fail(error);
       });
@@ -135,10 +139,17 @@ export class KernelClient {
         if (!reply.id && reply.event === 'error') throw new Error(reply.message ?? 'Kernel protocol error');
         const pending = this.pending.get(reply.id);
         if (!pending) continue;
+        if (reply.event === 'input_request') {
+          if (!pending.controller || pending.inputToken !== undefined || typeof reply.token !== 'string' || typeof reply.prompt !== 'string' || typeof reply.password !== 'boolean') throw new Error('Invalid kernel event');
+          pending.inputToken = reply.token;
+          void this.answerInput(reply.id, pending, reply as Reply & {token: string; prompt: string; password: boolean});
+          continue;
+        }
         if (reply.event === 'output' && reply.output) { pending.onOutput?.(reply.output); continue; }
         if (!['ready', 'result', 'error', 'stopped'].includes(reply.event)) throw new Error('Invalid kernel event');
         clearTimeout(pending.timer);
         this.pending.delete(reply.id);
+        pending.controller?.abort();
         if (reply.event === 'error') pending.reject(new Error(reply.message ?? 'Kernel error'));
         else pending.resolve(reply);
       } catch (error) {
@@ -148,8 +159,28 @@ export class KernelClient {
     }
   }
 
+  private async answerInput(id: string, pending: Pending, reply: Reply & {token: string; prompt: string; password: boolean}): Promise<void> {
+    const signal = pending.controller!.signal;
+    if (signal.aborted) return;
+    let value: string | null = null;
+    try { value = await pending.onInput?.({prompt: reply.prompt, password: reply.password}, signal) ?? null; }
+    catch {
+      if (!signal.aborted && this.pending.get(id) === pending) this.protocolFailure(new Error('Kernel error'));
+      return;
+    }
+    if (signal.aborted || this.pending.get(id) !== pending || pending.inputToken !== reply.token) return;
+    pending.inputToken = undefined;
+    if (typeof value !== 'string' || value.length > 65536) {
+      try { await this.interrupt(); }
+      catch { if (this.pending.get(id) === pending) this.protocolFailure(new Error('Kernel error')); }
+      return;
+    }
+    const child = this.process;
+    if (child) child.stdin.write(JSON.stringify({id, op: 'input_reply', token: reply.token, value}) + '\n', error => { if (error) this.fail(error); });
+  }
+
   private fail(error: Error): void {
-    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.reject(error); }
+    for (const pending of this.pending.values()) { clearTimeout(pending.timer); pending.controller?.abort(); pending.reject(error); }
     this.pending.clear();
   }
 }

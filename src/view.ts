@@ -47,6 +47,7 @@ export class NotebookView extends FileView{
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
+   outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
   },state);
   this.scheduleImportCheck(true);
  }
@@ -74,6 +75,10 @@ export class NotebookView extends FileView{
    if(!this.disposed&&generation===this.importGeneration)this.editor?.setImportStatuses?.(result.cells);
   }catch(error){if(!this.disposed&&generation===this.importGeneration&&!controller.signal.aborted){console.error('[Obsidian Jupyter Notebook] Import check failed',this.kernelPython,error);this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'error'})))}}
   finally{if(this.importController===controller)this.importController=undefined}
+ }
+ private renderOutputMarkdown(text:string,parent:HTMLElement):import('./outputs').MarkdownOutput{
+  const child=new Component();this.addChild(child);let active=true;
+  return {ready:MarkdownRenderer.render(this.app,text,parent,this.file?.path??'',child).then(()=>{if(active)this.bindMarkdownLinks(parent)}),dispose:()=>{if(active){active=false;this.removeChild(child)}}};
  }
  private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement):Promise<void>{
   const child=new Component();this.addChild(child);this.markdownChildren.push(child);
@@ -178,7 +183,10 @@ export class NotebookView extends FileView{
    if(this.disposed||this.session!==session)throw new Error(this.t('Notebook 已关闭或切换。'));
    if(codeSnapshot!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText)))throw new Error(this.t('确认期间代码已改变，请重新运行并检查代码。'));
    unlock();this.lastExecution=undefined;
-   let missing:string|undefined;const result=await session.run(index,{execute:(code,emit)=>kernel.execute(code,o=>{missing=detectMissingDependency(o)??missing;emit(o as Output)})});
+   let missing:string|undefined;const result=await session.run(index,{execute:(code,emit)=>kernel.execute(code,o=>{missing=detectMissingDependency(o)??missing;emit(o as Output)},async(request,signal)=>{
+    if(this.disposed||this.session!==session||signal.aborted)return null;
+    return this.editor?.requestInput(request,signal)??null;
+   })});
    if(!this.disposed&&this.session===session){this.lastExecution=result==='ok'?'success':'error';this.editor?.refresh?.()}
    if(missing&&!this.disposed&&this.session===session)this.editor?.showDependencyNotice(missing,this.isExternalKernel(),()=>this.openDependencyManager(missing?.split('.')[0]),()=>this.chooseEnvironment());
    return result;

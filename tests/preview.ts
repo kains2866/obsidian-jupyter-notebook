@@ -1,3 +1,5 @@
+import {requestKernelInput} from '../src/kernel-input-modal';
+import {richOutputFixture} from './rich-output-fixture';
 import {largeNotebookFixture} from './large-notebook-fixture';
 import {editCell} from '../src/notebook';
 import {createTranslator} from '../src/i18n';
@@ -12,21 +14,36 @@ Element.prototype.createSvg=function(this:Element,tag){const element=this.ownerD
 const root=document.getElementById('app')!;
 let disk=JSON.stringify({nbformat:4,nbformat_minor:5,metadata:{},cells:[{id:'intro',cell_type:'markdown',source:'# Native Notebook',metadata:{}},{id:'example',cell_type:'code',source:'greeting = "Notebook 已就绪"\nprint(greeting)',metadata:{},outputs:[{output_type:'stream',name:'stdout',text:'欢迎使用原生 Notebook\n'}],execution_count:1}]});
 if(new URLSearchParams(location.search).has('large'))disk=JSON.stringify(largeNotebookFixture());
+if(new URLSearchParams(location.search).has('charts')){const n=JSON.parse(disk);disk=JSON.stringify({...n,cells:n.cells.map((c:any,i:number)=>i%10===1?{...c,outputs:richOutputFixture.cells[1].outputs}:c)})}
+if(new URLSearchParams(location.search).has('outputs'))disk=JSON.stringify(richOutputFixture);
 const session=new NotebookSession(disk);
 let previewKernelState:'stopped'|'starting'|'busy'|'idle'='idle';
 let previewExecution:'success'|'error'|undefined;
 (window as any).simulateConflict=()=>{disk+=' '};
-const post=async(op:string,data:Record<string,unknown>={})=>{const response=await fetch('/kernel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...data})});const r=await response.json();if(!response.ok)throw new Error(r.message);return r};
+let inputController:AbortController|undefined;
+const post=async(op:string,data:Record<string,unknown>={})=>{
+ const response=await fetch('/kernel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...data})});
+ if(op!=='execute'){const result=await response.json();if(!response.ok)throw new Error(result.message);return result}
+ const controller=new AbortController();inputController=controller;const outputs:Output[]=[];let result:any;let pending='';const decoder=new TextDecoder();
+ try{const reader=response.body!.getReader();while(true){const read=await reader.read();pending+=decoder.decode(read.value,{stream:!read.done});let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);if(!line)continue;const event=JSON.parse(line);if(event.event==='output')outputs.push(event.output);else if(event.event==='result')result=event;else if(event.event==='input'){const value=await requestKernelInput(document.querySelector('.ipynb-input-host') as HTMLElement,event.request,controller.signal,createTranslator('zh'));await fetch('/stdin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:event.token,value})})}}if(read.done)break}if(!result)throw new Error('Missing execution result');return {...result,outputs}}finally{controller.abort();if(inputController===controller)inputController=undefined}
+};
 const actions:import('../src/editor').EditorActions={
  translate:createTranslator(new URLSearchParams(location.search).get('lang')==='en'?'en':'zh'),
  save:async()=>{await session.save({read:async()=>disk,write:async text=>{disk=text;(window as any).savedNotebook=JSON.parse(text)}})},
  saveCopy:async()=>{},reload:async()=>{},confirm:async()=>true,
  run:async(index)=>{await session.run(index,{execute:async(code,emit)=>{const result=await post('execute',{code});result.outputs.forEach((o:Output)=>emit(o));return result}})},
  runAll:async()=>{for(let i=0;i<session.notebook.cells.length;i++)await session.run(i,{execute:async(code,emit)=>{const r=await post('execute',{code});r.outputs.forEach((o:Output)=>emit(o));return r}})},
- interrupt:async()=>{await post('interrupt')},restart:async()=>{await post('restart')},
+ interrupt:async()=>{inputController?.abort();await post('interrupt')},restart:async()=>{await post('restart')},
  kernelState:()=>session.running?'busy':previewKernelState,lastExecution:()=>previewExecution,clearVariables:async()=>{await post('restart')},
  environment:()=>'.venv · Python 3.12',chooseEnvironment:async()=>{},
  sanitize:html=>{const template=document.createElement('template');template.innerHTML=html;template.content.querySelectorAll('script,iframe,object,embed,style').forEach(n=>n.remove());template.content.querySelectorAll('*').forEach(e=>Array.from(e.attributes).filter(a=>a.name.startsWith('on')||a.name==='srcdoc').forEach(a=>e.removeAttribute(a.name)));return template.content},
+ outputMarkdown:(text,parent)=>({ready:(async()=>{
+  // Minimal standalone preview stub; production uses Obsidian's MarkdownRenderer.
+  for(const line of text.split('\n')){
+   if(line.startsWith('### ')){parent.createEl('h3',{text:line.slice(4)});continue}
+   if(line.startsWith('|')&&!/^\|[-:| ]+\|$/.test(line)){let table=parent.querySelector('table');if(!table)table=parent.createEl('table');const row=table.createEl('tr');for(const value of line.split('|').slice(1,-1))row.createEl('td',{text:value.trim()})}
+  }
+ })(),dispose:()=>{parent.replaceChildren()}}),
  markdown:async(text,parent)=>{const h=document.createElement(text.startsWith('# ')?'h1':'p');h.textContent=text.replace(/^# /,'');parent.append(h)},
 };
 const diagnostics=document.createElement('div');diagnostics.id='preview-diagnostics';diagnostics.style.cssText='position:fixed;top:0;right:0;z-index:10000;background:#252526;color:white;font-size:11px';if(new URLSearchParams(location.search).has('harness'))document.body.append(diagnostics);

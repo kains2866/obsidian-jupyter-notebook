@@ -1,3 +1,5 @@
+import {requestKernelInput} from './kernel-input-modal';
+import type {KernelInputRequest} from './kernel';
 import {wordHighlights} from './word-highlights';
 import {EditorState,EditorSelection} from '@codemirror/state';
 import {EditorView,keymap,lineNumbers,highlightActiveLine,highlightActiveLineGutter} from '@codemirror/view';
@@ -8,7 +10,7 @@ import {python} from '@codemirror/lang-python';
 import {markdown} from '@codemirror/lang-markdown';
 import {newCell,insertCell,removeCell,moveCell,editCell,sourceText,type CellType,type Cell} from './notebook';
 import type {NotebookSession} from './session';
-import {OutputRenderer} from './outputs';
+import {OutputRenderer,outputImageDimensions,type RenderOutputMarkdown} from './outputs';
 import {createTranslator,type Translator} from './i18n';
 import {describeError} from './errors';
 const semanticHighlight=HighlightStyle.define([
@@ -31,6 +33,7 @@ export interface EditorActions {
  sanitize(html:string):DocumentFragment;
  markdown(text:string,parent:HTMLElement):Promise<void>;
  clearMarkdown?():void;
+ outputMarkdown?:RenderOutputMarkdown;
  notebookChanged?():void;
  retryImports?():void;
  installImport?(module:string):Promise<void>;
@@ -40,7 +43,7 @@ export interface EditorActions {
  clearVariables?():Promise<void>;
 }
 export interface ImportStatus {modules:string[];missing:string[];optional?:string[];syntaxError?:boolean;state?:'checking'|'no-environment'|'error'}
-export interface EditorSnapshot {preview:boolean[];selections:({ranges:{anchor:number;head:number}[];main:number}|undefined)[];focused:number}
+export interface EditorSnapshot {preview:boolean[];selections:({ranges:{anchor:number;head:number}[];main:number}|undefined)[];focused:number;selected?:number}
 export class NotebookEditor {
  private importStatuses:ImportStatus[]=[];
  private cellObserver?:IntersectionObserver;
@@ -48,6 +51,7 @@ export class NotebookEditor {
  private savedSelections=new Map<string,NonNullable<EditorSnapshot['selections'][number]>>();
  private editors:EditorView[]=[];
  private cellNodes:HTMLElement[]=[];
+ private inputHost!:HTMLElement;private inputController?:AbortController;
  private toolbar!:HTMLElement;private message!:HTMLElement;private list!:HTMLElement;
  private status!:HTMLElement;private environmentLabel!:HTMLButtonElement;
  private preview=new Set<string>();
@@ -55,6 +59,8 @@ export class NotebookEditor {
  private identitySequence=0;
  private structureChanging=false;
  private lastRunning=false;
+ private timingTimer?:number;
+ private selectedCellId?:string;
  private anchor?:{id:string;offset:number;scroll:number};
  private anchorObserver?:ResizeObserver;
  private toolbarObserver?:ResizeObserver;
@@ -84,16 +90,17 @@ export class NotebookEditor {
   this.environmentLabel.classList.add('ipynb-environment');
   }
   this.status=this.el('span','ipynb-status',this.toolbar);this.status.setAttribute('aria-live','polite');
+  this.inputHost=this.el('div','ipynb-input-host',this.toolbar);
   this.message=this.el('div','ipynb-message',root);this.message.setAttribute('role','status');this.message.hidden=true;
   this.list=this.el('div','ipynb-cell-list',root);
   const measureToolbar=()=>root.style.setProperty('--ipynb-toolbar-height',`${this.toolbar.getBoundingClientRect().height||48}px`);
   measureToolbar();this.toolbarObserver=new ResizeObserver(measureToolbar);this.toolbarObserver.observe(this.toolbar);
   root.addEventListener('keydown',this.onKeyDown);root.addEventListener('scroll',this.onScroll,{passive:true});
-  session.onChange=()=>this.refresh();session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&(snapshot?snapshot.preview[index]:sourceText(cell).trim()))this.preview.add(this.cellIdentity(cell))});this.renderCells();if(snapshot){snapshot.selections.forEach((selection,index)=>{if(selection&&this.editors[index])this.editors[index].dispatch({selection:EditorSelection.fromJSON(this.clampSelection(selection,this.editors[index].state.doc.length))})});if(snapshot.focused>=0)this.focusCell(snapshot.focused)}
+  session.onChange=()=>this.refresh();session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&(snapshot?snapshot.preview[index]:sourceText(cell).trim()))this.preview.add(this.cellIdentity(cell))});this.renderCells();if(snapshot){snapshot.selections.forEach((selection,index)=>{if(selection&&this.editors[index])this.editors[index].dispatch({selection:EditorSelection.fromJSON(this.clampSelection(selection,this.editors[index].state.doc.length))})});if(snapshot.focused>=0)this.focusCell(snapshot.focused);if(snapshot.selected!==undefined&&snapshot.selected>=0)this.selectCell(snapshot.selected)}
  }
  private rememberSelections():void{this.editors.forEach((editor,index)=>{const id=this.cellNodes[index]?.dataset.cellId;if(editor&&id)this.savedSelections.set(id,{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex})})}
  private clampSelection(selection:NonNullable<EditorSnapshot['selections'][number]>,length:number):NonNullable<EditorSnapshot['selections'][number]>{return {...selection,ranges:selection.ranges.map(range=>({anchor:Math.max(0,Math.min(length,range.anchor)),head:Math.max(0,Math.min(length,range.head))}))}}
- captureState():EditorSnapshot{this.rememberSelections();return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.session.notebook.cells.map(cell=>this.savedSelections.get(this.cellIdentity(cell))),focused:this.editors.findIndex(editor=>editor?.hasFocus)}}
+ captureState():EditorSnapshot{this.rememberSelections();return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.session.notebook.cells.map(cell=>this.savedSelections.get(this.cellIdentity(cell))),focused:this.editors.findIndex(editor=>editor?.hasFocus),selected:this.cellNodes.findIndex(node=>node.dataset.cellId===this.selectedCellId)}}
  private onScroll=()=>{if(Math.abs(this.root.scrollTop-this.expectedScroll)>1){this.captureAnchor();this.expectedScroll=this.root.scrollTop}};
  private onKeyDown=(e:KeyboardEvent)=>{
   if(e.key==='Escape')this.cancelDrag();
@@ -139,13 +146,14 @@ export class NotebookEditor {
   this.session.notebook.cells.forEach((cell,index)=>{
    const gap=!this.actions.readOnly?this.el('div','ipynb-insert-gap',this.list):undefined;
    const node=this.el('section','ipynb-cell',this.list);const cellLabel=this.el('span','ipynb-sr-only',node);cellLabel.id=`ipynb-cell-label-${crypto.randomUUID()}`;cellLabel.textContent=this.t('单元格 {index}',{index:index+1});node.setAttribute('role','group');node.setAttribute('aria-labelledby',cellLabel.id);node.dataset.index=String(index);node.dataset.cellId=this.cellIdentity(cell);this.cellNodes.push(node);
-   node.classList.add(`ipynb-${cell.cell_type}-cell`);
+   node.classList.add(`ipynb-${cell.cell_type}-cell`);node.classList.toggle('is-selected',node.dataset.cellId===this.selectedCellId);node.addEventListener('pointerdown',()=>this.selectCell(index));node.addEventListener('focusin',()=>this.selectCell(index));
    const mount=()=>{
    const cell=this.session.notebook.cells[index];
    if(gap)this.insertionGap(index,gap);
    const gutter=this.el('div','ipynb-cell-gutter',node);
    if(!this.actions.readOnly&&cell.cell_type==='code')this.iconButton(gutter,'运行单元格','play',()=>this.actions.run(index));
    const count=this.el('span','ipynb-count',gutter);count.textContent=cell.cell_type==='code'?`[${cell.execution_count??' '}]`:'';
+   if(cell.cell_type==='code'){const timing=this.el('span','ipynb-execution-time',gutter);timing.hidden=true;timing.setAttribute('role','timer')}
    if(!this.actions.readOnly){
    const handle=this.iconButton(gutter,'拖动单元格','grip',()=>{});handle.classList.add('ipynb-drag-handle');handle.addEventListener('pointerdown',event=>this.startDrag(event,index));
    const toolsAnchor=this.el('div','ipynb-cell-tools-anchor',node);
@@ -225,12 +233,13 @@ export class NotebookEditor {
  private cancelDrag():void{if(this.dragging){this.root.win.cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}this.root.ownerDocument.removeEventListener('pointermove',this.dragMove);this.root.ownerDocument.removeEventListener('pointerup',this.dragEnd);this.root.ownerDocument.removeEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.removeEventListener('keydown',this.dragKey)}
  private estimateCellHeight(cell:Cell):number{
   const source=sourceText(cell);const sourceHeight=Math.max(54,(source.split('\n').length+Math.ceil(source.length/100))*20);
-  let outputHeight=0;for(const output of cell.outputs??[]){const data=output.data as Record<string,unknown>|undefined;const text=typeof output.text==='string'?output.text:Array.isArray(output.text)?output.text.join(''):'';if(text)outputHeight+=text.split('\n').length*18;else if(typeof data?.['text/html']==='string')outputHeight+=((data['text/html'].match(/<tr[ >]/gi)?.length??4)+1)*28;else outputHeight+=180}
-  if(this.session.outputOptions.collapse)outputHeight=Math.min(outputHeight,this.session.outputOptions.collapseHeight);
+  let outputHeight=0;let hasImage=false;for(const output of cell.outputs??[]){const data=output.data as Record<string,unknown>|undefined;const text=typeof output.text==='string'?output.text:Array.isArray(output.text)?output.text.join(''):'';const mime=data?.['image/png']?'image/png':data?.['image/jpeg']?'image/jpeg':undefined;if(mime){hasImage=true;const size=outputImageDimensions(output,mime);const width=Math.max(120,this.root.clientWidth-110);outputHeight+=size?size.height*Math.min(1,width/size.width):180}else if(text)outputHeight+=text.split('\n').length*18;else if(typeof data?.['text/html']==='string')outputHeight+=((data['text/html'].match(/<tr[ >]/gi)?.length??4)+1)*28;else outputHeight+=180}
+  if(this.session.outputOptions.collapse&&!hasImage)outputHeight=Math.min(outputHeight,this.session.outputOptions.collapseHeight);
   return sourceHeight+outputHeight+32;
  }
  private mountCell(index:number):boolean{const mount=this.pendingCells.get(index);if(!mount)return false;this.pendingCells.delete(index);const node=this.cellNodes[index];this.cellObserver?.unobserve(node);node.classList.remove('ipynb-cell-pending');node.style.removeProperty('min-height');mount();return true}
- focusCell(index:number):void{const target=Math.min(index,this.session.notebook.cells.length-1);if(this.mountCell(target))this.refresh();this.editors[target]?.focus()}
+ private selectCell(index:number):void{const node=this.cellNodes[index];if(!node)return;this.selectedCellId=node.dataset.cellId;this.cellNodes.forEach(cell=>cell.classList.toggle('is-selected',cell.dataset.cellId===this.selectedCellId))}
+ focusCell(index:number):void{const target=Math.min(index,this.session.notebook.cells.length-1);if(this.mountCell(target))this.refresh();this.selectCell(target);this.editors[target]?.focus()}
  setImportStatuses(statuses:ImportStatus[]):void{this.importStatuses=statuses;this.renderImportStatuses()}
  private renderImportStatuses():void{
   let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const status=this.importStatuses[codeIndex++];const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-import-status');if(!host)return;host.replaceChildren();host.classList.remove('is-missing');host.hidden=true;if(!status||(!status.state&&!status.syntaxError&&!status.missing.length&&!status.optional?.length))return;host.hidden=false;host.setAttribute('aria-live','polite');
@@ -241,12 +250,16 @@ export class NotebookEditor {
    if(status.optional?.length)this.el('span','ipynb-import-optional',host).textContent=this.t('可选模块未安装：{modules}',{modules:status.optional.join(', ')});
   });
  }
+ private renderExecutionTimes():void{
+  this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-execution-time');if(!host)return;const seconds=this.session.executionSeconds(index);host.hidden=seconds===undefined;if(seconds!==undefined){const value=seconds<0.1?'<0.1':seconds.toFixed(1);host.textContent=this.t('{seconds} 秒',{seconds:value});host.setAttribute('aria-label',this.t('运行时间：{seconds} 秒',{seconds:value}));host.title=this.t('运行时间：{seconds} 秒',{seconds:value})}});
+ }
  refresh():void{
+  this.renderExecutionTimes();if(this.session.running&&!this.timingTimer)this.timingTimer=window.setInterval(()=>this.renderExecutionTimes(),100);else if(!this.session.running&&this.timingTimer){window.clearInterval(this.timingTimer);this.timingTimer=undefined}
   this.actions.notebookChanged?.();this.renderImportStatuses();
   const kernelState=this.actions.kernelState?.()??((this.session.running||this.session.busy)?'busy':'stopped');
   const stateLabel={stopped:'内核已停止',starting:'内核启动中',busy:'内核运行中',idle:'内核空闲'}[kernelState];
   const execution=this.actions.lastExecution?.();
-  this.status.textContent=[this.t(stateLabel),execution?this.t(execution==='success'?'已实际运行成功':'上次运行失败'):undefined,this.t(this.session.dirty?'未保存':'已保存')].filter(Boolean).join(' · ');
+  this.status.textContent=[this.t(stateLabel),this.t(execution==='success'?'运行成功':execution==='error'?'运行失败':'尚未运行'),this.t(this.session.dirty?'未保存':'已保存')].filter(Boolean).join(' · ');
   this.status.dataset.kernelState=kernelState;
   this.toolbar.querySelectorAll<HTMLButtonElement>('button').forEach(button=>{if(button.dataset.action==='清理运行变量')button.disabled=kernelState!=='idle'||this.session.running||this.session.busy});if(this.session.outputWarning!==this.lastOutputWarning){this.lastOutputWarning=this.session.outputWarning;if(this.lastOutputWarning)this.showMessage(this.t(this.lastOutputWarning))};
   if(this.environmentLabel){this.environmentLabel.textContent=this.actions.environment();this.environmentLabel.setAttribute('aria-label',this.actions.environment());this.environmentLabel.title=this.actions.environment();}
@@ -256,11 +269,16 @@ export class NotebookEditor {
    const node=this.cellNodes[index];if(!node)return;
    if(!this.structureChanging&&!this.identities.has(cell))this.identities.set(cell,node.dataset.cellId!);
    const count=node.querySelector('.ipynb-count');if(count)count.textContent=cell.cell_type==='code'?`[${(this.session.running||this.session.busy)&&index===this.session.runningIndex?'*':cell.execution_count??' '}]`:'';
-   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
+   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t,this.actions.outputMarkdown);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
    node.querySelectorAll<HTMLButtonElement>('button').forEach(b=>{if(['运行单元格','上移','下移','在下方插入','删除','预览','编辑','清除单元格输出'].includes(b.dataset.action??''))b.disabled=(this.session.running||this.session.busy) || (b.dataset.action==='上移'&&index===0)||(b.dataset.action==='下移'&&index===this.session.notebook.cells.length-1)});
    const select=node.querySelector('select');if(select)select.disabled=(this.session.running||this.session.busy);
   });
   if(this.lastRunning!==(this.session.running||this.session.busy)){this.lastRunning=(this.session.running||this.session.busy);}
  }
- destroy():void{this.cellObserver?.disconnect();this.pendingCells.clear();this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor.destroy());this.session.onChange=()=>{};this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
+ requestInput(request:KernelInputRequest,signal:AbortSignal):Promise<string|null>{
+  this.inputController?.abort();const controller=new AbortController();this.inputController=controller;
+  const abort=()=>controller.abort();signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
+  return requestKernelInput(this.inputHost,request,controller.signal,this.t).finally(()=>{signal.removeEventListener('abort',abort);if(this.inputController===controller)this.inputController=undefined});
+ }
+ destroy():void{this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor.destroy());this.session.onChange=()=>{};this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
 }

@@ -31,7 +31,7 @@ class BridgeTest(unittest.TestCase):
         self.directory.cleanup()
 
     def send(self, op, **kwargs):
-        self.proc.stdin.write(json.dumps(dict(id=op, op=op, **kwargs)) + '\n')
+        self.proc.stdin.write(json.dumps(dict(id='execute' if op == 'input_reply' else op, op=op, **kwargs)) + '\n')
         self.proc.stdin.flush()
 
     def until(self, event):
@@ -56,6 +56,21 @@ class BridgeTest(unittest.TestCase):
         self.until('ready')
         self.send('execute', code='answer')
         self.assertEqual(self.until('result')[-1]['status'], 'error')
+
+    def test_input_protocol_ignores_stale_tokens_and_accepts_blank_unicode(self):
+        self.send('execute', code='a=input("名字: ")\nb=input("Blank: ")\nprint(repr(a),repr(b))')
+        first = self.until('input_request')[-1]
+        self.assertEqual(first['prompt'], '名字: ')
+        self.assertFalse(first['password'])
+        self.send('input_reply', token='stale', value='wrong')
+        self.send('input_reply', token=first['token'], value='你好')
+        second = self.until('input_request')[-1]
+        self.assertNotEqual(first['token'], second['token'])
+        self.send('input_reply', token=first['token'], value='wrong')
+        self.send('input_reply', token=second['token'], value='')
+        events = self.until('result')
+        self.assertEqual(events[-1]['status'], 'ok')
+        self.assertTrue(any("'你好' ''" in e.get('output', {}).get('text', '') for e in events))
 
     def test_invalid_kernel_interpreter_reports_error(self):
         process = subprocess.Popen(

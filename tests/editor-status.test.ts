@@ -22,7 +22,7 @@ it('incomplete code remains visible without reporting dependencies ready',()=>{
 });
 it('focus mounts a deferred cell once before focusing and renders current outputs',()=>{
  const editor:any=Object.create(NotebookEditor.prototype);const focus=vi.fn();const unobserve=vi.fn();const mount=vi.fn(()=>{editor.editors[4]={focus};expect(editor.session.notebook.cells[4].outputs[0].text).toBe('latest saved output')});
- const node={classList:{remove:vi.fn()},style:{minHeight:'700px',removeProperty:vi.fn()}};
+ const node={dataset:{cellId:'focused'},classList:{remove:vi.fn(),toggle:vi.fn()},style:{minHeight:'700px',removeProperty:vi.fn()}};
  Object.assign(editor,{pendingCells:new Map([[4,mount]]),cellNodes:[,,,,node],cellObserver:{unobserve},editors:[],refresh:vi.fn(),session:{notebook:{cells:Array.from({length:5},()=>({outputs:[{text:'latest saved output'}]}))}}});
  editor.focusCell(4);expect(mount).toHaveBeenCalledOnce();expect(unobserve).toHaveBeenCalledWith(node);expect(node.style.removeProperty).toHaveBeenCalledWith('min-height');expect(focus).toHaveBeenCalledOnce();expect(editor.refresh).toHaveBeenCalledOnce();
  editor.focusCell(4);expect(mount).toHaveBeenCalledOnce();expect(focus).toHaveBeenCalledTimes(2);
@@ -49,4 +49,19 @@ it('selections follow cell identity across move/delete and clamp after shorter u
  editor.rememberSelections();editor.editors=[];editor.session.notebook.cells=[second,first];expect(editor.captureState().selections).toEqual([undefined,selection]);
  editor.session.notebook.cells=[second];expect(editor.captureState().selections).toEqual([undefined]);
  expect(editor.clampSelection(selection,3).ranges).toEqual([{anchor:3,head:3}]);
+});
+it('deferred tall charts reserve their full display height rather than a collapsed placeholder',()=>{
+ const editor:any=Object.create(NotebookEditor.prototype);editor.session={outputOptions:{collapse:true,collapseHeight:600}};editor.root={clientWidth:910};
+ const height=editor.estimateCellHeight({cell_type:'code',metadata:{},source:'display(chart)',outputs:[{output_type:'display_data',data:{'image/png':'iVBORw0KGgoAAAANSUhEUgAABAAAAAMACAIAAAA='},metadata:{'image/png':{width:800,height:1200}}}]});
+ expect(height).toBeGreaterThanOrEqual(1200);expect(height).toBeLessThan(1400);
+});
+it('click selection persists independently of hover and moves to the next chosen cell',()=>{
+ const editor:any=Object.create(NotebookEditor.prototype);const a={dataset:{cellId:'a'},classList:{toggle:vi.fn()}},b={dataset:{cellId:'b'},classList:{toggle:vi.fn()}};editor.cellNodes=[a,b];
+ editor.selectCell(0);expect(editor.selectedCellId).toBe('a');expect(a.classList.toggle).toHaveBeenLastCalledWith('is-selected',true);expect(b.classList.toggle).toHaveBeenLastCalledWith('is-selected',false);
+ editor.selectCell(1);expect(editor.selectedCellId).toBe('b');expect(a.classList.toggle).toHaveBeenLastCalledWith('is-selected',false);
+});
+it.each([[.002,'<0.1 秒'],[.049,'<0.1 秒'],[.09,'<0.1 秒'],[.14,'0.1 秒'],[1.26,'1.3 秒']])('formats real duration %s without rounding short runs to zero', (seconds,label)=>{
+ const editor:any=Object.create(NotebookEditor.prototype);const host={hidden:false,textContent:'',title:'',setAttribute:vi.fn()};
+ Object.assign(editor,{session:{notebook:{cells:[{cell_type:'code'}]},executionSeconds:()=>seconds},cellNodes:[{querySelector:()=>host}],t:(text:string,params:any)=>text.replace('{seconds}',params.seconds)});
+ editor.renderExecutionTimes();expect(host.textContent).toBe(label);
 });

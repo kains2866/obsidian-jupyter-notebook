@@ -1,7 +1,7 @@
 {
   "id": "jupyter-notebook",
   "name": "Jupyter Notebook",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "minAppVersion": "1.8.7",
   "description": "Edit and run native Jupyter notebooks with local Python environments, dependency checks, Markdown previews, and saved outputs.",
   "author": "Kains",

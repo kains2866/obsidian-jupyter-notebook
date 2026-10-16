@@ -2,13 +2,22 @@
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
 updated: 2026-10-15
-version: "0.6.7"
+version: "0.6.9"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.6.8] - 2026-10-16
+
+-  补充input输入框；密码输入隐藏内容；取消后会中断运行
+- 块的左侧增加灰色悬停条、主题强调色选中条
+- 修复Markdown的表格输出与长图片裁切问题
+- 调整图片加载与滚动定位，修复抽搐滚动问题
+- 代码块显示运行耗时，精确到0.1s
+- 修改内核运行的状态提示文字
 
 ## [0.6.7] - 2026-10-15
 

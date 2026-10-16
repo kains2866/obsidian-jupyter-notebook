@@ -2,7 +2,7 @@
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
 updated: 2026-10-15
-version: "0.6.9"
+version: "0.6.8"
 status: readyForReview
 scope:
   - obsidian-ipynb

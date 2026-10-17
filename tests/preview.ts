@@ -1,3 +1,5 @@
+import {renderStaticOutputMarkdown} from '../src/output-markdown';
+import {undo as undoCode} from '@codemirror/commands';
 import {richOutputFixture} from './rich-output-fixture';
 import {largeNotebookFixture} from './large-notebook-fixture';
 import {editCell} from '../src/notebook';
@@ -38,13 +40,7 @@ const actions:import('../src/editor').EditorActions={
  kernelState:()=>session.running?'busy':previewKernelState,lastExecution:()=>previewExecution&&previewExecutedCode!==undefined&&previewExecutedCode!==codeSnapshot()?'modified':previewExecution,clearVariables:async()=>{await post('restart')},
  environment:()=>'.venv · Python 3.12',chooseEnvironment:async()=>{},
  sanitize:html=>{const template=document.createElement('template');template.innerHTML=html;template.content.querySelectorAll('script,iframe,object,embed,style').forEach(n=>n.remove());template.content.querySelectorAll('*').forEach(e=>Array.from(e.attributes).filter(a=>a.name.startsWith('on')||a.name==='srcdoc').forEach(a=>e.removeAttribute(a.name)));return template.content},
- outputMarkdown:(text,parent)=>({ready:(async()=>{
-  // Minimal standalone preview stub; production uses Obsidian's MarkdownRenderer.
-  for(const line of text.split('\n')){
-   if(line.startsWith('### ')){parent.createEl('h3',{text:line.slice(4)});continue}
-   if(line.startsWith('|')&&!/^\|[-:| ]+\|$/.test(line)){let table=parent.querySelector('table');if(!table)table=parent.createEl('table');const row=table.createEl('tr');for(const value of line.split('|').slice(1,-1))row.createEl('td',{text:value.trim()})}
-  }
- })(),dispose:()=>{parent.replaceChildren()}}),
+ outputMarkdown:(text,parent)=>{renderStaticOutputMarkdown(text,parent,actions.sanitize);return {ready:Promise.resolve(),dispose:()=>{parent.replaceChildren()}}},
  markdown:async(text,parent)=>{const h=document.createElement(text.startsWith('# ')?'h1':'p');h.textContent=text.replace(/^# /,'');parent.append(h)},
 };
 const diagnostics=document.createElement('div');diagnostics.id='preview-diagnostics';diagnostics.style.cssText='position:fixed;top:0;right:0;z-index:10000;background:#252526;color:white;font-size:11px';if(new URLSearchParams(location.search).has('harness'))document.body.append(diagnostics);
@@ -77,6 +73,10 @@ if(new URLSearchParams(location.search).has('harness')){
  button('编辑与撤销计时',()=>(window as any).previewHarness.editAndUndo());
  button('释放并重建',()=>{const state=editor.captureState();editor.destroy();const released={editors:root.querySelectorAll('.cm-editor').length,outputs:root.querySelectorAll('.ipynb-output-item').length,dialogs:document.querySelectorAll('.ipynb-image-dialog').length};editor=new NotebookEditor(root,session,actions,state);return {released,mounted:root.querySelectorAll('.cm-editor').length}});
  button('文档统计',()=>(window as any).previewHarness.metrics());
+ let recyclingSource:string|undefined;
+ button('首块写入回收测试',()=>{editor.focusCell(1);const view=(editor as any).editors[1];if(!view)return {error:'no editor'};recyclingSource=view.state.doc.toString();view.dispatch({changes:{from:view.state.doc.length,insert:'\n# recycle-history-probe'}});return {edited:true,sourceLength:view.state.doc.length}});
+ button('返回顶部',()=>{root.scrollTop=0;return (window as any).previewHarness.metrics()});
+ button('回首块并撤销',()=>{root.scrollTop=0;editor.focusCell(1);const view=(editor as any).editors[1];const undone=undoCode(view);return {undone,restored:view.state.doc.toString()===recyclingSource,sourceLength:view.state.doc.length}});
  button('滚动到底部',()=>{root.scrollTop=root.scrollHeight;return (window as any).previewHarness.metrics()});
  controls.append(report);document.body.append(controls);
 }

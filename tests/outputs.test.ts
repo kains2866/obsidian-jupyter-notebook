@@ -4,6 +4,7 @@ import {OutputRenderer} from '../src/outputs';
 import {DEFAULT_OUTPUT_OPTIONS} from '../src/output-policy';
 class Element {
  children:Element[]=[];className='';textContent='';hidden=false;dataset:Record<string,string>={};attrs:Record<string,string>={};style:Record<string,string>={};parent?:Element;events:Record<string,()=>void>={};naturalHeight=800;naturalWidth=1200;loading='';alt='';src='';
+ get localName(){return this.attrs.tag??'div'}get attributes(){return Object.entries(this.attrs).filter(([name])=>name!=='tag').map(([name,value])=>({name,value}))}
  createEl(tag:string){const el=new Element();el.attrs.tag=tag;this.append(el);return el}createDiv(){return this.createEl('div')}createSvg(tag:string){return this.createEl(tag)}
  append(...nodes:Element[]){for(const node of nodes){node.remove();node.parent=this;this.children=this.children.filter(c=>c!==node).concat(node)}}
  replaceChildren(...nodes:Element[]){this.children=[];this.append(...nodes)}
@@ -119,3 +120,5 @@ it('numbers unnamed images by image order, preserves named images, and resets af
  renderer.update([{output_type:'stream',text:'text'},image,{...image},named]);const buttons=host.querySelectorAll('button').filter(b=>b.attrs['aria-label']==='保存图像');buttons.forEach(b=>b.events.click());expect(save.mock.calls.map(call=>call[2])).toEqual(['演示-7-1.png','演示-7-2.png','原图.png']);
  renderer.update([]);renderer.update([image]);host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save.mock.calls.at(-1)![2]).toBe('演示-7-1.png');
 });
+
+it('preserves explicit output expansion across renderer replacement',()=>{const host=new Element();const options={...DEFAULT_OUTPUT_OPTIONS,collapse:true};const renderer=new OutputRenderer(host as any,()=>new Element() as any,options);renderer.update([image]);host.children[1].events.click();const state=renderer.captureState();renderer.destroy();const next=new OutputRenderer(host as any,()=>new Element() as any,options);next.restoreState(state);next.update([image]);expect(host.children[0].style.maxHeight).toBe('600px');expect(host.children[1].attrs['aria-expanded']).toBe('false')});

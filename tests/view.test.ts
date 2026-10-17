@@ -93,10 +93,9 @@ it('内核启动期间修改源代码不会执行未经本次确认的代码',as
 
 it('新的实际执行异常不会保留上次成功标记',async()=>{const {view}=setup();view.lastExecution='success';view.getKernel=async()=>({execute:async()=>{throw new Error('bridge terminated')}});await expect(view.run(0)).rejects.toThrow('bridge terminated');expect(view.lastExecution).toBeUndefined()});
 it('dead bridge shows stopped and clears its previous successful execution status',async()=>{const {view}=setup();await view.onLoadFile(view.file);view.kernel={isAlive:false};view.lastExecution='success';expect(view.editor.actions.kernelState()).toBe('stopped')});
-it('Markdown outputs use their own disposable renderer without treating YAML as notebook properties',async()=>{
- const {view}=setup();const {MarkdownRenderer}=await import('obsidian');const render=vi.spyOn(MarkdownRenderer,'render');const remove=vi.spyOn(view,'removeChild');const parent={addEventListener(){}};
- const source='---\ntitle: Output\n---\n|a|b|\n|---|---|\n|1|2|';
- const output=view.renderOutputMarkdown(source,parent);await output.ready;expect(render).toHaveBeenLastCalledWith(view.app,source,parent,'测试.ipynb',expect.anything());output.dispose();output.dispose();expect(remove).toHaveBeenCalledOnce();render.mockRestore();
+it('Markdown outputs use static parsing without host processors or notebook properties',async()=>{
+ const {view}=setup();const obsidian=await import('obsidian');const render=vi.spyOn(obsidian.MarkdownRenderer,'render');const fragment={children:[]};const sanitize=vi.spyOn(obsidian,'sanitizeHTMLToDom').mockImplementation(()=>fragment as any);const parent={append:vi.fn()};
+ try{const source='---\ntitle: Output\n---\n|a|b|\n|---|---|\n|1|2|\n\n<script>run()</script>\n\n![image](https://tracker.test)';const output=view.renderOutputMarkdown(source,parent);await output.ready;expect(render).not.toHaveBeenCalled();const html=sanitize.mock.calls.at(-1)![0];expect(html).toContain('<table>');expect(html).toContain('title: Output');expect(html).not.toContain('<script>');expect(html).not.toContain('<img');expect(parent.append).toHaveBeenCalledWith(fragment);output.dispose();output.dispose()}finally{render.mockRestore();sanitize.mockRestore()}
 });
 it('marks execution results stale only when code changes and restores on undo',async()=>{
  const {view}=setup();await view.onLoadFile(view.file);view.getKernel=async()=>({execute:async()=>({status:'ok',execution_count:1})});await view.run(0);
@@ -114,3 +113,5 @@ it('saves images and text through Obsidian attachment paths without overwriting'
  await view.saveOutput('saved text','text/plain;charset=utf-8','output.txt');expect(app.vault.create).toHaveBeenCalledWith('assets/output.txt','saved text');
  await expect(view.saveOutput('https://remote/image','image/png','output.png')).rejects.toThrow();expect(app.vault.createBinary).toHaveBeenCalledTimes(1);
 });
+
+it('disposing an offscreen Markdown host releases only its component',async()=>{const {view}=setup();const a={},b={};await view.renderNotebookMarkdown(view.session,'first',a);await view.renderNotebookMarkdown(view.session,'second',b);expect(view.markdownChildren).toHaveLength(2);view.disposeMarkdown(a);expect(view.markdownChildren).toHaveLength(1);view.disposeMarkdown(a);expect(view.markdownChildren).toHaveLength(1);view.clearMarkdown();expect(view.markdownChildren).toHaveLength(0)});

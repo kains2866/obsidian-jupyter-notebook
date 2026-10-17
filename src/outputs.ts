@@ -1,8 +1,10 @@
 import {enlargeOutputImage,saveOutput,wrapOutputTables,outputImageFilename,outputCopyText,type OutputActions} from './output-actions';
 import type {Output} from './notebook';
+import {hardenOutputDom} from './output-security';
 import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {createTranslator,type Translator} from './i18n';
 export const outputText=(value:unknown):string=>{if(value==null)return '';if(Array.isArray(value))return value.map((item:unknown)=>outputText(item)).join('');if(typeof value==='object')return JSON.stringify(value)??'';if(typeof value==='string'||typeof value==='number'||typeof value==='boolean'||typeof value==='bigint')return String(value);return ''};
+export interface OutputSnapshot {expanded:boolean|undefined}
 export interface MarkdownOutput {ready:Promise<void>;dispose():void}
 export type RenderOutputMarkdown=(source:string,parent:HTMLElement)=>MarkdownOutput;
 export class OutputRenderer {
@@ -21,6 +23,8 @@ export class OutputRenderer {
   if(typeof ResizeObserver!=='undefined'){this.sizeObserver=new ResizeObserver(()=>this.updateCollapse());this.sizeObserver.observe(this.content)}
   if(options.lazyImages&&typeof IntersectionObserver!=='undefined')this.observer=new IntersectionObserver(entries=>{for(const entry of entries){const img=entry.target as HTMLImageElement;if(entry.isIntersecting){if(!img.hasAttribute('src'))img.src=img.dataset.source!;this.observer?.unobserve(img)}}},{rootMargin:'600px'});
  }
+ captureState():OutputSnapshot{return {expanded:this.expanded}}
+ restoreState(state:OutputSnapshot):void{this.expanded=state.expanded;this.updateCollapse()}
  update(outputs:Output[]):void{
   if(!outputs.length)this.expanded=undefined;
   this.hasImage=outputs.some(output=>{const data=output.data as Record<string,unknown>|undefined;return !!(data?.['image/png']||data?.['image/jpeg'])});
@@ -39,12 +43,12 @@ export class OutputRenderer {
   const data=output.data as Record<string,unknown>|undefined;if(!data)return block;
   const mime=['image/png','image/jpeg'].find(type=>typeof data[type]==='string'||Array.isArray(data[type]));
   if(mime){const img=block.createEl('img');const source=`data:${mime};base64,${outputText(data[mime])}`;img.alt=this.t('Notebook 输出图像');img.loading=this.options.lazyImages?'lazy':'eager';img.addEventListener('load',()=>this.updateCollapse());img.addEventListener('error',()=>this.updateCollapse());const dimensions=outputImageDimensions(output,mime);if(dimensions){img.setAttribute('width',String(dimensions.width));img.setAttribute('height',String(dimensions.height))}if(this.observer){img.dataset.source=source;this.observer.observe(img)}else img.src=source;const enlarge=block.createEl('button');enlarge.type='button';enlarge.className='ipynb-output-image-button';enlarge.setAttribute('aria-label',this.t('放大图像'));enlarge.append(img);enlarge.addEventListener('click',()=>{this.previews.get(block)?.();try{this.previews.set(block,enlargeOutputImage(img,source,this.t))}catch{const error=block.createDiv();error.setAttribute('role','alert');error.textContent=this.t('图像预览失败，请重试')}});this.action(block,'保存图像',()=>this.save(source,mime,outputImageFilename(output,mime,`${this.actions.imageName?.()??'output'}-${this.records.filter(record=>{const data=record.output.data as Record<string,unknown>|undefined;return data?.['image/png']||data?.['image/jpeg']}).findIndex(record=>record.block===block)+1}`),block))}
-  else if(data['text/html']){block.append(this.sanitize(outputText(data['text/html'])));wrapOutputTables(block,this.t);const text=outputText(data['text/plain']??block.textContent);this.textActions(block,()=>outputCopyText(block,text))}
+  else if(data['text/html']){const fragment=this.sanitize(outputText(data['text/html']));hardenOutputDom(fragment);block.append(fragment);wrapOutputTables(block,this.t);const text=outputText(data['text/plain']??block.textContent);this.textActions(block,()=>outputCopyText(block,text))}
   else if(data['text/markdown']){
    const source=outputText(data['text/markdown']);const host=block.createDiv();host.className='ipynb-output-markdown markdown-rendered';
    if(this.markdown){
     const failure=(error:unknown)=>{host.replaceChildren();host.createEl('pre').textContent=this.t('Markdown 输出渲染失败：{error}',{error:String(error)})+'\n\n'+source;this.updateCollapse()};
-    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block)){wrapOutputTables(host,this.t);this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
+    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block)){hardenOutputDom(host);wrapOutputTables(host,this.t);this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
    }else host.createEl('pre').textContent=source;this.textActions(block,()=>outputCopyText(host,source));
   }
   else{const pre=block.createEl('pre');pre.textContent=outputText(data['text/plain']??JSON.stringify(data,null,2));block.append(pre);this.textActions(block,()=>pre.textContent??'')}return block;

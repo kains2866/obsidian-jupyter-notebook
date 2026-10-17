@@ -1,3 +1,4 @@
+import {renderStaticOutputMarkdown} from './output-markdown';
 import {createTranslator,type Translator} from './i18n';
 import {parseNotebookProperties} from './notebook-properties';
 import {renderPropertyPreview} from './property-preview';
@@ -21,6 +22,7 @@ export class NotebookView extends FileView{
  private confirmingRestart=false;
  private disposed=false;private runAllActive=false;private stopAll=false;
  private markdownChildren:Component[]=[];
+ private markdownHosts=new Map<HTMLElement,Component>();
  private removalUnlock?:()=>void;
  private t:Translator=(text,values)=>this.plugin.getTranslator?.()(text,values)??createTranslator('zh')(text,values);
  constructor(leaf:WorkspaceLeaf,private plugin:NotebookPlugin){super(leaf);this.kernelPython=plugin.settings.kernelPython}
@@ -45,7 +47,7 @@ export class NotebookView extends FileView{
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
    kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
-   sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),
+   sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),disposeMarkdown:parent=>this.disposeMarkdown(parent),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
    outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
    outputActions:{imageName:()=>this.file?.basename??'Notebook',save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
@@ -87,11 +89,10 @@ export class NotebookView extends FileView{
   finally{if(this.importController===controller)this.importController=undefined}
  }
  private renderOutputMarkdown(text:string,parent:HTMLElement):import('./outputs').MarkdownOutput{
-  const child=new Component();this.addChild(child);let active=true;
-  return {ready:MarkdownRenderer.render(this.app,text,parent,this.file?.path??'',child).then(()=>{if(active)this.bindMarkdownLinks(parent)}),dispose:()=>{if(active){active=false;this.removeChild(child)}}};
+  renderStaticOutputMarkdown(text,parent,sanitizeHTMLToDom);return {ready:Promise.resolve(),dispose(){}};
  }
  private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement):Promise<void>{
-  const child=new Component();this.addChild(child);this.markdownChildren.push(child);
+  const child=new Component();this.addChild(child);this.markdownChildren.push(child);this.markdownHosts.set(parent,child);
   let body=text;
   const first=session.notebook.cells.find(cell=>cell.cell_type==='markdown');
   if(first&&sourceText(first)===text){
@@ -101,7 +102,7 @@ export class NotebookView extends FileView{
     body=text.replace(/^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/,'');
    }else if(result.error)parent.createEl('p',{cls:'ipynb-properties-error',text:this.t('Notebook YAML 无法解析：{error}',{error:result.error})});
   }
-  await MarkdownRenderer.render(this.app,body,parent,this.file?.path??'',child);this.bindMarkdownLinks(parent);
+  await MarkdownRenderer.render(this.app,body,parent,this.file?.path??'',child);if(this.markdownHosts.get(parent)===child)this.bindMarkdownLinks(parent);
  }
  private bindMarkdownLinks(parent:HTMLElement):void{
   parent.addEventListener?.('click',event=>{
@@ -122,7 +123,8 @@ export class NotebookView extends FileView{
  finishEnvironmentRemoval():void{this.removalUnlock?.();this.removalUnlock=undefined}
  clearRemovedEnvironment(python:string):void{if(belongsToEnvironmentDirectory(this.kernelPython,python))this.kernelPython='';this.editor?.refresh();this.scheduleImportCheck(true)}
  private guardRemoval():void{if(this.plugin.environmentRemovalActive)throw new Error(this.t('正在卸载运行环境，请稍后重试。'))}
- private clearMarkdown():void{for(const c of this.markdownChildren)this.removeChild(c);this.markdownChildren=[]}
+ private disposeMarkdown(parent:HTMLElement):void{const child=this.markdownHosts.get(parent);if(!child)return;this.markdownHosts.delete(parent);this.markdownChildren=this.markdownChildren.filter(item=>item!==child);this.removeChild(child)}
+ private clearMarkdown():void{for(const c of this.markdownChildren)this.removeChild(c);this.markdownChildren=[];this.markdownHosts.clear()}
  private requireDesktop():void{if(Platform.isMobile)throw new Error(this.t('手机端只读，Python 与编辑功能仅在电脑端提供。'))}
  async save():Promise<void>{
   this.requireDesktop();

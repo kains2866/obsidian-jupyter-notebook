@@ -1,0 +1,10 @@
+.ipynb-output-item { min-width: 0; }
+.ipynb-output-table-scroll { max-width: 100%; overflow-x: auto; }
+.ipynb-output-table-scroll:focus-visible, .ipynb-output-action:focus-visible, .ipynb-output-image-button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+.ipynb-output-image-button { display: block; max-width: 100%; height: auto; padding: 0; border: 0; background: transparent; cursor: zoom-in; box-shadow: none; }
+.ipynb-output-image-button img { display: block; max-width: 100%; height: auto; }
+.ipynb-output-action { margin: 4px 6px 4px 0; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.ipynb-image-dialog { max-width: 95vw; max-height: 95vh; overflow: auto; color: var(--text-normal); background: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); }
+.ipynb-image-dialog::backdrop { background: rgba(0,0,0,.65); }
+.ipynb-image-dialog > button { display: block; position: sticky; top: 0; margin-bottom: 8px; }
+.ipynb-image-dialog > img { display: block; max-width: none; height: auto; }

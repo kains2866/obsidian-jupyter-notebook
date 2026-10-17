@@ -1,3 +1,4 @@
+import type {OutputActions} from './output-actions';
 import {requestKernelInput} from './kernel-input-modal';
 import type {KernelInputRequest} from './kernel';
 import {wordHighlights} from './word-highlights';
@@ -34,12 +35,13 @@ export interface EditorActions {
  markdown(text:string,parent:HTMLElement):Promise<void>;
  clearMarkdown?():void;
  outputMarkdown?:RenderOutputMarkdown;
+ outputActions?:OutputActions;
  notebookChanged?():void;
  retryImports?():void;
  installImport?(module:string):Promise<void>;
  externalKernel?():boolean;
  kernelState?():'stopped'|'starting'|'busy'|'idle';
- lastExecution?():'success'|'error'|undefined;
+ lastExecution?():'success'|'error'|'modified'|undefined;
  clearVariables?():Promise<void>;
 }
 export interface ImportStatus {modules:string[];missing:string[];optional?:string[];syntaxError?:boolean;state?:'checking'|'no-environment'|'error'}
@@ -51,6 +53,7 @@ export class NotebookEditor {
  private savedSelections=new Map<string,NonNullable<EditorSnapshot['selections'][number]>>();
  private editors:EditorView[]=[];
  private cellNodes:HTMLElement[]=[];
+ private waitingInput=false;private inputSequence=0;private destroyed=false;
  private inputHost!:HTMLElement;private inputController?:AbortController;
  private toolbar!:HTMLElement;private message!:HTMLElement;private list!:HTMLElement;
  private status!:HTMLElement;private environmentLabel!:HTMLButtonElement;
@@ -255,11 +258,12 @@ export class NotebookEditor {
  }
  refresh():void{
   this.renderExecutionTimes();if(this.session.running&&!this.timingTimer)this.timingTimer=window.setInterval(()=>this.renderExecutionTimes(),100);else if(!this.session.running&&this.timingTimer){window.clearInterval(this.timingTimer);this.timingTimer=undefined}
+  if(!this.session.running&&!this.waitingInput)this.inputSequence=0;
   this.actions.notebookChanged?.();this.renderImportStatuses();
   const kernelState=this.actions.kernelState?.()??((this.session.running||this.session.busy)?'busy':'stopped');
-  const stateLabel={stopped:'内核已停止',starting:'内核启动中',busy:'内核运行中',idle:'内核空闲'}[kernelState];
+  const stateLabel=this.waitingInput?'等待输入':{stopped:'内核已停止',starting:'内核启动中',busy:'内核运行中',idle:'内核空闲'}[kernelState];
   const execution=this.actions.lastExecution?.();
-  this.status.textContent=[this.t(stateLabel),this.t(execution==='success'?'运行成功':execution==='error'?'运行失败':'尚未运行'),this.t(this.session.dirty?'未保存':'已保存')].filter(Boolean).join(' · ');
+  this.status.textContent=[this.t(stateLabel),this.t(execution==='success'?'运行成功':execution==='error'?'运行失败':execution==='modified'?'代码已修改':'尚未运行'),this.t(this.session.dirty?'未保存':'已保存')].filter(Boolean).join(' · ');
   this.status.dataset.kernelState=kernelState;
   this.toolbar.querySelectorAll<HTMLButtonElement>('button').forEach(button=>{if(button.dataset.action==='清理运行变量')button.disabled=kernelState!=='idle'||this.session.running||this.session.busy});if(this.session.outputWarning!==this.lastOutputWarning){this.lastOutputWarning=this.session.outputWarning;if(this.lastOutputWarning)this.showMessage(this.t(this.lastOutputWarning))};
   if(this.environmentLabel){this.environmentLabel.textContent=this.actions.environment();this.environmentLabel.setAttribute('aria-label',this.actions.environment());this.environmentLabel.title=this.actions.environment();}
@@ -269,7 +273,7 @@ export class NotebookEditor {
    const node=this.cellNodes[index];if(!node)return;
    if(!this.structureChanging&&!this.identities.has(cell))this.identities.set(cell,node.dataset.cellId!);
    const count=node.querySelector('.ipynb-count');if(count)count.textContent=cell.cell_type==='code'?`[${(this.session.running||this.session.busy)&&index===this.session.runningIndex?'*':cell.execution_count??' '}]`:'';
-   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t,this.actions.outputMarkdown);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
+   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t,this.actions.outputMarkdown,this.actions.outputActions);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
    node.querySelectorAll<HTMLButtonElement>('button').forEach(b=>{if(['运行单元格','上移','下移','在下方插入','删除','预览','编辑','清除单元格输出'].includes(b.dataset.action??''))b.disabled=(this.session.running||this.session.busy) || (b.dataset.action==='上移'&&index===0)||(b.dataset.action==='下移'&&index===this.session.notebook.cells.length-1)});
    const select=node.querySelector('select');if(select)select.disabled=(this.session.running||this.session.busy);
   });
@@ -278,7 +282,8 @@ export class NotebookEditor {
  requestInput(request:KernelInputRequest,signal:AbortSignal):Promise<string|null>{
   this.inputController?.abort();const controller=new AbortController();this.inputController=controller;
   const abort=()=>controller.abort();signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
-  return requestKernelInput(this.inputHost,request,controller.signal,this.t).finally(()=>{signal.removeEventListener('abort',abort);if(this.inputController===controller)this.inputController=undefined});
+  this.waitingInput=true;const context=this.t('单元格 {index} · 第 {count} 次输入',{index:(this.session.runningIndex??0)+1,count:++this.inputSequence});this.refresh();
+  return requestKernelInput(this.inputHost,request,controller.signal,this.t,context).finally(()=>{signal.removeEventListener('abort',abort);if(this.inputController===controller){this.inputController=undefined;this.waitingInput=false;if(!this.destroyed)this.refresh()}});
  }
- destroy():void{this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor.destroy());this.session.onChange=()=>{};this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
+ destroy():void{this.destroyed=true;this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor.destroy());this.session.onChange=()=>{};this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
 }

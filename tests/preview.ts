@@ -1,4 +1,3 @@
-import {requestKernelInput} from '../src/kernel-input-modal';
 import {richOutputFixture} from './rich-output-fixture';
 import {largeNotebookFixture} from './large-notebook-fixture';
 import {editCell} from '../src/notebook';
@@ -18,23 +17,24 @@ if(new URLSearchParams(location.search).has('charts')){const n=JSON.parse(disk);
 if(new URLSearchParams(location.search).has('outputs'))disk=JSON.stringify(richOutputFixture);
 const session=new NotebookSession(disk);
 let previewKernelState:'stopped'|'starting'|'busy'|'idle'='idle';
-let previewExecution:'success'|'error'|undefined;
+let previewExecution:'success'|'error'|undefined;let previewExecutedCode:string|undefined;
+const codeSnapshot=()=>JSON.stringify(session.notebook.cells.filter(c=>c.cell_type==='code').map(c=>c.source));
 (window as any).simulateConflict=()=>{disk+=' '};
 let inputController:AbortController|undefined;
 const post=async(op:string,data:Record<string,unknown>={})=>{
  const response=await fetch('/kernel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({op,...data})});
  if(op!=='execute'){const result=await response.json();if(!response.ok)throw new Error(result.message);return result}
  const controller=new AbortController();inputController=controller;const outputs:Output[]=[];let result:any;let pending='';const decoder=new TextDecoder();
- try{const reader=response.body!.getReader();while(true){const read=await reader.read();pending+=decoder.decode(read.value,{stream:!read.done});let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);if(!line)continue;const event=JSON.parse(line);if(event.event==='output')outputs.push(event.output);else if(event.event==='result')result=event;else if(event.event==='input'){const value=await requestKernelInput(document.querySelector('.ipynb-input-host') as HTMLElement,event.request,controller.signal,createTranslator('zh'));await fetch('/stdin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:event.token,value})})}}if(read.done)break}if(!result)throw new Error('Missing execution result');return {...result,outputs}}finally{controller.abort();if(inputController===controller)inputController=undefined}
+ try{const reader=response.body!.getReader();while(true){const read=await reader.read();pending+=decoder.decode(read.value,{stream:!read.done});let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);if(!line)continue;const event=JSON.parse(line);if(event.event==='output')outputs.push(event.output);else if(event.event==='result')result=event;else if(event.event==='input'){const value=await editor.requestInput(event.request,controller.signal);await fetch('/stdin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:event.token,value})})}}if(read.done)break}if(!result)throw new Error('Missing execution result');return {...result,outputs}}finally{controller.abort();if(inputController===controller)inputController=undefined}
 };
 const actions:import('../src/editor').EditorActions={
  translate:createTranslator(new URLSearchParams(location.search).get('lang')==='en'?'en':'zh'),
  save:async()=>{await session.save({read:async()=>disk,write:async text=>{disk=text;(window as any).savedNotebook=JSON.parse(text)}})},
  saveCopy:async()=>{},reload:async()=>{},confirm:async()=>true,
- run:async(index)=>{await session.run(index,{execute:async(code,emit)=>{const result=await post('execute',{code});result.outputs.forEach((o:Output)=>emit(o));return result}})},
+ run:async(index)=>{previewExecution=undefined;const code=codeSnapshot();const outcome=await session.run(index,{execute:async(code,emit)=>{const result=await post('execute',{code});result.outputs.forEach((o:Output)=>emit(o));return result}});previewExecution=outcome==='ok'?'success':'error';previewExecutedCode=code;editor.refresh()},
  runAll:async()=>{for(let i=0;i<session.notebook.cells.length;i++)await session.run(i,{execute:async(code,emit)=>{const r=await post('execute',{code});r.outputs.forEach((o:Output)=>emit(o));return r}})},
  interrupt:async()=>{inputController?.abort();await post('interrupt')},restart:async()=>{await post('restart')},
- kernelState:()=>session.running?'busy':previewKernelState,lastExecution:()=>previewExecution,clearVariables:async()=>{await post('restart')},
+ kernelState:()=>session.running?'busy':previewKernelState,lastExecution:()=>previewExecution&&previewExecutedCode!==undefined&&previewExecutedCode!==codeSnapshot()?'modified':previewExecution,clearVariables:async()=>{await post('restart')},
  environment:()=>'.venv · Python 3.12',chooseEnvironment:async()=>{},
  sanitize:html=>{const template=document.createElement('template');template.innerHTML=html;template.content.querySelectorAll('script,iframe,object,embed,style').forEach(n=>n.remove());template.content.querySelectorAll('*').forEach(e=>Array.from(e.attributes).filter(a=>a.name.startsWith('on')||a.name==='srcdoc').forEach(a=>e.removeAttribute(a.name)));return template.content},
  outputMarkdown:(text,parent)=>({ready:(async()=>{
@@ -48,7 +48,7 @@ const actions:import('../src/editor').EditorActions={
 };
 const diagnostics=document.createElement('div');diagnostics.id='preview-diagnostics';diagnostics.style.cssText='position:fixed;top:0;right:0;z-index:10000;background:#252526;color:white;font-size:11px';if(new URLSearchParams(location.search).has('harness'))document.body.append(diagnostics);
 const loadStarted=performance.now();diagnostics.textContent='constructing editor';
-const editor=new NotebookEditor(root,session,actions);
+let editor=new NotebookEditor(root,session,actions);
 diagnostics.textContent=`editor ready ${Math.round(performance.now()-loadStarted)}ms`;
 let ticks=0;setInterval(()=>{diagnostics.textContent=`ready ${Math.round(performance.now()-loadStarted)}ms heartbeat ${++ticks} mounted ${root.querySelectorAll('.cm-editor').length}`},1000);
 (window as any).notebookEditor=editor;
@@ -74,6 +74,7 @@ if(new URLSearchParams(location.search).has('harness')){
  button('缺少依赖',()=>editor.setImportStatuses([{modules:['numpy'],missing:['numpy']}]));
  button('可选缺失',()=>editor.setImportStatuses([{modules:['numpy'],missing:[],optional:['pandas']}]));
  button('编辑与撤销计时',()=>(window as any).previewHarness.editAndUndo());
+ button('释放并重建',()=>{const state=editor.captureState();editor.destroy();const released={editors:root.querySelectorAll('.cm-editor').length,outputs:root.querySelectorAll('.ipynb-output-item').length,dialogs:document.querySelectorAll('.ipynb-image-dialog').length};editor=new NotebookEditor(root,session,actions,state);return {released,mounted:root.querySelectorAll('.cm-editor').length}});
  button('文档统计',()=>(window as any).previewHarness.metrics());
  button('滚动到底部',()=>{root.scrollTop=root.scrollHeight;return (window as any).previewHarness.metrics()});
  controls.append(report);document.body.append(controls);

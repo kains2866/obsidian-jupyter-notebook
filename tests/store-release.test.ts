@@ -3,7 +3,7 @@ import {readFileSync} from 'node:fs';
 it('declares the same release version and a parseable README title matching the manifest',()=>{
  const manifest=JSON.parse(readFileSync('manifest.json','utf8'));
  const pkg=JSON.parse(readFileSync('package.json','utf8'));
- expect(manifest.version).toBe('0.6.8');expect(pkg.version).toBe(manifest.version);
+ expect(manifest.version).toMatch(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/);expect(pkg.version).toBe(manifest.version);
  for(const name of ['README.md','README.zh-CN.md'])expect(readFileSync(name,'utf8').match(/^# (.+)$/m)?.[1]).toBe(manifest.name);
  expect(JSON.parse(readFileSync('versions.json','utf8'))[manifest.version]).toBe(manifest.minAppVersion);
 });

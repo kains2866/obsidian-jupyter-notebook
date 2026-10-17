@@ -92,6 +92,7 @@ export class EnvironmentManagerModal extends Modal {
  private managed:Environment|undefined;
  private manual:Environment|undefined;
  private managedMode:'install'|'repair'|'ready'|'blocked'='install';
+ private installRetry=false;
  private managedDescription='';
  private managedVersion='';
  private vaultOptions:ManagedOptions|undefined;
@@ -152,7 +153,7 @@ export class EnvironmentManagerModal extends Modal {
   info.createEl('small',{text:this.t('在此仓库为本设备安装独立 Python 和 Notebook 依赖；其他设备分别安装自己的环境。')});
   info.createSpan({text:[this.managedVersion?this.t('Python {version}',{version:this.managedVersion}):'',this.managedDescription].filter(Boolean).join(' · '),cls:'ipynb-kernel-version'});
   const actions=owned.createDiv({cls:'ipynb-kernel-actions'});
-  if(this.managedMode!=='ready')this.addButton(actions,this.managedMode==='repair'?'修复':'安装',()=>this.action(()=>this.installManaged()),this.managedMode==='blocked');
+  if(this.managedMode!=='ready')this.addButton(actions,this.installRetry?'重试安装':this.managedMode==='repair'?'修复':'安装',()=>this.action(()=>this.installManaged()),this.managedMode==='blocked');
   if(this.managed)this.addButton(actions,'删除',()=>this.action(()=>this.uninstallManaged()));
   this.radio(owned,this.managed?.python,'仓库专用环境（本设备）',this.managedMode!=='ready',()=>this.activateManaged());
   for(const row of this.catalog.filter(row=>(!this.managed||!belongsToEnvironmentDirectory(row.python,this.managed.python))&&row.python!==this.manual?.python)){
@@ -213,11 +214,11 @@ export class EnvironmentManagerModal extends Modal {
   if(this.managed&&!await confirm(this.app,this.t('修复环境'),this.t('将修复本设备的仓库专用 Python 和依赖，可能重新下载或安装。Notebook 文件保留。'),this.t))return;
   const {provisionStandaloneEnvironment}=await import('./managed-runtime');
   const hooks=this.options?.createOperationHooks?.('packages')||{before:()=>this.options?.onBeforePackages?.()||Promise.resolve(),after:()=>this.options?.onAfterPackages?.()};
-  const controller=new AbortController();this.abort=controller;this.cancel.setDisabled(false);let python:string;
+  this.installRetry=false;const controller=new AbortController();this.abort=controller;this.cancel.setDisabled(false);let python:string;
   try{
    await hooks.before();python=await provisionStandaloneEnvironment(this.vaultOptions,message=>this.progress(message),controller.signal);
-  }catch(error){this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();await this.inspectManaged();throw error}finally{hooks.after();this.cancel.setDisabled(true);this.abort=undefined}
-  if(this.closed)return;if(controller.signal.aborted){await this.inspectManaged();return}
+  }catch(error){this.installRetry=true;this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();await this.inspectManaged();throw error}finally{hooks.after();this.cancel.setDisabled(true);this.abort=undefined}
+  if(this.closed)return;if(controller.signal.aborted){this.installRetry=true;await this.inspectManaged();return}
   await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed||this.managed.python!==python)throw new Error(this.t('仓库环境需要修复。'));
   await this.activate(this.managed,this.options?.onManagedCreated||this.choose);
 

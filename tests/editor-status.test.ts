@@ -1,3 +1,5 @@
+vi.mock('../src/kernel-input-modal',()=>({requestKernelInput:vi.fn()}));
+import {requestKernelInput} from '../src/kernel-input-modal';
 import {expect,it,vi} from 'vitest';
 import {NotebookEditor} from '../src/editor';
 function fixture(){
@@ -64,4 +66,14 @@ it.each([[.002,'<0.1 秒'],[.049,'<0.1 秒'],[.09,'<0.1 秒'],[.14,'0.1 秒'],[1
  const editor:any=Object.create(NotebookEditor.prototype);const host={hidden:false,textContent:'',title:'',setAttribute:vi.fn()};
  Object.assign(editor,{session:{notebook:{cells:[{cell_type:'code'}]},executionSeconds:()=>seconds},cellNodes:[{querySelector:()=>host}],t:(text:string,params:any)=>text.replace('{seconds}',params.seconds)});
  editor.renderExecutionTimes();expect(host.textContent).toBe(label);
+});
+
+it('shows waiting state with cell and sequential input context and clears on completion',async()=>{
+ const editor:any=Object.create(NotebookEditor.prototype);const refresh=vi.fn();let finish!:(value:string)=>void;
+ vi.mocked(requestKernelInput).mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));
+ Object.assign(editor,{inputHost:{},waitingInput:false,inputSequence:0,session:{runningIndex:4},refresh,t:(text:string,p:any)=>text.replace(/\{(\w+)\}/g,(_,key)=>p[key])});
+ const controller=new AbortController();const result=editor.requestInput({prompt:'Name?',password:false},controller.signal);
+ expect(editor.waitingInput).toBe(true);expect(requestKernelInput).toHaveBeenLastCalledWith(editor.inputHost,{prompt:'Name?',password:false},expect.any(AbortSignal),expect.any(Function),'单元格 5 · 第 1 次输入');
+ finish('name');expect(await result).toBe('name');expect(editor.waitingInput).toBe(false);expect(refresh).toHaveBeenCalledTimes(2);
+ vi.mocked(requestKernelInput).mockResolvedValueOnce('');await editor.requestInput({prompt:'Next',password:true},controller.signal);expect(editor.inputSequence).toBe(2);
 });

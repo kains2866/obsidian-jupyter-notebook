@@ -1,4 +1,8 @@
 export const outputTranslations:Record<string,string>={
+ '输出已保存：{path}':'Output saved: {path}',
+ '输出图像来源无效。':'Invalid output image source.',
+ '图像预览失败，请重试':'Image preview failed; try again',
+ '复制输出':'Copy output','保存文本':'Save text','保存图像':'Save image','放大图像':'Enlarge image','关闭图像':'Close image','已复制':'Copied','操作失败，请重试':'Action failed; try again','输出表格，左右滚动查看更多':'Output table; scroll horizontally to see more',
  '正在卸载运行环境，请稍后重试。':'A kernel environment is being removed. Please try again shortly.',
  '中断':'Interrupt','重启内核':'Restart kernel','更多操作':'More actions','另存副本':'Save a copy','重新加载':'Reload','撤销':'Undo','重做':'Redo','关闭错误':'Dismiss error','查看详细日志':'View diagnostic log','空 Notebook · 添加一个代码单元格开始。':'Empty notebook · Add a code cell to begin.',
  '运行单元格':'Run cell','拖动单元格':'Drag cell','编辑':'Edit','预览':'Preview','上移':'Move up','下移':'Move down','单元格操作':'Cell actions','在下方插入':'Insert below','删除':'Delete','单元格类型':'Cell type','代码':'Code','添加代码':'Add code','添加 Markdown':'Add Markdown','Markdown 预览':'Markdown preview','Markdown 预览，按 Enter 编辑':'Markdown preview, press Enter to edit',

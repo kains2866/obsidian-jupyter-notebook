@@ -105,3 +105,12 @@ it('failed downloads replace stale checks with copyable sanitized network diagno
  const writeText=vi.fn().mockResolvedValue(undefined);await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();const picker=state.modal;picker.contentEl.ownerDocument={defaultView:{navigator:{clipboard:{writeText}}}};
  await button('检查环境').click();await settle();state.provision.mockRejectedValue(new Error('CERTIFICATE_VERIFY_FAILED https://user:secret@host/ token=abc'));await button('安装').click();await settle();expect(allText(picker.contentEl)).toContain('网络问题');expect(allText(picker.contentEl)).toContain('CERTIFICATE_VERIFY_FAILED');await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('CERTIFICATE_VERIFY_FAILED'));expect(writeText.mock.calls[0][0]).not.toContain('secret');expect(writeText.mock.calls[0][0]).not.toContain('token=abc');
 });
+
+it('offers an explicit retry after an installation failure and releases the previous operation',async()=>{
+ state.provision.mockRejectedValueOnce(new Error('network interrupted'));await EnvironmentPicker.show({} as any,'',undefined,state.choose,options);await settle();await button('安装').click();await settle();await button('重试安装').click();await settle();expect(state.provision).toHaveBeenCalledTimes(2);
+});
+
+it('offers retry after cancellation with a fresh non-aborted signal',async()=>{
+ const signals:AbortSignal[]=[];let reject!:(error:Error)=>void;state.provision.mockImplementationOnce((_options:any,_progress:any,signal:AbortSignal)=>{signals.push(signal);return new Promise((_resolve,r)=>{reject=r})}).mockImplementationOnce(async(_options:any,_progress:any,signal:AbortSignal)=>{signals.push(signal);return '/managed/python'});
+ await EnvironmentPicker.show({} as any,'',undefined,state.choose,options);await settle();const work=button('安装').click();await settle();await button('取消').click();reject(new Error('安装已取消。'));await work;await settle();await button('重试安装').click();await settle();expect(signals).toHaveLength(2);expect(signals[0].aborted).toBe(true);expect(signals[1].aborted).toBe(false);
+});

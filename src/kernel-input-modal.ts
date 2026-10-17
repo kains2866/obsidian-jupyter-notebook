@@ -1,10 +1,11 @@
 import type {Translator} from './i18n';
 import type {KernelInputRequest} from './kernel';
 /** Input stays in memory and goes only to the active stdin request. */
-export function requestKernelInput(host:HTMLElement,request:KernelInputRequest,signal:AbortSignal,t:Translator):Promise<string|null>{
+export function requestKernelInput(host:HTMLElement,request:KernelInputRequest,signal:AbortSignal,t:Translator,context?:string):Promise<string|null>{
  if(signal.aborted)return Promise.resolve(null);
  return new Promise(resolve=>{
   const panel=host.createDiv({cls:'ipynb-input-panel'});panel.setAttribute('role','group');panel.setAttribute('aria-label',t('Python 输入'));
+  if(context)panel.createEl('small',{text:context,cls:'ipynb-input-context'});
   panel.createEl('p',{text:request.prompt||t('请输入内容。'),cls:'ipynb-input-prompt'});
   const input=panel.createEl('input');input.type=request.password?'password':'text';input.autocomplete='off';input.maxLength=65536;input.setAttribute('aria-label',request.prompt||t('输入内容'));
   let settled=false;

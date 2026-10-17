@@ -1,7 +1,11 @@
 export type DiagnosticCategory='ready'|'network'|'permissions'|'python'|'dependencies'|'unknown';
 export interface EnvironmentDiagnostic {category:DiagnosticCategory;evidence:string;nextStep:string;python:string}
 export function sanitizeDiagnosticText(value:string):string{
- return value.replace(/(https?:\/\/)[^\s/@]+:[^\s/@]+@/gi,'$1[redacted]@').replace(/((?:token|password|secret|api[_-]?key|authorization)\s*[:=]\s*)(?:bearer\s+)?[^\s&]+/gi,'$1[redacted]').replace(/\bBearer\s+[^\s]+/gi,'Bearer [redacted]').replace(/\/Users\/[^/\s]+|\/home\/[^/\s]+|[A-Z]:\\Users\\[^\\\s]+/gi,'~');
+ return value
+  .replace(/(https?:\/\/)[^\s/@]+@/gi,'$1[redacted]@')
+  .replace(/((?:token|password|secret|api[_-]?key|authorization)\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|(?:bearer\s+)?[^\s&]+)/gi,'$1[redacted]')
+  .replace(/\bBearer\s+[^\s]+/gi,'Bearer [redacted]')
+  .replace(/[A-Z]:[\\/]Users[\\/][^\\/\s]+|\/Users\/[^/\s]+|\/home\/[^/\s]+/gi,'~');
 }
 export async function diagnoseEnvironment(python:string,modules:string[],validate:(python:string,modules:string[])=>Promise<{version:string;missing:string[]}>):Promise<EnvironmentDiagnostic>{
  try{const info=await validate(python,modules);return {python:sanitizeDiagnosticText(python),category:info.missing.length?'dependencies':'ready',evidence:info.missing.length?`缺少依赖：${info.missing.join(', ')}`:'静态检查未发现缺失依赖；尚未验证 Notebook 执行。',nextStep:info.missing.length?'修复本设备仓库环境，或在外部环境中手动安装缺失依赖。':'打开 Notebook 后运行单元格，验证实际执行。'}}

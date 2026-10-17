@@ -1,13 +1,17 @@
 {
   "name": "obsidian-jupyter-notebook",
-  "version": "0.6.8",
+  "version": "0.6.10",
   "private": true,
   "scripts": {
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "build": "node build.mjs",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "release:version": "node scripts/release.mjs version",
+    "release:check": "node scripts/release.mjs check",
+    "release:preflight": "npm run release:check && npm test && npm run lint && npm run typecheck && npm run build",
+    "release:package": "npm run build && node scripts/release.mjs package"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

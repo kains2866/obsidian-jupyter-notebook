@@ -15,7 +15,7 @@ export class NotebookView extends FileView{
  private importTimer?:number;private importController?:AbortController;private importGeneration=0;private importKey='';
  private session?:NotebookSession;private editor?:NotebookEditor;
  private kernel?:KernelClient;private starting?:Promise<KernelClient>;
- private loadedNotebook?:Notebook;private trustedSession=false;private lastExecution?:'success'|'error';
+ private loadedNotebook?:Notebook;private trustedSession=false;private lastExecution?:'success'|'error';private lastExecutionCode?:string;
  private kernelPython:string;
  private kernelBridgePython?:string;
  private confirmingRestart=false;
@@ -43,13 +43,23 @@ export class NotebookView extends FileView{
    notebookChanged:()=>this.scheduleImportCheck(),retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
    readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
-   kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution,clearVariables:()=>this.restart(true),
+   kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
    outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
+   outputActions:{save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
   },state);
   this.scheduleImportCheck(true);
+ }
+ private async saveOutput(content:string,mime:string,filename:string):Promise<void>{
+  if(this.disposed||!this.file)throw new Error(this.t('Notebook 已关闭。'));
+  const path=await this.app.fileManager.getAvailablePathForAttachment(filename,this.file.path);
+  if(mime==='image/png'||mime==='image/jpeg'){
+   const prefix=`data:${mime};base64,`;if(!content.startsWith(prefix))throw new Error(this.t('输出图像来源无效。'));
+   const bytes=Uint8Array.from(atob(content.slice(prefix.length)),char=>char.charCodeAt(0));await this.app.vault.createBinary(path,bytes.buffer);
+  }else await this.app.vault.create(path,content);
+  new Notice(this.t('输出已保存：{path}',{path}));
  }
  private scheduleImportCheck(force=false):void{
   if(Platform.isMobile||this.disposed||!this.session)return;
@@ -187,7 +197,7 @@ export class NotebookView extends FileView{
     if(this.disposed||this.session!==session||signal.aborted)return null;
     return this.editor?.requestInput(request,signal)??null;
    })});
-   if(!this.disposed&&this.session===session){this.lastExecution=result==='ok'?'success':'error';this.editor?.refresh?.()}
+   if(!this.disposed&&this.session===session){this.lastExecution=result==='ok'?'success':'error';this.lastExecutionCode=codeSnapshot;this.editor?.refresh?.()}
    if(missing&&!this.disposed&&this.session===session)this.editor?.showDependencyNotice(missing,this.isExternalKernel(),()=>this.openDependencyManager(missing?.split('.')[0]),()=>this.chooseEnvironment());
    return result;
   }finally{unlock()}

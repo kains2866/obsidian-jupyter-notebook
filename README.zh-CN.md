@@ -4,7 +4,7 @@
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — 原生 Notebook、本机 Python、统一工作区" width="100%" />
   <p><strong>在你的知识库里，编写笔记、运行代码、保留结果。</strong></p>
   <p>
-    <a href="release-archives/v0.6.8/"><img src="https://img.shields.io/badge/version-0.6.8-8B5CF6?style=flat-square" alt="版本 0.6.8" /></a>
+    <a href="release-archives/v0.6.10/"><img src="https://img.shields.io/badge/version-0.6.10-8B5CF6?style=flat-square" alt="版本 0.6.10" /></a>
     <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 及以上" /></a>
     <a href="#yaml-属性与-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#平台与运行方式"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="桌面端编辑与运行" /></a>
@@ -42,7 +42,7 @@
 | --- | --- |
 | 桌面端查看、编辑和保存 Notebook | 支持 |
 | 桌面端本机 Python 执行 | 支持 |
-| 手机端 | 0.6.8 商店版为桌面专用；手机只读仅为旧版能力 |
+| 手机端 | 0.6.10 商店版为桌面专用；手机只读仅为旧版能力 |
 | 云同步仓库 | 文件须在本机可访问；每台电脑使用独立环境 |
 | 远程 Jupyter 服务 | 暂不支持 |
 
@@ -50,14 +50,14 @@
 
 ## 安装
 
-0.6.8 为桌面专用发行版，正在准备商店上架。插件名称改为 **Jupyter Notebook**，ID 为 `jupyter-notebook`。升级前备份旧目录 `obsidian-ipynb`，停用旧插件后安装新插件；如需保留设置，可在 Obsidian 关闭时将旧目录的 `data.json` 复制到新目录。不要同时启用两个版本；不删除 `.obsidian/ipynb-envs/` 或 `.obsidian/ipynb-runtimes/`，然后重新选择并验证本机环境。标准安装只需三个文件，Python 脚本已内嵌并按需恢复。
+0.6.10 为桌面专用发行版，正在准备商店上架。插件名称改为 **Jupyter Notebook**，ID 为 `jupyter-notebook`。升级前备份旧目录 `obsidian-ipynb`，停用旧插件后安装新插件；如需保留设置，可在 Obsidian 关闭时将旧目录的 `data.json` 复制到新目录。不要同时启用两个版本；不删除 `.obsidian/ipynb-envs/` 或 `.obsidian/ipynb-runtimes/`，然后重新选择并验证本机环境。标准安装只需三个文件，Python 脚本已内嵌并按需恢复。
 
 目前采用手动安装方式。
 
-1. 下载 [仓库归档 ZIP](release-archives/v0.6.8/jupyter-notebook-v0.6.8.zip) 并解压，或从 [0.6.8 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.8) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
+1. 下载 [仓库归档 ZIP](release-archives/v0.6.10/jupyter-notebook-v0.6.10.zip) 并解压，或从 [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
 
    [历史安装包](release-archives) 仍使用旧 `obsidian-ipynb/` 目录及原清单，必须保留包内全部五个文件；不要按下方新版三文件步骤安装旧包。
-2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.8 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
+2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.10 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
 3. 确认插件目录包含以下三个文件：
 
    ```text
@@ -283,3 +283,11 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 ## 权限与网络
 
 桌面端需要读取本机解释器和本设备环境目录，并通过不启用 shell 的子进程运行 Python、pip 与安装工具。这些权限是运行 Notebook 和管理环境所必需的；仅运行可信 Notebook。安装由用户触发，工具包校验固定 SHA-256。云同步依赖清单会验证包名与固定版本，不执行任意路径或 URL。包查询采用 Obsidian 网络接口；取消会立即停止界面等待，但该接口不提供中止已发出请求的能力。uv 下载继续采用 Electron 流式接口，支持进度、取消与大小限制。
+
+## 发布维护
+
+新版本执行一次 `npm run release:version -- 0.6.11`，同步 package/lock、manifest、兼容记录并新增更新日志章节，不覆盖已有发布历史。发布前填写该章节。`npm run release:preflight` 检查版本、测试、lint、类型与构建；Python 集成测试需要安装了 `jupyter_client` 和 `ipykernel` 的 `.venv`。PR 和 main 自动执行相同预检。
+
+`npm run release:package` 在 `release/` 生成 `main.js`、`manifest.json`、`styles.css`、内含 `jupyter-notebook/` 的直接安装 ZIP、`SHA256SUMS` 和从当前更新日志提取的发布说明。将三个文件复制到 `.obsidian/plugins/jupyter-notebook/`，或把 ZIP 解压到 `.obsidian/plugins/`。标签工作流先测试和构建，再发布附件与构建来源证明。
+
+0.6.10 还补充大型 Notebook 回归场景、过期结果提示、等待输入上下文、安装重试与残留恢复、脱敏诊断，以及图片、表格和单项输出操作。大型 Notebook 测试覆盖指定场景，不代表所有滚动或内存问题都已解决。

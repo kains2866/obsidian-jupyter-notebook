@@ -98,3 +98,19 @@ it('Markdown outputs use their own disposable renderer without treating YAML as 
  const source='---\ntitle: Output\n---\n|a|b|\n|---|---|\n|1|2|';
  const output=view.renderOutputMarkdown(source,parent);await output.ready;expect(render).toHaveBeenLastCalledWith(view.app,source,parent,'测试.ipynb',expect.anything());output.dispose();output.dispose();expect(remove).toHaveBeenCalledOnce();render.mockRestore();
 });
+it('marks execution results stale only when code changes and restores on undo',async()=>{
+ const {view}=setup();await view.onLoadFile(view.file);view.getKernel=async()=>({execute:async()=>({status:'ok',execution_count:1})});await view.run(0);
+ expect(view.editor.actions.lastExecution()).toBe('success');
+ view.session.change(editCell(view.session.notebook,0,{source:'print("changed")'}));expect(view.editor.actions.lastExecution()).toBe('modified');
+ view.session.undo();expect(view.editor.actions.lastExecution()).toBe('success');
+ view.session.change({...view.session.notebook,metadata:{description:'note only'}});expect(view.editor.actions.lastExecution()).toBe('success');
+});
+
+it('saves images and text through Obsidian attachment paths without overwriting',async()=>{
+ const {view,app}=setup();app.fileManager={getAvailablePathForAttachment:vi.fn(async(name:string)=>'assets/'+name)};app.vault.createBinary=vi.fn(async()=>{});
+ await view.saveOutput('data:image/png;base64,aGVsbG8=','image/png','output.png');
+ expect(app.fileManager.getAvailablePathForAttachment).toHaveBeenCalledWith('output.png','测试.ipynb');expect(app.vault.createBinary).toHaveBeenCalledWith('assets/output.png',expect.any(ArrayBuffer));
+ expect(new TextDecoder().decode(app.vault.createBinary.mock.calls[0][1])).toBe('hello');
+ await view.saveOutput('saved text','text/plain;charset=utf-8','output.txt');expect(app.vault.create).toHaveBeenCalledWith('assets/output.txt','saved text');
+ await expect(view.saveOutput('https://remote/image','image/png','output.png')).rejects.toThrow();expect(app.vault.createBinary).toHaveBeenCalledTimes(1);
+});

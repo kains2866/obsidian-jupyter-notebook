@@ -1,14 +1,25 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-15
-version: "0.6.8"
+updated: 2026-10-17
+version: "0.6.10"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.6.10] - 2026-10-17
+
+- 统一版本命令同步 manifest、package、lock、兼容记录与更新日志，拒绝覆盖已有历史。
+- PR 与 main 自动运行版本、测试、lint、类型检查和构建预检。
+- 发布同时提供三个安装文件、可直接解压的 jupyter-notebook ZIP、SHA256SUMS 与当前版本说明。
+- 增加固定大型 Notebook 回归夹具，覆盖滚动、编辑、输出、撤销与关闭清理。
+- 代码执行后被修改时标明结果已过期，保留已有输出供参考。
+- 等待输入时显示状态与当前单元上下文。
+- 安装失败可重试并恢复残留状态，诊断信息脱敏。
+- 图片支持放大与保存，表格横向滚动，单项输出复制与保存，大输出显式展开。
 
 ## [0.6.8] - 2026-10-16
 

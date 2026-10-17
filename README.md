@@ -4,7 +4,7 @@
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — native notebooks, local Python, one workspace" width="100%" />
   <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
   <p>
-    <a href="release-archives/v0.6.8/"><img src="https://img.shields.io/badge/version-0.6.8-8B5CF6?style=flat-square" alt="Version 0.6.8" /></a>
+    <a href="release-archives/v0.6.10/"><img src="https://img.shields.io/badge/version-0.6.10-8B5CF6?style=flat-square" alt="Version 0.6.10" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 or later" /></a>
     <a href="#yaml-properties-and-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="Desktop editing and execution" /></a>
@@ -42,7 +42,7 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 | --- | --- |
 | View, edit, and save Notebooks on desktop | Supported |
 | Run Python locally on desktop | Supported |
-| Mobile | The 0.6.8 store edition is desktop-only; mobile viewing belongs to earlier versions |
+| Mobile | The 0.6.10 store edition is desktop-only; mobile viewing belongs to earlier versions |
 | Cloud-synced vaults | Files must be accessible locally; each computer uses its own environment |
 | Remote Jupyter servers | Not currently supported |
 
@@ -50,14 +50,14 @@ Standalone Python installation has been verified on **macOS Apple Silicon**. Win
 
 ## Installation
 
-Version 0.6.8 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
+Version 0.6.10 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
 
 The plugin currently uses manual installation.
 
-1. Download and extract the [archived ZIP](release-archives/v0.6.8/jupyter-notebook-v0.6.8.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.8 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.8).
+1. Download and extract the [archived ZIP](release-archives/v0.6.10/jupyter-notebook-v0.6.10.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10).
 
    [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
-2. Create a `jupyter-notebook` folder containing the three 0.6.8 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
+2. Create a `jupyter-notebook` folder containing the three 0.6.10 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
 3. Confirm that the plugin directory contains these three files:
 
    ```text
@@ -283,3 +283,11 @@ Thank you for your support. Scan the appropriate original payment code below. Do
 ## Permissions and network access
 
 Desktop execution inspects local interpreters and device-specific environment directories, and starts Python, pip, and installation-tool processes without enabling a shell. These permissions are required to run notebooks and manage environments. Run only notebooks you trust. Installation starts on explicit user action; the tool archive is checked against its pinned SHA-256. Synced managed requirements allow only validated package names and pinned versions, not arbitrary paths or URLs. Package queries use the Obsidian request transport. Cancellation stops waiting promptly, but that transport cannot abort an already-issued network request. uv downloads retain Electron streaming for progress, cancellation, and size limits.
+
+## Release maintenance
+
+Run `npm run release:version -- 0.6.11` once for a new version; it updates package/lock, manifest, compatibility history and adds a changelog section without overwriting an existing release. Fill in that section before publishing. `npm run release:preflight` checks metadata, tests, lint, types and the build (Python integration tests require `.venv` with `jupyter_client` and `ipykernel`). PRs and main run the same preflight.
+
+`npm run release:package` builds `release/` with `main.js`, `manifest.json`, `styles.css`, a direct-install ZIP containing `jupyter-notebook/`, `SHA256SUMS`, and release notes extracted from the current changelog section. Copy the three files into `.obsidian/plugins/jupyter-notebook/`, or extract the ZIP into `.obsidian/plugins/`. The tag workflow tests and builds before publishing these assets with provenance.
+
+Version 0.6.10 also adds large-notebook regression coverage, stale-result indicators, input-wait context, installation retry/recovery and redacted diagnostics, and expanded image/table/output controls. Large-notebook coverage checks specific scenarios; it does not guarantee all scrolling or memory issues are resolved.

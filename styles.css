@@ -157,3 +157,5 @@
 .ipynb-input-panel{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--background-modifier-border)}
 .ipynb-input-panel .ipynb-input-prompt{flex-basis:100%;margin:0}
 .ipynb-input-panel input{flex:1;min-width:140px}
+
+.ipynb-input-context{flex-basis:100%;color:var(--text-muted)}

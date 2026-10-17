@@ -5,7 +5,7 @@ on:
       version:
         description: Existing release tag to build and update
         required: true
-        default: '0.6.5'
+        default: '0.6.10'
   push:
     tags: ['[0-9]*.[0-9]*.[0-9]*']
 permissions:
@@ -31,22 +31,30 @@ jobs:
         with:
           node-version: '24'
           cache: npm
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - run: python -m venv .venv
+      - run: .venv/bin/python -m pip install jupyter_client ipykernel
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run build
+      - run: npm run release:preflight
+      - run: .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+      - run: node scripts/release.mjs package
       - name: Verify release identity
         run: node -e "const m=require('./manifest.json');if(!/^\d+\.\d+\.\d+$/.test(process.env.RELEASE_TAG)||m.version!==process.env.RELEASE_TAG)throw Error('Release tag does not match manifest')"
       - name: Attest standard installation assets
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: |
-            dist/main.js
-            dist/manifest.json
-            dist/styles.css
+            release/main.js
+            release/manifest.json
+            release/styles.css
+            release/*.zip
+            release/SHA256SUMS
       - name: Publish standard installation assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --verify-tag --title "Jupyter Notebook $RELEASE_TAG" --notes "See CHANGELOG.md for changes."
-          gh release upload "$RELEASE_TAG" dist/main.js dist/manifest.json dist/styles.css --clobber
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --verify-tag --title "Jupyter Notebook $RELEASE_TAG" --notes-file release/release-notes.md
+          gh release edit "$RELEASE_TAG" --notes-file release/release-notes.md
+          gh release upload "$RELEASE_TAG" release/main.js release/manifest.json release/styles.css release/*.zip release/SHA256SUMS --clobber

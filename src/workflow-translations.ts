@@ -1,4 +1,5 @@
 export const workflowTranslations:Record<string,string>={
+ '等待输入':'Waiting for input','代码已修改':'Code modified','单元格 {index} · 第 {count} 次输入':'Cell {index} · Input {count}',
  'Python 输入':'Python input','请输入内容。':'Enter a value.','输入内容':'Input value','取消并中断':'Cancel and interrupt','提交':'Submit',
  'Markdown 输出渲染失败：{error}':'Markdown output rendering failed: {error}',
  '{seconds} 秒':'{seconds} s','运行时间：{seconds} 秒':'Execution time: {seconds} s',

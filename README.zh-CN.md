@@ -54,7 +54,7 @@
 
 目前采用手动安装方式。
 
-1. 下载 [仓库归档 ZIP](release-archives/v0.6.10/jupyter-notebook-v0.6.10.zip) 并解压，或从 [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
+1. 从 [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
 
    [历史安装包](release-archives) 仍使用旧 `obsidian-ipynb/` 目录及原清单，必须保留包内全部五个文件；不要按下方新版三文件步骤安装旧包。
 2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.10 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
@@ -288,6 +288,6 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 
 新版本执行一次 `npm run release:version -- 0.6.11`，同步 package/lock、manifest、兼容记录并新增更新日志章节，不覆盖已有发布历史。发布前填写该章节。`npm run release:preflight` 检查版本、测试、lint、类型与构建；Python 集成测试需要安装了 `jupyter_client` 和 `ipykernel` 的 `.venv`。PR 和 main 自动执行相同预检。
 
-`npm run release:package` 在 `release/` 生成 `main.js`、`manifest.json`、`styles.css`、内含 `jupyter-notebook/` 的直接安装 ZIP、`SHA256SUMS` 和从当前更新日志提取的发布说明。将三个文件复制到 `.obsidian/plugins/jupyter-notebook/`，或把 ZIP 解压到 `.obsidian/plugins/`。标签工作流先测试和构建，再发布附件与构建来源证明。
+`npm run release:package` 在 `release/` 生成 `main.js`、`manifest.json`、`styles.css`、内含 `jupyter-notebook/` 的直接安装 ZIP、`SHA256SUMS` 和从当前更新日志提取的发布说明。将三个文件复制到 `.obsidian/plugins/jupyter-notebook/`，或把 ZIP 解压到 `.obsidian/plugins/`。标签工作流先测试和构建，只上传 `main.js`、`manifest.json`、`styles.css` 并为它们生成构建来源证明。ZIP 和 SHA256SUMS 仅供本地使用，不上传到 GitHub Release。重跑历史任务仍使用旧工作流；需要手动重建时，应从 main 分支运行最新工作流并填写目标标签。已有 Release 的标题和说明保持不变。
 
 0.6.10 还补充大型 Notebook 回归场景、过期结果提示、等待输入上下文、安装重试与残留恢复、脱敏诊断，以及图片、表格和单项输出操作。大型 Notebook 测试覆盖指定场景，不代表所有滚动或内存问题都已解决。

@@ -13,3 +13,11 @@ it('styles HTML alerts only inside notebook previews with theme-aware variants',
  for(const variant of ['success','info','warning','danger'])expect(css).toContain(`.alert-${variant}`);
  expect(css).toContain('--ipynb-html-color');expect(css).toContain('--text-normal');
 });
+it('publishes and attests only the three standard installation files',()=>{
+ const workflow=readFileSync('.github/workflows/release.yml','utf8');
+ const upload=workflow.split('\n').find(line=>line.trim().startsWith('gh release upload '));
+ expect(upload?.match(/release\/[\w.*-]+/g)).toEqual(['release/main.js','release/manifest.json','release/styles.css']);
+ const subjects=workflow.split('subject-path: |')[1].split('- name:')[0].trim().split('\n').map(line=>line.trim());
+ expect(subjects).toEqual(['release/main.js','release/manifest.json','release/styles.css']);
+ expect(workflow).not.toContain('gh release edit');
+});

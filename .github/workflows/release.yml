@@ -49,12 +49,9 @@ jobs:
             release/main.js
             release/manifest.json
             release/styles.css
-            release/*.zip
-            release/SHA256SUMS
       - name: Publish standard installation assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --verify-tag --title "Jupyter Notebook $RELEASE_TAG" --notes-file release/release-notes.md
-          gh release edit "$RELEASE_TAG" --notes-file release/release-notes.md
-          gh release upload "$RELEASE_TAG" release/main.js release/manifest.json release/styles.css release/*.zip release/SHA256SUMS --clobber
+          gh release view "$RELEASE_TAG" >/dev/null 2>&1 || gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --notes-file release/release-notes.md
+          gh release upload "$RELEASE_TAG" release/main.js release/manifest.json release/styles.css --clobber

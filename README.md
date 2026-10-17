@@ -54,7 +54,7 @@ Version 0.6.10 is a desktop-only release being prepared for community directory 
 
 The plugin currently uses manual installation.
 
-1. Download and extract the [archived ZIP](release-archives/v0.6.10/jupyter-notebook-v0.6.10.zip), or download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10).
+1. Download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10).
 
    [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
 2. Create a `jupyter-notebook` folder containing the three 0.6.10 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
@@ -288,6 +288,6 @@ Desktop execution inspects local interpreters and device-specific environment di
 
 Run `npm run release:version -- 0.6.11` once for a new version; it updates package/lock, manifest, compatibility history and adds a changelog section without overwriting an existing release. Fill in that section before publishing. `npm run release:preflight` checks metadata, tests, lint, types and the build (Python integration tests require `.venv` with `jupyter_client` and `ipykernel`). PRs and main run the same preflight.
 
-`npm run release:package` builds `release/` with `main.js`, `manifest.json`, `styles.css`, a direct-install ZIP containing `jupyter-notebook/`, `SHA256SUMS`, and release notes extracted from the current changelog section. Copy the three files into `.obsidian/plugins/jupyter-notebook/`, or extract the ZIP into `.obsidian/plugins/`. The tag workflow tests and builds before publishing these assets with provenance.
+`npm run release:package` builds `release/` with `main.js`, `manifest.json`, `styles.css`, a direct-install ZIP containing `jupyter-notebook/`, `SHA256SUMS`, and release notes extracted from the current changelog section. Copy the three files into `.obsidian/plugins/jupyter-notebook/`, or extract the ZIP into `.obsidian/plugins/`. The tag workflow tests and builds, then uploads and attests only `main.js`, `manifest.json`, and `styles.css`. ZIP and SHA256SUMS remain local and are not uploaded to GitHub Releases. Historical run re-runs still use their original workflow; dispatch the latest workflow from main with the target tag for a manual rebuild. Existing release titles and notes are preserved.
 
 Version 0.6.10 also adds large-notebook regression coverage, stale-result indicators, input-wait context, installation retry/recovery and redacted diagnostics, and expanded image/table/output controls. Large-notebook coverage checks specific scenarios; it does not guarantee all scrolling or memory issues are resolved.

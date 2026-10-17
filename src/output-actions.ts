@@ -41,3 +41,22 @@ export function outputImageFilename(output:Output,mime:string,fallback='output')
  if(mime==='image/jpeg'&&/\.jpe?g$/i.test(safeName)||mime==='image/png'&&/\.png$/i.test(safeName))return safeName;
  return safeName.replace(/\.(?:png|jpe?g)$/i,'')+'.'+extension;
 }
+
+/** Preserve merged-cell positions, tabs and line breaks when pasting into a spreadsheet. */
+export function tableToTsv(table:HTMLTableElement):string{
+ const rows=Array.from(table.rows??[]);const grid:string[][]=rows.map(()=>[]);const groupEnds:number[]=[];
+ for(let i=rows.length-1;i>=0;i--)groupEnds[i]=i+1<rows.length&&rows[i].parentElement===rows[i+1].parentElement?groupEnds[i+1]:i+1;
+ rows.forEach((row,r)=>{let column=0;Array.from(row.cells).forEach(cell=>{
+  while(grid[r][column]!==undefined)column++;
+  const height=cell.rowSpan===0?groupEnds[r]-r:Math.min(cell.rowSpan||1,groupEnds[r]-r);const width=Math.min(cell.colSpan||1,1000);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++)grid[r+y][column+x]=y===0&&x===0?(cell.innerText??cell.textContent??'').trim():'';
+  column+=width;
+ })});
+ const width=grid.reduce((width,row)=>Math.max(width,row.length),0);
+ const quote=(value:string)=>/[\t\r\n"]/.test(value)?'"'+value.replace(/"/g,'""')+'"':value;
+ return grid.map(row=>Array.from({length:width},(_,i)=>quote(row[i]??'')).join('\t')).join('\n');
+}
+export function outputCopyText(host:HTMLElement,fallback:string):string{
+ const tables=Array.from(host.querySelectorAll('table')).filter(table=>!table.parentElement?.closest('table'));
+ const text=tables.map(tableToTsv).filter(Boolean).join('\n\n');return text||fallback;
+}

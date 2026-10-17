@@ -11,7 +11,7 @@ class Element {
  querySelector(selector:string){return this.querySelectorAll(selector)[0]}
  setAttribute(name:string,value:string){this.attrs[name]=value}hasAttribute(name:string){return name==='src'?!!this.src:name in this.attrs}removeAttribute(name:string){if(name==='src')this.src='';delete this.attrs[name]}
  addEventListener(name:string,cb:()=>void){this.events[name]=cb}remove(){if(this.parent)this.parent.children=this.parent.children.filter(c=>c!==this)}
- replaceWith(other:Element){if(this.parent){const p=this.parent;p.children=p.children.map(c=>c===this?other:c);other.parent=p}}
+ replaceWith(other:Element){if(this.parent){const p=this.parent;other.remove();p.children=p.children.map(c=>c===this?other:c);other.parent=p}}
 }
 const image={output_type:'display_data',data:{'image/png':'iVBORw0KGgoAAAANSUhEUgAABAAAAAMACAIAAAA='},metadata:{}};
 afterEach(()=>vi.unstubAllGlobals());
@@ -45,7 +45,7 @@ it('copies the current stream text and saves each output independently',async()=
 it('provides keyboard accessible image enlargement and a safe image download',()=>{
  const host=new Element();const save=vi.fn();new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{save}).update([image]);
  const buttons=host.querySelectorAll('button');expect(buttons.some(b=>b.attrs['aria-label']==='放大图像')).toBe(true);
- buttons.find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.stringContaining('data:image/png;base64,'),'image/png','output.png');
+ buttons.find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.stringContaining('data:image/png;base64,'),'image/png','output-1.png');
 });
 it('gives HTML and asynchronously rendered Markdown tables a scroll region',async()=>{
  const host=new Element();const fragment=new Element();fragment.createEl('table');
@@ -99,7 +99,7 @@ it.each([
  [{metadata:{}},'image/png','分析.v2-2','分析.v2-2.png'],
  [{metadata:{filename:'../..'}},'image/png','分析-2','分析-2.png'],
 ])('preserves image filenames when available and provides portable notebook fallback', (output,mime,fallback,expected)=>{expect(outputImageFilename(output as any,mime,fallback)).toBe(expected)});
-it('uses the current Notebook image name when the output has no filename',()=>{const host=new Element();const save=vi.fn();new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{save,imageName:()=> '特性演示-7'}).update([image]);host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.any(String),'image/png','特性演示-7.png')});
+it('uses the current Notebook image name when the output has no filename',()=>{const host=new Element();const save=vi.fn();new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{save,imageName:()=> '特性演示-7'}).update([image]);host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.any(String),'image/png','特性演示-7-1.png')});
 it('only offers collapse controls for content taller than the configured limit, even when expanded',()=>{
  const host=new Element();const renderer=new OutputRenderer(host as any,()=>new Element() as any);const content=host.children[0] as any;
  content.scrollHeight=100;renderer.update([{output_type:'stream',text:'short'}]);expect(host.children[1].hidden).toBe(true);
@@ -110,4 +110,12 @@ it('remeasures on content resize and disconnects the size observer on destroy',(
  let resized!:()=>void;const disconnect=vi.fn();vi.stubGlobal('ResizeObserver',class{constructor(cb:()=>void){resized=cb}observe(){}disconnect=disconnect});
  const host=new Element();const renderer=new OutputRenderer(host as any,()=>new Element() as any);renderer.update([image]);const content=host.children[0] as any;
  content.scrollHeight=900;resized();expect(host.children[1].hidden).toBe(false);content.scrollHeight=200;resized();expect(host.children[1].hidden).toBe(true);renderer.destroy();expect(disconnect).toHaveBeenCalledOnce();
+});
+it('copies rendered HTML tables as TSV instead of their plain-text repr',async()=>{
+ const host=new Element();const fragment=new Element();const table=fragment.createEl('table');(table as any).rows=[{cells:[{innerText:'A',rowSpan:1,colSpan:1},{innerText:'B',rowSpan:1,colSpan:1}]},{cells:[{innerText:'1',rowSpan:1,colSpan:1},{innerText:'2',rowSpan:1,colSpan:1}]}];const copyText=vi.fn();new OutputRenderer(host as any,()=>fragment as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{copyText}).update([{output_type:'display_data',data:{'text/html':'<table>','text/plain':'repr'}}]);host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='复制输出')!.events.click();expect(copyText).toHaveBeenCalledWith('A\tB\n1\t2');
+});
+it('numbers unnamed images by image order, preserves named images, and resets after clearing',()=>{
+ const host=new Element();const save=vi.fn();const renderer=new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{save,imageName:()=> '演示-7'});const named={...image,metadata:{filename:'原图.png'}};
+ renderer.update([{output_type:'stream',text:'text'},image,{...image},named]);const buttons=host.querySelectorAll('button').filter(b=>b.attrs['aria-label']==='保存图像');buttons.forEach(b=>b.events.click());expect(save.mock.calls.map(call=>call[2])).toEqual(['演示-7-1.png','演示-7-2.png','原图.png']);
+ renderer.update([]);renderer.update([image]);host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save.mock.calls.at(-1)![2]).toBe('演示-7-1.png');
 });

@@ -245,12 +245,17 @@ export class NotebookEditor {
  focusCell(index:number):void{const target=Math.min(index,this.session.notebook.cells.length-1);if(this.mountCell(target))this.refresh();this.selectCell(target);this.editors[target]?.focus()}
  setImportStatuses(statuses:ImportStatus[]):void{this.importStatuses=statuses;this.renderImportStatuses()}
  private renderImportStatuses():void{
-  let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const status=this.importStatuses[codeIndex++];const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-import-status');if(!host)return;host.replaceChildren();host.classList.remove('is-missing');host.hidden=true;if(!status||(!status.state&&!status.syntaxError&&!status.missing.length&&!status.optional?.length))return;host.hidden=false;host.setAttribute('aria-live','polite');
-   const text=status.state==='no-environment'?'选择环境后检查依赖':status.state==='checking'?'正在检查依赖…':status.state==='error'?'依赖检查失败，请重试':status.syntaxError?'代码尚未完整，暂不检查依赖':status.missing.length?this.t('缺少模块：{module}',{module:status.missing.join(', ')}):'检测未发现缺失';this.el('span','ipynb-import-label',host).textContent=this.t(text);host.classList.toggle('is-missing',!!status.missing.length);
-   for(const module of status.missing)this.button(host,this.t('查找并安装依赖')+' · '+module,()=>this.actions.installImport?.(module)??Promise.resolve());
-   if(status.missing.length&&this.actions.externalKernel?.())this.el('span','ipynb-import-external',host).textContent=this.t('当前使用外部环境。依赖只安装到仓库环境，安装后需切换环境。');
-   if(status.state==='error'||status.missing.length)this.button(host,'重新检查',()=>{this.actions.retryImports?.()});
+  let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{
+   if(cell.cell_type!=='code')return;
+   const status=this.importStatuses[codeIndex++];const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-import-status');if(!host)return;
+   host.replaceChildren();host.classList.remove('is-missing');host.hidden=true;
+   if(!status||(!status.missing.length&&!status.optional?.length))return;
+   host.hidden=false;host.setAttribute('aria-live','polite');host.classList.toggle('is-missing',!!status.missing.length);
+   if(status.missing.length)this.el('span','ipynb-import-label',host).textContent=this.t('缺少模块：{module}',{module:status.missing.join(', ')});
    if(status.optional?.length)this.el('span','ipynb-import-optional',host).textContent=this.t('可选模块未安装：{modules}',{modules:status.optional.join(', ')});
+   for(const module of new Set([...status.missing,...(status.optional??[])]))this.button(host,this.t('查找并安装依赖')+' · '+module,()=>this.actions.installImport?.(module)??Promise.resolve());
+   if(this.actions.externalKernel?.())this.el('span','ipynb-import-external',host).textContent=this.t('当前使用外部环境。依赖只安装到仓库环境，安装后需切换环境。');
+   this.button(host,'重新检查',()=>{this.actions.retryImports?.()});
   });
  }
  private renderExecutionTimes():void{
@@ -273,7 +278,7 @@ export class NotebookEditor {
    const node=this.cellNodes[index];if(!node)return;
    if(!this.structureChanging&&!this.identities.has(cell))this.identities.set(cell,node.dataset.cellId!);
    const count=node.querySelector('.ipynb-count');if(count)count.textContent=cell.cell_type==='code'?`[${(this.session.running||this.session.busy)&&index===this.session.runningIndex?'*':cell.execution_count??' '}]`:'';
-   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t,this.actions.outputMarkdown,this.actions.outputActions);this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
+   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){let renderer=this.outputRenderers.get(output);if(!renderer){renderer=new OutputRenderer(output,html=>this.actions.sanitize(html),this.session.outputOptions,this.t,this.actions.outputMarkdown,{...this.actions.outputActions,imageName:()=>`${this.actions.outputActions?.imageName?.()??'Notebook'}-${index+1}`});this.outputRenderers.set(output,renderer)}renderer.update(cell.outputs??[])}
    node.querySelectorAll<HTMLButtonElement>('button').forEach(b=>{if(['运行单元格','上移','下移','在下方插入','删除','预览','编辑','清除单元格输出'].includes(b.dataset.action??''))b.disabled=(this.session.running||this.session.busy) || (b.dataset.action==='上移'&&index===0)||(b.dataset.action==='下移'&&index===this.session.notebook.cells.length-1)});
    const select=node.querySelector('select');if(select)select.disabled=(this.session.running||this.session.busy);
   });

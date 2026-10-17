@@ -14,13 +14,13 @@ it('static success hides the entire dependency row, including after a missing re
  editor.setImportStatuses([{modules:['numpy'],missing:[]}]);expect(host.hidden).toBe(true);expect(children).toEqual([]);
 });
 it('optional missing remains informative without claiming actual execution success',()=>{
- const {editor,host,children}=fixture();editor.setImportStatuses([{modules:['numpy'],missing:[],optional:['pandas']}]);expect(host.hidden).toBe(false);expect(children.map(c=>c.textContent).join(' ')).toContain('检测未发现缺失');expect(children.map(c=>c.textContent).join(' ')).toContain('pandas');expect(children.map(c=>c.textContent).join(' ')).not.toContain('运行成功');
+ const {editor,host,children}=fixture();editor.setImportStatuses([{modules:['numpy'],missing:[],optional:['pandas']}]);expect(host.hidden).toBe(false);expect(children.map(c=>c.textContent).join(' ')).not.toContain('检测未发现缺失');expect(children.map(c=>c.textContent).join(' ')).toContain('pandas');expect(children.map(c=>c.textContent).join(' ')).not.toContain('运行成功');
 });
-it.each(['checking','error','no-environment'] as const)('shows actionable dependency state %s',state=>{
- const {editor,host,children}=fixture();editor.setImportStatuses([{modules:[],missing:[],state}]);expect(host.hidden).toBe(false);expect(children[0].textContent).toBeTruthy();
+it.each(['checking','error','no-environment'] as const)('hides invisible dependency state %s',state=>{
+ const {editor,host,children}=fixture();editor.setImportStatuses([{modules:[],missing:[],state}]);expect(host.hidden).toBe(true);expect(children).toEqual([]);
 });
 it('incomplete code remains visible without reporting dependencies ready',()=>{
- const {editor,host,children}=fixture();editor.setImportStatuses([{modules:[],missing:[],syntaxError:true}]);expect(host.hidden).toBe(false);expect(children[0].textContent).toContain('代码尚未完整');
+ const {editor,host,children}=fixture();editor.setImportStatuses([{modules:[],missing:[],syntaxError:true}]);expect(host.hidden).toBe(true);expect(children).toEqual([]);
 });
 it('focus mounts a deferred cell once before focusing and renders current outputs',()=>{
  const editor:any=Object.create(NotebookEditor.prototype);const focus=vi.fn();const unobserve=vi.fn();const mount=vi.fn(()=>{editor.editors[4]={focus};expect(editor.session.notebook.cells[4].outputs[0].text).toBe('latest saved output')});
@@ -77,3 +77,5 @@ it('shows waiting state with cell and sequential input context and clears on com
  finish('name');expect(await result).toBe('name');expect(editor.waitingInput).toBe(false);expect(refresh).toHaveBeenCalledTimes(2);
  vi.mocked(requestKernelInput).mockResolvedValueOnce('');await editor.requestInput({prompt:'Next',password:true},controller.signal);expect(editor.inputSequence).toBe(2);
 });
+
+it('offers install actions for optional missing modules without a success banner',()=>{const {editor,host}=fixture();editor.actions.installImport=vi.fn();editor.setImportStatuses([{modules:['pandas'],missing:[],optional:['pandas']}]);expect(host.hidden).toBe(false);expect(editor.button).toHaveBeenCalledWith(host,expect.stringContaining('pandas'),expect.any(Function));editor.button.mock.calls[0][2]();expect(editor.actions.installImport).toHaveBeenCalledWith('pandas')});

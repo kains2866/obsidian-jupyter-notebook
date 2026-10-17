@@ -1,5 +1,7 @@
+import type {Output} from './notebook';
 import type {Translator} from './i18n';
 export interface OutputActions {
+ imageName?():string;
  copyText?(text:string):Promise<void>;
  save?(content:string,mime:string,filename:string):void|Promise<void>;
 }
@@ -25,4 +27,17 @@ export function enlargeOutputImage(image:HTMLImageElement,source:string,t:Transl
  const close=doc.body.createEl('button');close.type='button';close.textContent=t('关闭图像');dialog.append(close);
  const preview=doc.body.createEl('img');preview.src=source;preview.alt=image.alt;dialog.append(preview);
  const dispose=()=>dialog.remove();close.addEventListener('click',()=>dialog.close());dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close()});dialog.addEventListener('close',dispose);doc.body.append(dialog);let opened=false;try{dialog.showModal();close.focus();opened=true;return dispose}finally{if(!opened)dispose()}
+}
+
+/** Inline Jupyter images often have no source filename; never infer one from Python code. */
+export function outputImageFilename(output:Output,mime:string,fallback='output'):string{
+ const metadata=output.metadata as Record<string,unknown>|undefined;
+ const names=metadata?.filenames as Record<string,unknown>|undefined;
+ const image=metadata?.[mime] as Record<string,unknown>|undefined;
+ const clean=(value:unknown)=>typeof value==='string'?value.split(/[\\/]/).at(-1)!.replace(/[<>:"|?*]/g,'_').split('').map(char=>char.charCodeAt(0)<32?'_':char).join('').replace(/[. ]+$/g,'').trim():'';
+ const name=[metadata?.filename,names?.[mime],image?.filename].map(clean).find(Boolean)||clean(fallback)||'output';
+ const safeName=/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)?'_'+name:name;
+ const extension=mime==='image/jpeg'?'jpg':'png';
+ if(mime==='image/jpeg'&&/\.jpe?g$/i.test(safeName)||mime==='image/png'&&/\.png$/i.test(safeName))return safeName;
+ return safeName.replace(/\.(?:png|jpe?g)$/i,'')+'.'+extension;
 }

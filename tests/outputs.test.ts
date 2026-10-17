@@ -1,10 +1,10 @@
 import {expect,it,vi,afterEach} from 'vitest';
-import {enlargeOutputImage,saveOutput} from '../src/output-actions';
+import {enlargeOutputImage,saveOutput,outputImageFilename} from '../src/output-actions';
 import {OutputRenderer} from '../src/outputs';
 import {DEFAULT_OUTPUT_OPTIONS} from '../src/output-policy';
 class Element {
  children:Element[]=[];className='';textContent='';hidden=false;dataset:Record<string,string>={};attrs:Record<string,string>={};style:Record<string,string>={};parent?:Element;events:Record<string,()=>void>={};naturalHeight=800;naturalWidth=1200;loading='';alt='';src='';
- createEl(tag:string){const el=new Element();el.attrs.tag=tag;this.append(el);return el}createDiv(){return this.createEl('div')}
+ createEl(tag:string){const el=new Element();el.attrs.tag=tag;this.append(el);return el}createDiv(){return this.createEl('div')}createSvg(tag:string){return this.createEl(tag)}
  append(...nodes:Element[]){for(const node of nodes){node.remove();node.parent=this;this.children=this.children.filter(c=>c!==node).concat(node)}}
  replaceChildren(...nodes:Element[]){this.children=[];this.append(...nodes)}
  querySelectorAll(selector:string):Element[]{return this.children.flatMap(child=>[...(child.attrs.tag===selector?[child]:[]),...child.querySelectorAll(selector)])}
@@ -38,15 +38,14 @@ it('copies the current stream text and saves each output independently',async()=
  renderer.update([{output_type:'stream',name:'stdout',text:'first'}]);
  renderer.update([{output_type:'stream',name:'stdout',text:'first\nsecond'}]);
  const buttons=host.querySelectorAll('button');
- await buttons.find(b=>b.textContent==='复制输出')!.events.click();
+ await buttons.find(b=>b.attrs['aria-label']==='复制输出')!.events.click();
  expect(copyText).toHaveBeenCalledWith('first\nsecond');
- buttons.find(b=>b.textContent==='保存文本')!.events.click();
- expect(save).toHaveBeenCalledWith('first\nsecond','text/plain;charset=utf-8','output.txt');
+ expect(buttons.some(b=>b.attrs['aria-label']==='保存文本')).toBe(false);expect(save).not.toHaveBeenCalled();
 });
 it('provides keyboard accessible image enlargement and a safe image download',()=>{
  const host=new Element();const save=vi.fn();new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{save}).update([image]);
  const buttons=host.querySelectorAll('button');expect(buttons.some(b=>b.attrs['aria-label']==='放大图像')).toBe(true);
- buttons.find(b=>b.textContent==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.stringContaining('data:image/png;base64,'),'image/png','output.png');
+ buttons.find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.stringContaining('data:image/png;base64,'),'image/png','output.png');
 });
 it('gives HTML and asynchronously rendered Markdown tables a scroll region',async()=>{
  const host=new Element();const fragment=new Element();fragment.createEl('table');
@@ -69,8 +68,8 @@ it('keeps image preview modal, closes accessibly and releases it when disposed',
 it('reports copy errors without losing the original output and permits retry',async()=>{
  const host=new Element();const copyText=vi.fn().mockRejectedValue(new Error('denied'));
  new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{copyText}).update([{output_type:'stream',text:'keep me'}]);
- const copy=host.querySelectorAll('button').find(b=>b.textContent==='复制输出')!;copy.events.click();await Promise.resolve();await Promise.resolve();
- expect(copy.textContent).toBe('操作失败，请重试');expect(host.querySelector('pre')!.textContent).toBe('keep me');
+ const copy=host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='复制输出')!;copy.events.click();await Promise.resolve();await Promise.resolve();
+ expect(copy.attrs['aria-label']).toBe('操作失败，请重试');expect(host.querySelector('pre')!.textContent).toBe('keep me');
  copyText.mockResolvedValue(undefined);copy.events.click();await Promise.resolve();expect(copyText).toHaveBeenCalledTimes(2);
 });
 it('refuses arbitrary image download URLs',()=>{
@@ -86,4 +85,29 @@ it('removes a dialog when opening it fails',()=>{
  const body=new Element();const create=body.createEl.bind(body);body.createEl=(tag:string)=>{const el=create(tag);if(tag==='dialog')(el as any).showModal=()=>{throw new Error('unavailable')};return el};
  const image=new Element();(image as any).ownerDocument={body};
  expect(()=>enlargeOutputImage(image as any,'data:image/png;base64,AA==',text=>text)).toThrow('unavailable');expect(body.children).toHaveLength(0);
+});
+
+it('places text and image icon actions in consistent bottom toolbars',()=>{const host=new Element();new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS).update([{output_type:'stream',text:'hello'},image]);const buttons=host.querySelectorAll('button').filter(b=>b.className==='ipynb-output-action');expect(buttons).toHaveLength(2);for(const button of buttons){expect(button.parent?.className).toBe('ipynb-output-actions');expect(button.attrs.title).toBe(button.attrs['aria-label']);expect(button.textContent).toBe('')}});
+
+it.each([
+ [{metadata:{filename:'CON.png'}},'image/png','分析-2','_CON.png'],
+ [{metadata:{filename:'a\nb.png'}},'image/png','分析-2','a_b.png'],
+ [{metadata:{filename:'结果.png'}},'image/png','分析-2','结果.png'],
+ [{metadata:{filenames:{'image/png':'plots/图表.png'}}},'image/png','分析-2','图表.png'],
+ [{metadata:{'image/jpeg':{filename:'C:\\plots\\photo.jpeg'}}},'image/jpeg','分析-2','photo.jpeg'],
+ [{metadata:{}},'image/png','分析-2','分析-2.png'],
+ [{metadata:{}},'image/png','分析.v2-2','分析.v2-2.png'],
+ [{metadata:{filename:'../..'}},'image/png','分析-2','分析-2.png'],
+])('preserves image filenames when available and provides portable notebook fallback', (output,mime,fallback,expected)=>{expect(outputImageFilename(output as any,mime,fallback)).toBe(expected)});
+it('uses the current Notebook image name when the output has no filename',()=>{const host=new Element();const save=vi.fn();new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,undefined,{save,imageName:()=> '特性演示-7'}).update([image]);host.querySelectorAll('button').find(b=>b.attrs['aria-label']==='保存图像')!.events.click();expect(save).toHaveBeenCalledWith(expect.any(String),'image/png','特性演示-7.png')});
+it('only offers collapse controls for content taller than the configured limit, even when expanded',()=>{
+ const host=new Element();const renderer=new OutputRenderer(host as any,()=>new Element() as any);const content=host.children[0] as any;
+ content.scrollHeight=100;renderer.update([{output_type:'stream',text:'short'}]);expect(host.children[1].hidden).toBe(true);
+ content.scrollHeight=800;renderer.update([{output_type:'stream',text:'long'}]);expect(host.children[1].hidden).toBe(false);host.children[1].events.click();expect(host.children[1].hidden).toBe(false);expect(host.children[1].attrs['aria-expanded']).toBe('true');
+ content.scrollHeight=100;renderer.update([{output_type:'stream',text:'short again'}]);expect(host.children[1].hidden).toBe(true);
+});
+it('remeasures on content resize and disconnects the size observer on destroy',()=>{
+ let resized!:()=>void;const disconnect=vi.fn();vi.stubGlobal('ResizeObserver',class{constructor(cb:()=>void){resized=cb}observe(){}disconnect=disconnect});
+ const host=new Element();const renderer=new OutputRenderer(host as any,()=>new Element() as any);renderer.update([image]);const content=host.children[0] as any;
+ content.scrollHeight=900;resized();expect(host.children[1].hidden).toBe(false);content.scrollHeight=200;resized();expect(host.children[1].hidden).toBe(true);renderer.destroy();expect(disconnect).toHaveBeenCalledOnce();
 });

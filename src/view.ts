@@ -48,7 +48,7 @@ export class NotebookView extends FileView{
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
    outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
-   outputActions:{save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
+   outputActions:{imageName:()=>this.file?.basename??'Notebook',save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
   },state);
   this.scheduleImportCheck(true);
  }

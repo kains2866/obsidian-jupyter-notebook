@@ -3,8 +3,14 @@
 .ipynb-output-table-scroll:focus-visible, .ipynb-output-action:focus-visible, .ipynb-output-image-button:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
 .ipynb-output-image-button { display: block; max-width: 100%; height: auto; padding: 0; border: 0; background: transparent; cursor: zoom-in; box-shadow: none; }
 .ipynb-output-image-button img { display: block; max-width: 100%; height: auto; }
-.ipynb-output-action { margin: 4px 6px 4px 0; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.ipynb-output-actions { display: flex; justify-content: flex-end; align-items: center; gap: 4px; min-height: 30px; padding: 4px 0 0; width: 100%; box-sizing: border-box; }
+.ipynb-output-action { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 5px; margin: 0; border: 0; box-shadow: none; background: transparent; color: var(--text-muted); opacity: .65; }
+.ipynb-output-item:hover .ipynb-output-action, .ipynb-output-action:focus-visible { opacity: 1; }
+.ipynb-output-action:hover { background: var(--background-modifier-hover); }
+.ipynb-output-action[data-state="error"] { color: var(--text-error); opacity: 1; }
+.ipynb-output-action[data-state="success"] { color: var(--interactive-accent); }
 .ipynb-image-dialog { max-width: 95vw; max-height: 95vh; overflow: auto; color: var(--text-normal); background: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); }
 .ipynb-image-dialog::backdrop { background: rgba(0,0,0,.65); }
 .ipynb-image-dialog > button { display: block; position: sticky; top: 0; margin-bottom: 8px; }
 .ipynb-image-dialog > img { display: block; max-width: none; height: auto; }
+.ipynb-output-toggle[hidden] { display: none; }

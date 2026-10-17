@@ -15,6 +15,7 @@ let disk=JSON.stringify({nbformat:4,nbformat_minor:5,metadata:{},cells:[{id:'int
 if(new URLSearchParams(location.search).has('large'))disk=JSON.stringify(largeNotebookFixture());
 if(new URLSearchParams(location.search).has('charts')){const n=JSON.parse(disk);disk=JSON.stringify({...n,cells:n.cells.map((c:any,i:number)=>i%10===1?{...c,outputs:richOutputFixture.cells[1].outputs}:c)})}
 if(new URLSearchParams(location.search).has('outputs'))disk=JSON.stringify(richOutputFixture);
+if(new URLSearchParams(location.search).has('demo')){const fixture=document.getElementById('preview-notebook')?.textContent;if(fixture)disk=fixture}
 const session=new NotebookSession(disk);
 let previewKernelState:'stopped'|'starting'|'busy'|'idle'='idle';
 let previewExecution:'success'|'error'|undefined;let previewExecutedCode:string|undefined;

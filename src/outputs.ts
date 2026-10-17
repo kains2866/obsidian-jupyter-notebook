@@ -1,4 +1,4 @@
-import {enlargeOutputImage,saveOutput,wrapOutputTables,type OutputActions} from './output-actions';
+import {enlargeOutputImage,saveOutput,wrapOutputTables,outputImageFilename,type OutputActions} from './output-actions';
 import type {Output} from './notebook';
 import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {createTranslator,type Translator} from './i18n';
@@ -8,14 +8,17 @@ export type RenderOutputMarkdown=(source:string,parent:HTMLElement)=>MarkdownOut
 export class OutputRenderer {
  private markdownDisposers=new Map<HTMLElement,()=>void>();
  private hasImage=false;
+ private actionBars=new WeakMap<HTMLElement,HTMLElement>();
  private previews=new Map<HTMLElement,()=>void>();
  private records:{output:Output;block:HTMLElement}[]=[];
  private observer?:IntersectionObserver;
+ private sizeObserver?:ResizeObserver;private destroyed=false;
  private expanded:boolean|undefined;
  private content:HTMLElement;
  private toggle:HTMLButtonElement;
  constructor(private parent:HTMLElement,private sanitize:(html:string)=>DocumentFragment,private options:OutputOptions=DEFAULT_OUTPUT_OPTIONS,private t:Translator=createTranslator('zh'),private markdown?:RenderOutputMarkdown,private actions:OutputActions={}){
   parent.replaceChildren();this.content=parent.createDiv();this.content.className='ipynb-output-content';this.toggle=parent.createEl('button');this.toggle.className='ipynb-output-toggle';this.toggle.type='button';this.toggle.addEventListener('click',()=>{this.expanded=!(this.expanded??this.hasImage);this.updateCollapse()});parent.append(this.content,this.toggle);
+  if(typeof ResizeObserver!=='undefined'){this.sizeObserver=new ResizeObserver(()=>this.updateCollapse());this.sizeObserver.observe(this.content)}
   if(options.lazyImages&&typeof IntersectionObserver!=='undefined')this.observer=new IntersectionObserver(entries=>{for(const entry of entries){const img=entry.target as HTMLImageElement;if(entry.isIntersecting){if(!img.hasAttribute('src'))img.src=img.dataset.source!;this.observer?.unobserve(img)}}},{rootMargin:'600px'});
  }
  update(outputs:Output[]):void{
@@ -28,31 +31,35 @@ export class OutputRenderer {
   for(const record of this.records.slice(outputs.length)){this.disposeBlock(record.block);record.block.remove()}
   this.records=this.records.slice(0,outputs.length);this.parent.hidden=!outputs.length;this.updateCollapse();
  }
- private updateCollapse():void{const expanded=this.expanded??this.hasImage;this.content.style.maxHeight=this.options.collapse&&!expanded?`${this.options.collapseHeight}px`:'';this.content.style.overflow=this.options.collapse&&!expanded?'auto':'';this.toggle.hidden=!this.options.collapse||!this.records.length;this.toggle.textContent=this.t(expanded?'收起输出':'展开输出');this.toggle.setAttribute('aria-expanded',String(expanded))}
+ private updateCollapse():void{if(this.destroyed)return;const expanded=this.expanded??this.hasImage;this.content.style.maxHeight=this.options.collapse&&!expanded?`${this.options.collapseHeight}px`:'';this.content.style.overflow=this.options.collapse&&!expanded?'auto':'';this.toggle.hidden=!this.options.collapse||!this.records.length||this.content.scrollHeight<=this.options.collapseHeight;this.toggle.textContent=this.t(expanded?'收起输出':'展开输出');this.toggle.setAttribute('aria-expanded',String(expanded))}
  private disposeBlock(block:HTMLElement):void{block.querySelectorAll('img').forEach(img=>this.observer?.unobserve(img));this.previews.get(block)?.();this.previews.delete(block);this.markdownDisposers.get(block)?.();this.markdownDisposers.delete(block)}
  private makeBlock(output:Output):HTMLElement{
   const block=this.content.createDiv();block.className='ipynb-output-item';
   if(output.output_type==='stream'||output.output_type==='error'){const pre=block.createEl('pre');pre.textContent=output.output_type==='stream'?outputText(output.text):outputText(Array.isArray(output.traceback)?output.traceback.join('\n'):`${outputText(output.ename)}: ${outputText(output.evalue)}`).replace(new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*[A-Za-z]`,'g'),'');if(output.output_type==='error'||output.name==='stderr')pre.className='ipynb-error';block.append(pre);this.textActions(block,()=>pre.textContent??'');return block}
   const data=output.data as Record<string,unknown>|undefined;if(!data)return block;
   const mime=['image/png','image/jpeg'].find(type=>typeof data[type]==='string'||Array.isArray(data[type]));
-  if(mime){const img=block.createEl('img');const source=`data:${mime};base64,${outputText(data[mime])}`;img.alt=this.t('Notebook 输出图像');img.loading=this.options.lazyImages?'lazy':'eager';const dimensions=outputImageDimensions(output,mime);if(dimensions){img.setAttribute('width',String(dimensions.width));img.setAttribute('height',String(dimensions.height))}if(this.observer){img.dataset.source=source;this.observer.observe(img)}else img.src=source;const enlarge=block.createEl('button');enlarge.type='button';enlarge.className='ipynb-output-image-button';enlarge.setAttribute('aria-label',this.t('放大图像'));enlarge.append(img);enlarge.addEventListener('click',()=>{this.previews.get(block)?.();try{this.previews.set(block,enlargeOutputImage(img,source,this.t))}catch{const error=block.createDiv();error.setAttribute('role','alert');error.textContent=this.t('图像预览失败，请重试')}});this.action(block,'保存图像',()=>this.save(source,mime,mime==='image/png'?'output.png':'output.jpg',block))}
+  if(mime){const img=block.createEl('img');const source=`data:${mime};base64,${outputText(data[mime])}`;img.alt=this.t('Notebook 输出图像');img.loading=this.options.lazyImages?'lazy':'eager';img.addEventListener('load',()=>this.updateCollapse());img.addEventListener('error',()=>this.updateCollapse());const dimensions=outputImageDimensions(output,mime);if(dimensions){img.setAttribute('width',String(dimensions.width));img.setAttribute('height',String(dimensions.height))}if(this.observer){img.dataset.source=source;this.observer.observe(img)}else img.src=source;const enlarge=block.createEl('button');enlarge.type='button';enlarge.className='ipynb-output-image-button';enlarge.setAttribute('aria-label',this.t('放大图像'));enlarge.append(img);enlarge.addEventListener('click',()=>{this.previews.get(block)?.();try{this.previews.set(block,enlargeOutputImage(img,source,this.t))}catch{const error=block.createDiv();error.setAttribute('role','alert');error.textContent=this.t('图像预览失败，请重试')}});this.action(block,'保存图像',()=>this.save(source,mime,outputImageFilename(output,mime,this.actions.imageName?.()),block))}
   else if(data['text/html']){block.append(this.sanitize(outputText(data['text/html'])));wrapOutputTables(block,this.t);const text=outputText(data['text/plain']??block.textContent);this.textActions(block,()=>text)}
   else if(data['text/markdown']){
    const source=outputText(data['text/markdown']);const host=block.createDiv();host.className='ipynb-output-markdown markdown-rendered';
    if(this.markdown){
-    const failure=(error:unknown)=>{host.replaceChildren();host.createEl('pre').textContent=this.t('Markdown 输出渲染失败：{error}',{error:String(error)})+'\n\n'+source};
-    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block))wrapOutputTables(host,this.t)}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
+    const failure=(error:unknown)=>{host.replaceChildren();host.createEl('pre').textContent=this.t('Markdown 输出渲染失败：{error}',{error:String(error)})+'\n\n'+source;this.updateCollapse()};
+    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block)){wrapOutputTables(host,this.t);this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
    }else host.createEl('pre').textContent=source;this.textActions(block,()=>source);
   }
   else{const pre=block.createEl('pre');pre.textContent=outputText(data['text/plain']??JSON.stringify(data,null,2));block.append(pre);this.textActions(block,()=>pre.textContent??'')}return block;
  }
  private save(content:string,mime:string,filename:string,block:HTMLElement):void|Promise<void>{if(this.actions.save)return this.actions.save(content,mime,filename);else saveOutput(content,mime,filename,block.ownerDocument)}
  private action(block:HTMLElement,label:string,run:()=>void|Promise<void>):void{
-  const button=block.createEl('button');button.type='button';button.className='ipynb-output-action';button.textContent=this.t(label);
-  button.addEventListener('click',()=>{const failure=()=>{button.textContent=this.t('操作失败，请重试')};try{void Promise.resolve(run()).then(()=>{button.textContent=this.t(label==='复制输出'?'已复制':label)}).catch(failure)}catch{failure()}});
+  let bar=this.actionBars.get(block);if(!bar){bar=block.createDiv();bar.className='ipynb-output-actions';this.actionBars.set(block,bar)}
+  const button=bar.createEl('button');button.type='button';button.className='ipynb-output-action';
+  const describe=(text:string,state='')=>{button.setAttribute('aria-label',this.t(text));button.setAttribute('title',this.t(text));button.dataset.state=state};describe(label);
+  const svg=button.createSvg('svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('width','16');svg.setAttribute('height','16');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.7');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('aria-hidden','true');
+  const path=svg.createSvg('path');path.setAttribute('d',label==='复制输出'?'M9 9h11v11H9z M5 15H3V3h12v2':'M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4');
+  button.addEventListener('click',()=>{const failure=()=>describe('操作失败，请重试','error');try{void Promise.resolve(run()).then(()=>describe(label==='复制输出'?'已复制':label,'success')).catch(failure)}catch{failure()}});
  }
- private textActions(block:HTMLElement,text:()=>string):void{this.action(block,'复制输出',()=>this.actions.copyText?this.actions.copyText(text()):navigator.clipboard.writeText(text()));this.action(block,'保存文本',()=>this.save(text(),'text/plain;charset=utf-8','output.txt',block))}
- destroy():void{this.observer?.disconnect();for(const record of this.records)this.disposeBlock(record.block);this.records=[];this.parent.replaceChildren()}
+ private textActions(block:HTMLElement,text:()=>string):void{this.action(block,'复制输出',()=>this.actions.copyText?this.actions.copyText(text()):navigator.clipboard.writeText(text()))}
+ destroy():void{this.destroyed=true;this.sizeObserver?.disconnect();this.observer?.disconnect();for(const record of this.records)this.disposeBlock(record.block);this.records=[];this.parent.replaceChildren()}
 }
 export function renderOutputs(parent:HTMLElement,outputs:Output[],sanitize:(html:string)=>DocumentFragment):void{new OutputRenderer(parent,sanitize,{...DEFAULT_OUTPUT_OPTIONS,collapse:false,lazyImages:false}).update(outputs)}
 

@@ -23,6 +23,7 @@ export class NotebookSession {
  onChange:()=>void=()=>{};
  constructor(text:string,options:Partial<OutputOptions>={},private hooks:{onWarning?:(message:string)=>void;onLimit?:()=>void|Promise<void>}={}){this.history=new NotebookHistory(parseNotebook(text));this.baseline=text;this.savedNotebook=this.notebook;this.outputOptions={...DEFAULT_OUTPUT_OPTIONS,...options}}
  configureOutputOptions(options:Partial<OutputOptions>):void{this.outputOptions={...DEFAULT_OUTPUT_OPTIONS,...options};this.onChange()}
+ get savedText():string{return this.baseline}
  get notebook():Notebook{return this.history.current}
  get dirty():boolean{return this.notebook!==this.savedNotebook}
  change(n:Notebook):void{this.history.update(n);this.onChange()}

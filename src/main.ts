@@ -1,3 +1,5 @@
+import {cleanupRecoveryDrafts} from './recovery-drafts';
+import {recoveryCacheDirectory,openRecoveryDirectory} from './recovery-cache';
 import {Plugin,Notice,normalizePath,setTooltip,Platform,FileSystemAdapter,getLanguage,TFolder,TFile} from 'obsidian';
 import {NotebookView,NOTEBOOK_VIEW} from './view';
 import {DEFAULT_SETTINGS,NotebookSettingsTab,type NotebookSettings,type EnvironmentPickerOptions} from './settings';
@@ -12,6 +14,8 @@ export default class NotebookPlugin extends Plugin{
  environmentRemovalActive=false;
  private commandIds:string[]=[];private commandLabels='';private ribbon?:HTMLElement;
  private creationQueue:Promise<void>=Promise.resolve();
+ private recoveryCleanup?:ReturnType<typeof cleanupRecoveryDrafts>;
+ private persistedRetentionDays=7;
  private persistedLocal={bridgePython:'',kernelPython:''};
  deviceId="";
  async onload():Promise<void>{
@@ -42,6 +46,7 @@ export default class NotebookPlugin extends Plugin{
   new NotebookDataviewBridge(this,message=>new Notice(this.getTranslator()(message),10000)).start();
   if(!Platform.isMobile)this.addSettingTab(new NotebookSettingsTab(this.app,this));
   if(Platform.isMobile)return;
+  if(this.recoveryDirectory()){await this.cleanRecoveryCache(false);this.registerInterval(window.setInterval(()=>{void this.cleanRecoveryCache(false)},3600000))}
   this.refreshLanguageCommands();
   this.ribbon=this.addRibbonIcon('notebook-pen',this.getTranslator()('新建 Jupyter Notebook'),()=>void this.createNotebook());
   this.registerEvent(this.app.workspace.on('file-menu',(menu,file)=>{
@@ -59,6 +64,19 @@ export default class NotebookPlugin extends Plugin{
    catch(error){if(preserveLocalOnSyncFailure){this.persistedLocal=nextLocal;throw error}try{await writeLocalEnvironmentSettings(normalized.vaultId,previousLocal)}catch(rollbackError){throw new Error(this.getTranslator()('同步设置保存失败，本机配置恢复也失败，请重新选择默认环境。{error}',{error:String(rollbackError)}))}throw error}
    this.persistedLocal=nextLocal;
   }else await this.saveData(syncedEnvironmentSettings(normalized));
+  if(normalized.recoveryRetentionDays!==this.persistedRetentionDays){this.persistedRetentionDays=normalized.recoveryRetentionDays;await this.cleanRecoveryCache(false)}
+ }
+ private recoveryDirectory():string|undefined{const root=this.vaultRoot();return !Platform.isMobile&&root&&this.manifest?.id&&this.deviceId?recoveryCacheDirectory(root,this.manifest.id,this.deviceId):undefined}
+ async openRecoveryCache():Promise<void>{const directory=this.recoveryDirectory();if(!directory)throw new Error(this.getTranslator()('当前设备的恢复缓存目录不可用。'));await openRecoveryDirectory(directory)}
+ async cleanRecoveryCache(manual=true):Promise<void>{
+  const directory=this.recoveryDirectory();if(!directory)return;
+  try{
+   if(!this.recoveryCleanup)this.recoveryCleanup=cleanupRecoveryDrafts(directory,this.settings.recoveryRetentionDays);
+   const pending=this.recoveryCleanup;let result:Awaited<typeof pending>;
+   try{result=await pending}finally{if(this.recoveryCleanup===pending)this.recoveryCleanup=undefined}
+   if(manual)new Notice(this.getTranslator()('已清理 {count} 个过期缓存文件，释放 {size} MiB。',{count:result.removed,size:(result.bytes/1048576).toFixed(2)}));
+   if(result.errors.length)new Notice(this.getTranslator()('部分恢复缓存无法清理，请检查目录权限后重试。'),10000);
+  }catch(error){new Notice(this.getTranslator()('恢复缓存清理失败：{error}',{error:this.getTranslator()(error instanceof Error?error.message:String(error))}),10000)}
  }
  getTranslator():Translator{return createTranslator(this.settings.language,typeof getLanguage==='function'?getLanguage():'en')}
  onPreferencesChanged():void{this.refreshLanguageCommands();for(const view of this.notebookViews())view.refreshPreferences()}

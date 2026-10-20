@@ -196,14 +196,22 @@ Supported outputs include text, PNG/JPEG images, sanitized HTML tables, and erro
 - Default warnings appear when cell outputs reach 50 MiB or Notebook outputs reach 200 MiB.
 - Hard limits, automatic removal of old outputs, and releasing undo history when clearing outputs are disabled by default.
 
-Output limits measure serialized data size, not Obsidian's total memory usage. Full cell virtualization has not yet been implemented. Clearing outputs does not clear kernel variables; saving writes the cleared outputs to the file.
+Output limits measure serialized data size, not Obsidian's total memory usage. Offscreen editor and output recycling is supported. Clearing outputs does not clear kernel variables; saving writes the cleared outputs to the file.
 
 The plugin supports explicit saving and saving on close. It does not write to disk after every keystroke. Before saving, it checks for external changes and refuses to overwrite conflicting content. If saving the original file on close fails, it attempts to write an `.ipynb` recovery copy and notifies you.
+
+### Local recovery and incremental rendering
+
+Unsaved changes are checkpointed roughly once per second in the device user's `.cache/obsidian-jupyter-notebook/recovery/` directory, separately by vault, file, and view. Reopening a Notebook offers to restore a draft into the editor without directly overwriting the original file. Successful saves clean up the corresponding draft; damaged and declined drafts remain available until they expire. The most recent edits not yet written at a crash may still be lost. Local recovery is not a separate backup.
+
+Settings → Cache and recovery provides a retention period (1–365 days, default 7), an Open cache directory action, and Clean expired cache. Drafts and temporary files expire based on their last modification time. Checks run at startup, when opening a Notebook, and hourly while Obsidian is running. Active sessions are protected; permission failures and uncertain session states are skipped and reported. No cleanup runs while Obsidian is closed.
+
+Offscreen recycling considers cell count, source/output size, image count, and estimated document height. Active editing, running, and interacting cells remain mounted. Markdown mode changes and cell structure operations reuse unaffected editors and their undo state where possible.
 
 ## Current limitations
 
 - Code editing and execution currently target Python. Remote kernels are not supported.
-- Notebook widgets, JavaScript/SVG rich outputs, and interactive stdin input are not currently supported.
+- Notebook widgets and active JavaScript outputs are not supported. Static SVG is filtered for safety; inline stdin prompts are supported.
 - Cell attachment data is preserved, but preview support for attachment-referenced images is limited.
 - `.ipynb` files are not integrated with Obsidian's native graph, backlinks, or Properties index.
 - Cell types follow the file's `cell_type` field rather than being inferred from content. HTML callouts incorrectly marked as code can be changed to Markdown manually.

@@ -1,13 +1,13 @@
 import {classifyEnvironmentFailure,diagnoseEnvironment,sanitizeDiagnosticText,type EnvironmentDiagnostic} from './environment-diagnostics';
 import {translateEnvironmentProgress} from './environment-translations';
-import {App,Modal,Notice,PluginSettingTab,Setting,Platform,type SettingDefinitionItem} from 'obsidian';
+import {App,Modal,Notice,PluginSettingTab,Setting,Platform,type SettingDefinitionItem,type SettingGroupItem} from 'obsidian';
 import type NotebookPlugin from './main';
 import {belongsToEnvironmentDirectory,translateEnvironmentName,type Environment} from './environments';
 import {createTranslator,type Translator,type LanguageSetting} from './i18n';
 import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {probeKernelCatalog,type KernelCatalogRow} from './kernel-catalog';
-export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string;language:LanguageSetting;outputOptions:OutputOptions}
-export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:'',language:'auto',outputOptions:{...DEFAULT_OUTPUT_OPTIONS}};
+export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string;language:LanguageSetting;outputOptions:OutputOptions;recoveryRetentionDays:number}
+export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:'',language:'auto',recoveryRetentionDays:7,outputOptions:{...DEFAULT_OUTPUT_OPTIONS}};
 const OUTPUT_TOGGLES=[['collapse','折叠长输出'],['lazyImages','延迟加载图片'],['hardLimit','启用输出硬限制'],['autoDiscardOld','自动丢弃旧输出'],['releaseHistoryOnClear','清空输出时释放撤销历史']] as const;
 const OUTPUT_NUMBERS=[['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const;
 const PYTHON_PATHS=[['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const;
@@ -27,16 +27,25 @@ export class NotebookSettingsTab extends PluginSettingTab {
    {type:'group',heading:t('输出管理'),items:[
     ...OUTPUT_TOGGLES.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'toggle' as const,key:`outputOptions.${key}`,defaultValue:Boolean(DEFAULT_OUTPUT_OPTIONS[key])}})),
     ...OUTPUT_NUMBERS.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'number' as const,key:`outputOptions.${key}`,defaultValue:Number(DEFAULT_OUTPUT_OPTIONS[key]),validate:(value:number)=>Number.isFinite(value)&&value>0?undefined:t('请输入大于零的有限数值。')}}))]},
+   {type:'group',heading:t('缓存与恢复'),items:this.recoverySettings()},
    {type:'group',heading:t('高级：手动 Python 路径'),items:PYTHON_PATHS.map(([key,label])=>({name:t(label),aliases:[key,'Python','解释器'],control:{type:'text' as const,key}}))}];
  }
+ private recoverySettings():SettingGroupItem[]{
+  const t=this.plugin.getTranslator();
+  return [{name:t('缓存保留时间（天）'),desc:t('超过保留期后，自动清理未接受的恢复草稿、保存失败或损坏的草稿及临时文件；当前打开的会话不会被清理。'),aliases:['cache','recovery','缓存','恢复'],control:{type:'number',key:'recoveryRetentionDays',defaultValue:7,validate:value=>Number.isInteger(value)&&value>=1&&value<=365?undefined:t('请输入 1 到 365 的整数。')}},
+   {name:t('打开缓存目录'),render:setting=>{setting.addButton(button=>button.setButtonText(t('打开缓存目录')).onClick(()=>this.recoveryAction(()=>this.plugin.openRecoveryCache(),'无法打开缓存目录，请检查目录权限后重试。')))}},
+   {name:t('清理过期缓存'),desc:t('仅清理超过保留时间的缓存，保留当前打开会话的草稿。'),render:setting=>{setting.addButton(button=>button.setButtonText(t('清理过期缓存')).onClick(()=>this.recoveryAction(()=>this.plugin.cleanRecoveryCache(true),'无法清理过期缓存，请稍后重试。')))}}];
+ }
+ private async recoveryAction(action:()=>Promise<void>,failure:string):Promise<void>{try{await action()}catch{new Notice(this.plugin.getTranslator()(failure))}}
  getControlValue(key:string):unknown{
-  if(key==='language'||key==='bridgePython'||key==='kernelPython')return this.plugin.settings[key];
+  if(key==='recoveryRetentionDays'||key==='language'||key==='bridgePython'||key==='kernelPython')return this.plugin.settings[key];
   const outputKey=key.slice('outputOptions.'.length);
   if(key.startsWith('outputOptions.')&&isOutputKey(outputKey))return this.plugin.settings.outputOptions[outputKey];
   return undefined;
  }
  async setControlValue(key:string,value:unknown):Promise<void>{
   const settings=this.plugin.settings;
+  if(key==='recoveryRetentionDays'){if(typeof value==='number'&&Number.isInteger(value)&&value>=1&&value<=365)await this.updateSettings({...settings,recoveryRetentionDays:value},false);return}
   if(key==='language'){
    if(value!=='auto'&&value!=='zh'&&value!=='en')return;
    await this.updateSettings({...settings,language:value});this.refreshSettings();return;
@@ -47,7 +56,7 @@ export class NotebookSettingsTab extends PluginSettingTab {
   if(OUTPUT_TOGGLES.some(([entry])=>entry===outputKey)?typeof value!=='boolean':typeof value!=='number'||!Number.isFinite(value)||value<=0)return;
   await this.updateSettings({...settings,outputOptions:{...settings.outputOptions,[outputKey]:value}});
  }
- private async updateSettings(next:NotebookSettings):Promise<void>{const previous=this.plugin.settings;this.plugin.settings=next;try{await this.plugin.saveSettings();this.plugin.onPreferencesChanged()}catch(error){this.plugin.settings=previous;new Notice(this.plugin.getTranslator()(String(error)));this.refreshSettings()}}
+ private async updateSettings(next:NotebookSettings,refreshNotebooks=true):Promise<void>{const previous=this.plugin.settings;this.plugin.settings=next;try{await this.plugin.saveSettings();if(refreshNotebooks)this.plugin.onPreferencesChanged()}catch(error){this.plugin.settings=previous;new Notice(this.plugin.getTranslator()(String(error)));this.refreshSettings()}}
  display():void{this.renderLegacy()}
  private renderLegacy():void{
   const t=this.plugin.getTranslator();this.containerEl.empty();new Setting(this.containerEl).setName(t('Notebook 设置')).setHeading();
@@ -58,6 +67,8 @@ export class NotebookSettingsTab extends PluginSettingTab {
   const toggle=(key:keyof OutputOptions,label:string)=>new Setting(this.containerEl).setName(t(label)).addToggle(control=>control.setValue(Boolean(this.plugin.settings.outputOptions[key])).onChange(value=>{void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:value}})}));
   for(const [key,label] of OUTPUT_TOGGLES)toggle(key,label);
   for(const [key,label] of OUTPUT_NUMBERS)new Setting(this.containerEl).setName(t(label)).addText(control=>control.setValue(String(this.plugin.settings.outputOptions[key])).onChange(value=>{const number=Number(value);if(!Number.isFinite(number)||number<=0)return;void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:number}})}));
+  new Setting(this.containerEl).setName(t('缓存与恢复')).setHeading();
+  for(const definition of this.recoverySettings()){const item=definition as {name:string;desc?:string;render?:(setting:Setting)=>void};const setting=new Setting(this.containerEl).setName(item.name);if(item.desc)setting.setDesc(item.desc);if(item.render)item.render(setting);else setting.addText(control=>{control.inputEl.type='number';control.inputEl.min='1';control.inputEl.max='365';control.inputEl.step='1';control.setValue(String(this.plugin.settings.recoveryRetentionDays)).onChange(value=>{if(value.trim())void this.setControlValue('recoveryRetentionDays',Number(value))})})}
   const advanced=this.containerEl.createEl('details');advanced.createEl('summary',{text:t('高级：手动 Python 路径')});
   for(const [key,label] of PYTHON_PATHS)new Setting(advanced).setName(t(label)).addText(control=>control.setValue(this.plugin.settings[key]).onChange(value=>{void this.updateSettings({...this.plugin.settings,[key]:value.trim()})}));
  }

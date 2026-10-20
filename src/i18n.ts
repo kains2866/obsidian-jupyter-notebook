@@ -6,6 +6,28 @@ import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
+ '恢复会话 lease 不是普通文件，已保留草稿。':'The recovery session lease is not a regular file. The draft has been kept.',
+ '恢复会话 lease 损坏，已保留草稿。':'The recovery session lease is damaged. The draft has been kept.',
+ '缓存':'Cache','恢复':'Recovery',
+ '当前设备的恢复缓存目录不可用。':'The recovery cache directory is unavailable on this device.',
+ '已清理 {count} 个过期缓存文件，释放 {size} MiB。':'Removed {count} expired cache files, freeing {size} MiB.',
+ '部分恢复缓存无法清理，请检查目录权限后重试。':'Some recovery cache files could not be cleaned. Check directory permissions and retry.',
+ '恢复缓存清理失败：{error}':'Recovery cache cleanup failed: {error}',
+ '缓存与恢复':'Cache and recovery',
+ '缓存保留时间（天）':'Cache retention (days)',
+ '超过保留期后，自动清理未接受的恢复草稿、保存失败或损坏的草稿及临时文件；当前打开的会话不会被清理。':'Automatically remove unaccepted recovery drafts, failed-save or damaged drafts, and temporary files after the retention period. Currently open sessions are excluded.',
+ '请输入 1 到 365 的整数。':'Enter a whole number from 1 to 365.',
+ '打开缓存目录':'Open cache folder',
+ '清理过期缓存':'Clean expired cache',
+ '仅清理超过保留时间的缓存，保留当前打开会话的草稿。':'Only remove cache past its retention period; keep drafts for currently open sessions.',
+ '无法打开缓存目录，请检查目录权限后重试。':'Unable to open the cache folder. Check folder permissions and try again.',
+ '无法清理过期缓存，请稍后重试。':'Unable to clean expired cache. Please try again later.',
+ '恢复草稿损坏，原始文件已保留。':'The recovery draft is damaged. Its original file has been kept.',
+ '恢复 Notebook 草稿':'Recover notebook draft',
+ '恢复草稿读写失败：{error}':'Unable to read or write recovery draft: {error}',
+ '找到本设备未保存草稿。是否恢复到编辑器？取消会保留草稿。':'An unsaved draft was found on this device. Restore it in the editor? Cancel keeps the draft.',
+ '找到本设备未保存草稿，但磁盘文件已改变。是否恢复到编辑器？保存仍检查当前磁盘版本；取消会保留草稿。':'An unsaved draft was found, but the file on disk has changed. Restore it in the editor? Saving still checks the current disk version; Cancel keeps the draft.',
+
  '当前 Dataview 版本不支持 Notebook 属性索引，请更新 Dataview。':'This Dataview version does not support notebook properties. Update Dataview.',
  'Notebook 属性':'Notebook properties','Notebook YAML 无法解析：{error}':'Unable to parse notebook YAML: {error}',
  '请等待当前运行结束后再修改仓库环境。':'Wait for execution to finish before changing the vault environment.',

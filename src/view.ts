@@ -1,3 +1,5 @@
+import {RecoveryDrafts,recoveryHash,type RecoveryDraft} from './recovery-drafts';
+import {recoveryCacheDirectory} from './recovery-cache';
 import {renderStaticOutputMarkdown} from './output-markdown';
 import {createTranslator,type Translator} from './i18n';
 import {parseNotebookProperties} from './notebook-properties';
@@ -13,6 +15,7 @@ import {EnvironmentPicker,confirm} from './settings';
 import {environmentName,belongsToEnvironmentDirectory} from './environments';
 export const NOTEBOOK_VIEW='native-ipynb';
 export class NotebookView extends FileView{
+ private recoveredDraft?:RecoveryDraft;private recovery?:RecoveryDrafts;private recoveryTimer?:number;private recoveryBaseline='';private recoveryNotebook?:Notebook;
  private importTimer?:number;private importController?:AbortController;private importGeneration=0;private importKey='';
  private session?:NotebookSession;private editor?:NotebookEditor;
  private kernel?:KernelClient;private starting?:Promise<KernelClient>;
@@ -32,7 +35,7 @@ export class NotebookView extends FileView{
  async onLoadFile(file:TFile):Promise<void>{
   this.disposed=false;this.importKey='';
   const text=await this.app.vault.read(file);
-  try{this.loadNotebook(text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
+  try{this.loadNotebook(text);await this.openRecovery(file,text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
  }
  private loadNotebook(text:string):void{
   const session=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});
@@ -52,7 +55,45 @@ export class NotebookView extends FileView{
    outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
    outputActions:{imageName:()=>this.file?.basename??'Notebook',save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
   },state);
+  const changed=session.onChange;session.onChange=()=>{changed();this.scheduleRecovery()};
   this.scheduleImportCheck(true);
+ }
+ private recoveryError(error:unknown):void{new Notice(this.t('恢复草稿读写失败：{error}',{error:this.t(error instanceof Error?error.message:String(error))}),10000)}
+ private async openRecovery(file:TFile,text:string):Promise<void>{
+  this.recovery?.release();this.recovery=undefined;this.recoveredDraft=undefined;this.recoveryNotebook=undefined;this.recoveryBaseline=recoveryHash(text);
+  const vaultRoot=this.plugin.vaultRoot?.();
+  if(Platform.isMobile||!(this.app.vault.adapter instanceof FileSystemAdapter)||!vaultRoot||!this.plugin.manifest?.id||!this.plugin.deviceId)return;
+  const opening=this.session;await this.plugin.cleanRecoveryCache?.(false);
+  if(this.disposed||this.session!==opening||this.file!==file)return;
+  this.recovery=new RecoveryDrafts(recoveryCacheDirectory(vaultRoot,this.plugin.manifest.id,this.plugin.deviceId),file.path);
+  const recovery=this.recovery,initialSession=this.session;
+  try{
+   const drafts=await recovery.list(true);if(this.recovery!==recovery||this.session!==initialSession||this.file!==file||this.disposed)return;for(const error of recovery.errors)this.recoveryError(error);
+   for(const draft of drafts){
+    if(draft.text===text)continue;
+    const message=this.t(draft.baselineHash===recoveryHash(text)?'找到本设备未保存草稿。是否恢复到编辑器？取消会保留草稿。':'找到本设备未保存草稿，但磁盘文件已改变。是否恢复到编辑器？保存仍检查当前磁盘版本；取消会保留草稿。');
+    const session=this.session,notebook=session?.notebook;if(await confirm(this.app,this.t('恢复 Notebook 草稿'),message,this.t)){
+     if(this.disposed||this.file!==file||this.session!==session||session?.notebook!==notebook)return;
+     this.recoveredDraft=draft;const restored=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});restored.change(new NotebookSession(draft.text).notebook);this.session=restored;this.loadedNotebook=new NotebookSession(text).notebook;this.trustedSession=false;this.createEditor(restored);this.scheduleRecovery();break;
+    }
+   }
+  }catch(error){this.recoveryError(error)}
+ }
+ private scheduleRecovery():void{
+  if(this.recoveryTimer!==undefined||!this.recovery||this.disposed)return;
+  this.recoveryTimer=window.setTimeout(()=>{this.recoveryTimer=undefined;void this.flushRecovery()},1000);
+ }
+ private async flushRecovery():Promise<void>{
+  window.clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined;const session=this.session,recovery=this.recovery;
+  if(!session||!recovery)return;
+  const notebook=session.notebook;
+  if(!session.dirty){
+   const current=()=>this.session===session&&this.recovery===recovery&&session.notebook===notebook&&!session.dirty;
+   try{await recovery.clear(current);if(current())this.recoveryNotebook=undefined}catch(error){this.recoveryError(error)}
+   return;
+  }
+  if(notebook===this.recoveryNotebook)return;
+  try{await recovery.write(serializeNotebook(notebook),this.recoveryBaseline);if(this.recovery===recovery&&this.session===session)this.recoveryNotebook=notebook}catch(error){this.recoveryError(error)}
  }
  private async saveOutput(content:string,mime:string,filename:string):Promise<void>{
   if(this.disposed||!this.file)throw new Error(this.t('Notebook 已关闭。'));
@@ -129,7 +170,15 @@ export class NotebookView extends FileView{
  async save():Promise<void>{
   this.requireDesktop();
   const file=this.file,session=this.session;if(!file||!session)return;
+  const savedNotebook=session.notebook,recovery=this.recovery,recoveredDraft=this.recoveredDraft;
   await session.save({read:()=>this.app.vault.read(file),write:async(text,expected)=>{await this.app.vault.process(file,current=>{assertUnchanged(expected,current);return text})}});
+  const current=()=>this.session===session&&this.file===file&&this.recovery===recovery;
+  if(!current())return;
+  this.recoveryBaseline=recoveryHash(session.savedText);
+  if(recovery){try{
+   if(recoveredDraft){await recovery.removeRecovered(recoveredDraft);if(!current())return;this.recoveredDraft=undefined}
+   if(!session.dirty){await recovery.clear(()=>current()&&!session.dirty&&session.notebook===savedNotebook);if(current())this.recoveryNotebook=undefined}else await this.flushRecovery();
+  }catch(error){this.recoveryError(error)}}
  }
  async saveCopy():Promise<void>{
   this.requireDesktop();
@@ -147,7 +196,9 @@ export class NotebookView extends FileView{
    if(session.dirty&&!await confirm(this.app,this.t('重新加载 Notebook'),this.t('当前有未保存修改。确认后将读取磁盘文件并放弃当前编辑。'),this.t))return;
    const text=await this.app.vault.read(file);
    if(this.disposed||this.session!==session||this.file!==file)throw new Error(this.t('Notebook 已关闭或切换。'));
-   this.loadNotebook(text);
+   if(this.recovery){try{await this.recovery.clear()}catch(error){this.recoveryError(error)}}
+   if(this.disposed||this.session!==session||this.file!==file)throw new Error(this.t('Notebook 已关闭或切换。'));
+   this.recoveryBaseline=recoveryHash(text);this.recoveryNotebook=undefined;this.recoveredDraft=undefined;window.clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined;this.loadNotebook(text);
   }finally{unlock()}
  }
  private projectDir():string|undefined{
@@ -288,6 +339,7 @@ export class NotebookView extends FileView{
  async onClose():Promise<void>{await this.dispose()}
  private async dispose():Promise<void>{
   if(this.disposed)return;this.disposed=true;this.stopAll=true;window.clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;
+  await this.flushRecovery();
   const starting=this.starting;
   try{
    try{await this.kernel?.close();if(starting)await starting.catch(()=>{})}
@@ -300,6 +352,6 @@ export class NotebookView extends FileView{
     }
    }
   }catch(error){this.disposed=false;throw error}
-  this.finishEnvironmentRemoval();this.kernel=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
+  window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
  }
 }

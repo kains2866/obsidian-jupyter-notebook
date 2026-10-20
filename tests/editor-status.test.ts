@@ -128,3 +128,17 @@ it('structural pruning retains current cell state and drops deleted cell caches'
  const editor:any=Object.create(NotebookEditor.prototype);const cell={};Object.assign(editor,{session:{notebook:{cells:[cell]}},identities:new WeakMap([[cell,'keep']]),savedSelections:new Map([['keep',{}],['deleted',{}]]),outputSnapshots:new Map([['keep',{}],['deleted',{}]])});
  editor.pruneCellState();expect([...editor.savedSelections.keys()]).toEqual(['keep']);expect([...editor.outputSnapshots.keys()]).toEqual(['keep']);
 });
+
+it('Markdown toggles remount only its own cell',()=>{
+ const editor:any=Object.create(NotebookEditor.prototype);const cell={cell_type:'markdown'};
+ Object.assign(editor,{session:{notebook:{cells:[cell]}},identities:new WeakMap([[cell,'markdown']]),preview:new Set(['markdown']),remountCell:vi.fn(),renderCells:vi.fn(),focusCell:vi.fn()});
+ editor.editMarkdown(0);expect(editor.remountCell).toHaveBeenCalledWith(0);expect(editor.renderCells).not.toHaveBeenCalled();expect(editor.focusCell).toHaveBeenCalledWith(0);
+});
+
+it('missing or duplicate notebook ids still receive distinct stable identities',()=>{
+ const editor:any=Object.create(NotebookEditor.prototype);Object.assign(editor,{identities:new WeakMap(),identitySequence:0});
+ const cells=[{id:'duplicate'},{id:'duplicate'},{}];const ids=cells.map(cell=>editor.cellIdentity(cell));expect(new Set(ids).size).toBe(3);expect(editor.cellIdentity(cells[1])).toBe(ids[1]);
+});
+it('structural session notifications cannot bind old nodes to the next cells',()=>{
+ const editor:any=Object.create(NotebookEditor.prototype);editor.structureChanging=true;editor.enableVirtualization=vi.fn();editor.refresh();expect(editor.enableVirtualization).not.toHaveBeenCalled();
+});

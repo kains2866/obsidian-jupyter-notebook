@@ -2,7 +2,7 @@ import {renderStaticOutputMarkdown} from '../src/output-markdown';
 import {undo as undoCode} from '@codemirror/commands';
 import {richOutputFixture} from './rich-output-fixture';
 import {largeNotebookFixture} from './large-notebook-fixture';
-import {editCell} from '../src/notebook';
+import {editCell,moveCell} from '../src/notebook';
 import {createTranslator} from '../src/i18n';
 import {NotebookEditor} from '../src/editor';import {NotebookSession} from '../src/session';
 import type {Output} from '../src/notebook';
@@ -17,6 +17,7 @@ let disk=JSON.stringify({nbformat:4,nbformat_minor:5,metadata:{},cells:[{id:'int
 if(new URLSearchParams(location.search).has('large'))disk=JSON.stringify(largeNotebookFixture());
 if(new URLSearchParams(location.search).has('charts')){const n=JSON.parse(disk);disk=JSON.stringify({...n,cells:n.cells.map((c:any,i:number)=>i%10===1?{...c,outputs:richOutputFixture.cells[1].outputs}:c)})}
 if(new URLSearchParams(location.search).has('outputs'))disk=JSON.stringify(richOutputFixture);
+if(new URLSearchParams(location.search).has('heavy'))disk=JSON.stringify({...richOutputFixture,cells:Array.from({length:40},(_,index)=>({...richOutputFixture.cells[1],id:`heavy-${index}`,source:`# Tall saved chart ${index+1}`}))});
 if(new URLSearchParams(location.search).has('demo')){const fixture=document.getElementById('preview-notebook')?.textContent;if(fixture)disk=fixture}
 const session=new NotebookSession(disk);
 let previewKernelState:'stopped'|'starting'|'busy'|'idle'='idle';
@@ -57,6 +58,17 @@ let ticks=0;setInterval(()=>{diagnostics.textContent=`ready ${Math.round(perform
  setKernelState:(state:typeof previewKernelState)=>{previewKernelState=state;editor.refresh()},
  setExecution:(state:typeof previewExecution)=>{previewExecution=state;editor.refresh()},
  setImports:(statuses:import('../src/editor').ImportStatus[])=>editor.setImportStatuses(statuses),
+ incrementalProbe:()=>{
+  const internal=editor as any;const codeIndex=session.notebook.cells.findIndex(cell=>cell.cell_type==='code');const markdownIndex=session.notebook.cells.findIndex(cell=>cell.cell_type==='markdown');if(codeIndex<0||markdownIndex<0)return {error:'requires code and markdown'};
+  editor.focusCell(codeIndex);const code=internal.editors[codeIndex];const original=code.state.doc.toString();const node=internal.cellNodes[codeIndex];code.dispatch({changes:{from:code.state.doc.length,insert:'\n# local-update-probe'}});
+  internal.editMarkdown(markdownIndex);const markdown=internal.editors[markdownIndex];const markdownSource=markdown.state.doc.toString();markdown.dispatch({changes:{from:markdown.state.doc.length,insert:'\nmarkdown history probe'}});internal.preview.add(internal.cellIdentity(session.notebook.cells[markdownIndex]));internal.remountCell(markdownIndex);internal.editMarkdown(markdownIndex);
+  const markdownUndo=undoCode(internal.editors[markdownIndex])&&internal.editors[markdownIndex].state.doc.toString()===markdownSource;
+  const codeRetained=internal.editors[codeIndex]===code&&internal.cellNodes[codeIndex]===node;const codeUndo=undoCode(code)&&code.state.doc.toString()===original;
+  internal.structure(()=>moveCell(session.notebook,codeIndex,markdownIndex));const movedIndex=session.notebook.cells.findIndex(cell=>internal.cellIdentity(cell)===node.dataset.cellId);const moveRetained=internal.editors[movedIndex]===code&&internal.cellNodes[movedIndex]===node;
+  const oldRun=actions.run;let clickedIndex=-1;actions.run=async(index)=>{clickedIndex=index};internal.cellNodes[movedIndex].querySelector('[data-action="运行单元格"]').click();actions.run=oldRun;
+  internal.historyChange(()=>session.undo());const undoRetained=internal.editors[codeIndex]===code&&internal.cellNodes[codeIndex]===node;
+  return {markdownUndo,codeRetained,codeUndo,moveRetained,clickedIndex,movedIndex,undoRetained};
+ },
  metrics:()=>({cells:session.notebook.cells.length,bytes:disk.length,scrollTop:root.scrollTop,scrollHeight:root.scrollHeight,mountedEditors:root.querySelectorAll('.cm-editor').length,pendingCells:root.querySelectorAll('.ipynb-cell-pending').length,dirty:session.dirty}),
  editAndUndo:()=>{const index=1;const before=session.notebook.cells[index].source;const started=performance.now();session.change(editCell(session.notebook,index,{source:String(before)+'\n# performance edit'}));const edited=performance.now();session.undo();return {editMs:edited-started,undoMs:performance.now()-edited,restored:session.notebook.cells[index].source===before}},
 };
@@ -72,6 +84,8 @@ if(new URLSearchParams(location.search).has('harness')){
  button('可选缺失',()=>editor.setImportStatuses([{modules:['numpy'],missing:[],optional:['pandas']}]));
  button('编辑与撤销计时',()=>(window as any).previewHarness.editAndUndo());
  button('释放并重建',()=>{const state=editor.captureState();editor.destroy();const released={editors:root.querySelectorAll('.cm-editor').length,outputs:root.querySelectorAll('.ipynb-output-item').length,dialogs:document.querySelectorAll('.ipynb-image-dialog').length};editor=new NotebookEditor(root,session,actions,state);return {released,mounted:root.querySelectorAll('.cm-editor').length}});
+ button('局部更新回归验证',()=>(window as any).previewHarness.incrementalProbe());
+ button('追加大图输出验证',()=>{const index=session.notebook.cells.findIndex(cell=>cell.cell_type==='code');const retained=(editor as any).editors[index];session.change(editCell(session.notebook,index,{outputs:Array.from({length:15},()=>richOutputFixture.cells[1].outputs![0])}));return {editorRetained:retained===(editor as any).editors[index],virtualized:(editor as any).virtualized,cells:session.notebook.cells.length}});
  button('文档统计',()=>(window as any).previewHarness.metrics());
  let recyclingSource:string|undefined;
  button('首块写入回收测试',()=>{editor.focusCell(1);const view=(editor as any).editors[1];if(!view)return {error:'no editor'};recyclingSource=view.state.doc.toString();view.dispatch({changes:{from:view.state.doc.length,insert:'\n# recycle-history-probe'}});return {edited:true,sourceLength:view.state.doc.length}});

@@ -2,7 +2,7 @@ const trust=vi.hoisted(()=>({isNotebookTrusted:vi.fn(async()=>true),rememberNote
 vi.mock('../src/notebook-trust',()=>trust);
 vi.mock('../src/script-assets',()=>({ensurePythonScripts:async(directory:string)=>({bridge:directory+'/kernel_bridge.py',checker:directory+'/import_check.py'})}));
 import {describe,it,expect,vi} from 'vitest';
-vi.mock('../src/editor',()=>({NotebookEditor:class{actions:any;constructor(_root:any,_session:any,actions:any){this.actions=actions}destroy(){}refresh(){}showMessage(){}perform(action:()=>unknown){return action()}}}));
+vi.mock('../src/editor',()=>({NotebookEditor:class{actions:any;session:any;constructor(_root:any,_session:any,actions:any){this.actions=actions;this.session=_session}destroy(){}refresh(){}showMessage(){}perform(action:()=>unknown){return action()}}}));
 const kernelMock=vi.hoisted(()=>({start:vi.fn(async()=>{}),close:vi.fn(async()=>{}),execute:vi.fn(async()=>({status:'ok',execution_count:1})),interrupt:vi.fn(async()=>{}),restart:vi.fn(async()=>{})}));
 vi.mock('../src/environment-manager',()=>({EnvironmentManager:class{async validate(){return {missing:[]}}}}));
 vi.mock('../src/kernel',()=>({KernelClient:class{start=kernelMock.start;close=kernelMock.close;execute=kernelMock.execute;interrupt=kernelMock.interrupt;restart=kernelMock.restart}}));
@@ -115,3 +115,42 @@ it('saves images and text through Obsidian attachment paths without overwriting'
 });
 
 it('disposing an offscreen Markdown host releases only its component',async()=>{const {view}=setup();const a={},b={};await view.renderNotebookMarkdown(view.session,'first',a);await view.renderNotebookMarkdown(view.session,'second',b);expect(view.markdownChildren).toHaveLength(2);view.disposeMarkdown(a);expect(view.markdownChildren).toHaveLength(1);view.disposeMarkdown(a);expect(view.markdownChildren).toHaveLength(1);view.clearMarkdown();expect(view.markdownChildren).toHaveLength(0)});
+
+it('recovery retains latest dirty edits during save race and failed saves',async()=>{
+ const {view,app}=setup();await view.onLoadFile(view.file);
+ const write=vi.fn(async()=>{}),clear=vi.fn(async()=>{});view.recovery={write,clear};
+ view.session.change(editCell(view.session.notebook,0,{source:'first'}));
+ let finish!:()=>void;app.vault.process=async()=>{await new Promise<void>(r=>{finish=r})};
+ const save=view.save();await Promise.resolve();view.session.change(editCell(view.session.notebook,0,{source:'second'}));finish();await save;
+ expect(clear).not.toHaveBeenCalled();expect(JSON.parse((write.mock.calls as unknown as [string][])[0][0]).cells[0].source).toBe('second');
+ app.vault.read=async()=>'{external}';await expect(view.save()).rejects.toThrow();expect(clear).not.toHaveBeenCalled();
+ window.clearTimeout(view.recoveryTimer);
+});
+it('reopen recovery uses current disk baseline and asks about external changes',async()=>{
+ const {view,app}=setup();const {RecoveryDrafts,recoveryHash}=await import('../src/recovery-drafts');
+ const list=vi.spyOn(RecoveryDrafts.prototype,'list').mockResolvedValue([{version:1,path:'测试.ipynb',session:'prior',updated:1,baselineHash:recoveryHash('old disk'),text:data.replace('42','recovered')}]);
+ try{await view.onLoadFile(view.file);expect(view.session.notebook.cells[0].source).toBe('recovered');expect((picker.confirm.mock.calls as unknown as [unknown,unknown,string][]).at(-1)?.[2]).toContain('磁盘文件已改变');expect(app.vault.process).not.toHaveBeenCalled();app.vault.read=async()=>data+' ';await expect(view.save()).rejects.toThrow();expect(view.session.dirty).toBe(true)}finally{list.mockRestore();window.clearTimeout(view.recoveryTimer);view.recovery?.release()}
+});
+it('continuous changes flush on the first one second deadline',async()=>{
+ vi.useFakeTimers();const {view}=setup();await view.onLoadFile(view.file);const write=vi.fn(async()=>{});view.recovery={write};
+ try{view.session.change(editCell(view.session.notebook,0,{source:'first'}));await vi.advanceTimersByTimeAsync(700);view.session.change(editCell(view.session.notebook,0,{source:'latest'}));await vi.advanceTimersByTimeAsync(300);expect(write).toHaveBeenCalledTimes(1);expect(JSON.parse((write.mock.calls as unknown as [string][])[0][0]).cells[0].source).toBe('latest')}finally{window.clearTimeout(view.recoveryTimer);vi.useRealTimers()}
+});
+it('edits made during a recovery confirmation are never overwritten',async()=>{
+ const {view}=setup();const {RecoveryDrafts,recoveryHash}=await import('../src/recovery-drafts');const list=vi.spyOn(RecoveryDrafts.prototype,'list').mockResolvedValue([{version:1,path:'测试.ipynb',session:'prior',updated:1,baselineHash:recoveryHash(data),text:data.replace('42','draft')}]);
+ picker.confirm.mockImplementationOnce(async()=>{view.session.change(editCell(view.session.notebook,0,{source:'typed during dialog'}));return true});
+ try{await view.onLoadFile(view.file);expect(view.session.notebook.cells[0].source).toBe('typed during dialog')}finally{list.mockRestore();window.clearTimeout(view.recoveryTimer);view.recovery?.release()}
+});
+it('explicit reload clears only owned draft and resets recovery baseline',async()=>{
+ const {view,app}=setup();await view.onLoadFile(view.file);view.session.change(editCell(view.session.notebook,0,{source:'discard'}));const clear=vi.fn(async()=>{});view.recovery={clear};view.recoveredDraft={session:'unaccepted-file-kept'};
+ const updated=data.replace('42','disk update');app.vault.read=async()=>updated;await view.reload();const {recoveryHash}=await import('../src/recovery-drafts');expect(clear).toHaveBeenCalledOnce();expect(view.recoveryBaseline).toBe(recoveryHash(updated));expect(view.recoveredDraft).toBeUndefined();expect(view.editor.session.notebook.cells[0].source).toBe('disk update');window.clearTimeout(view.recoveryTimer);
+});
+it('a slow save for file A never clears file B recovery state after switching',async()=>{
+ const {view,app}=setup();view.session.change(editCell(view.session.notebook,0,{source:'A edit'}));const a={clear:vi.fn(async()=>{})};view.recovery=a;
+ let finish!:()=>void;app.vault.process=async()=>{await new Promise<void>(r=>{finish=r})};const save=view.save();await Promise.resolve();
+ const b=new NotebookSession(data);b.change(editCell(b.notebook,0,{source:'B unsaved'}));const bStore={clear:vi.fn(async()=>{}),removeRecovered:vi.fn(async()=>{})};view.file={path:'B.ipynb',basename:'B'};view.session=b;view.recovery=bStore;view.recoveryBaseline='B baseline';view.recoveredDraft={session:'B draft'};finish();await save;
+ expect(bStore.clear).not.toHaveBeenCalled();expect(bStore.removeRecovered).not.toHaveBeenCalled();expect(view.recoveryBaseline).toBe('B baseline');expect(view.recoveredDraft.session).toBe('B draft');expect(b.dirty).toBe(true);
+});
+it('undo to saved state clears only owned draft and guards edits queued during clear',async()=>{
+ const {view}=setup();const clear=vi.fn(async(check:()=>boolean)=>{expect(check()).toBe(true)});view.recovery={clear};view.session.change(editCell(view.session.notebook,0,{source:'discarded by undo'}));view.session.undo();expect(view.session.dirty).toBe(false);await view.flushRecovery();expect(clear).toHaveBeenCalledOnce();
+ let mayDelete=true;view.recovery={clear:async(check:()=>boolean)=>{view.session.change(editCell(view.session.notebook,0,{source:'new edit during cleanup'}));mayDelete=check()}};await view.flushRecovery();expect(mayDelete).toBe(false);expect(view.session.notebook.cells[0].source).toBe('new edit during cleanup');window.clearTimeout(view.recoveryTimer);
+});

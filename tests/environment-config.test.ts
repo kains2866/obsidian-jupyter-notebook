@@ -3,3 +3,5 @@ import {syncedEnvironmentSettings} from '../src/environment-config';
 it('同步配置只包含仓库标识，绝不泄漏本机解释器路径',()=>{
  expect(syncedEnvironmentSettings({vaultId:'vault-123',bridgePython:'/private/bridge',kernelPython:'/private/kernel'})).toEqual({vaultId:'vault-123'});
 });
+
+it('同步缓存保留偏好但不包含解释器路径',()=>{expect(syncedEnvironmentSettings({vaultId:'v',bridgePython:'/bridge',kernelPython:'/kernel',recoveryRetentionDays:30})).toEqual({vaultId:'v',recoveryRetentionDays:30})});

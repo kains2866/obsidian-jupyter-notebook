@@ -177,6 +177,8 @@ status: Learning
 ---
 ```
 
+The current source includes an experimental native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Editing properties reserializes YAML, so comments and quoting may change; nested values remain available in YAML source. This does not add core sidebar, graph, or Bases indexing.
+
 After saving, the properties can be queried by an enabled Dataview plugin. For example, add this to a Markdown cell or a regular note:
 
 ````markdown
@@ -188,7 +190,7 @@ FROM #Python
 
 Markdown previews style HTML `div` containers and Jupyter-style `alert` blocks with theme-aware backgrounds and borders. Success, information, warning, and danger variants use the current theme colors.
 
-Markdown cell previews can display query results. The plugin provides an in-memory adapter for indexing Notebook properties. It does not modify Obsidian's core metadata cache or integrate with the native Properties panel. The Dataview adapter relies on internal interfaces and has been verified with **0.5.68**. If incompatible, it reports the issue and safely skips indexing.
+Markdown cell previews can display query results. The plugin provides an in-memory adapter for indexing Notebook properties. It does not modify Obsidian's core metadata cache or the core File properties sidebar. The Dataview adapter relies on internal interfaces and has been verified with **0.5.68**. If incompatible, it reports the issue and safely skips indexing.
 
 Notebooks retain standard nbformat structure, including unknown metadata and fields. When opened in Jupyter or VS Code, YAML remains ordinary Markdown content and does not affect Python execution. Dataview queries work only in an Obsidian environment with Dataview enabled.
 

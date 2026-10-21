@@ -4,7 +4,8 @@ import {recoveryCacheDirectory} from './recovery-cache';
 import {renderStaticOutputMarkdown} from './output-markdown';
 import {createTranslator,type Translator} from './i18n';
 import {parseNotebookProperties} from './notebook-properties';
-import {renderPropertyPreview} from './property-preview';
+import {NotebookPropertiesEditor} from './native-properties';
+import {updateNotebookProperties} from './notebook-property-edit';
 import {detectMissingDependency} from './missing-dependency';
 import {FileView,FileSystemAdapter,Notice,MarkdownRenderer,sanitizeHTMLToDom,Component,Platform,type WorkspaceLeaf,type TFile} from 'obsidian';
 import type NotebookPlugin from './main';
@@ -26,6 +27,7 @@ export class NotebookView extends FileView{
  private kernelBridgePython?:string;
  private confirmingRestart=false;
  private disposed=false;private runAllActive=false;private stopAll=false;
+ private propertiesEditor?:NotebookPropertiesEditor;private propertiesSource?:string;
  private markdownChildren:Component[]=[];
  private markdownHosts=new Map<HTMLElement,Component>();
  private removalUnlock?:()=>void;
@@ -44,21 +46,40 @@ export class NotebookView extends FileView{
   this.session=session;this.loadedNotebook=session.notebook;this.trustedSession=false;this.lastExecution=undefined;this.createEditor(session);
  }
  private createEditor(session:NotebookSession,state?:import('./editor').EditorSnapshot):void{
+  this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.propertiesSource=undefined;
   this.editor?.destroy();this.clearMarkdown();
   this.editor=new NotebookEditor(this.contentEl,session,{
    translate:this.t,confirm:(title,message)=>confirm(this.app,title,message,this.t),
-   notebookChanged:()=>this.scheduleImportCheck(),retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
+   notebookChanged:()=>{this.scheduleImportCheck();this.syncProperties(session)},retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
    readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
    kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),disposeMarkdown:parent=>this.disposeMarkdown(parent),
    markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
+   properties:parent=>{
+    this.propertiesEditor=new NotebookPropertiesEditor(this.app,this.leaf,this,parent,{
+     getFile:()=>this.file,translate:this.t,focus:()=>this.editor?.focusCell(0),error:error=>this.editor?.showMessage(this.t(String(error))),
+     change:properties=>{this.guardPropertyChange(session);const next=updateNotebookProperties(session.notebook,properties);if(next!==session.notebook)this.editor?.applyProperties(next)},
+     undo:()=>{this.guardPropertyChange(session);this.editor?.propertyHistory()},redo:()=>{this.guardPropertyChange(session);this.editor?.propertyHistory(true)},
+    });this.syncProperties(session);
+   },
    outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
    outputActions:{imageName:()=>this.file?.basename??'Notebook',save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
   },state);
   const changed=session.onChange;session.onChange=()=>{changed();this.scheduleRecovery()};
   this.scheduleImportCheck(true);
+ }
+ private guardPropertyChange(session:NotebookSession):void{
+  this.requireDesktop();if(this.disposed||this.session!==session)throw new Error(this.t('Notebook 已关闭或切换。'));
+  if(session.running||session.busy||this.runAllActive||this.starting)throw new Error(this.t('请等待当前运行结束后再修改 Notebook 属性。'));
+ }
+ private syncProperties(session:NotebookSession):void{
+  if(!this.propertiesEditor||this.disposed||this.session!==session)return;
+  this.propertiesEditor.setDisabled(Platform.isMobile||session.running||session.busy||this.runAllActive||!!this.starting);
+  const first=session.notebook.cells.find(cell=>cell.cell_type==='markdown');const source=first?sourceText(first):'';
+  if(source===this.propertiesSource)return;this.propertiesSource=source;
+  const result=parseNotebookProperties(session.notebook);this.propertiesEditor.update(result.properties,result.error);
  }
  private recoveryError(error:unknown):void{new Notice(this.t('恢复草稿读写失败：{error}',{error:this.t(error instanceof Error?error.message:String(error))}),10000)}
  private async openRecovery(file:TFile,text:string):Promise<void>{
@@ -144,7 +165,6 @@ export class NotebookView extends FileView{
   if(first&&sourceText(first)===text){
    const result=parseNotebookProperties(session.notebook);
    if(result.properties){
-    renderPropertyPreview(parent,result.properties,this.t('Notebook 属性'));
     body=text.replace(/^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/,'');
    }else if(result.error)parent.createEl('p',{cls:'ipynb-properties-error',text:this.t('Notebook YAML 无法解析：{error}',{error:result.error})});
   }
@@ -357,6 +377,6 @@ export class NotebookView extends FileView{
     }
    }
   }catch(error){this.disposed=false;throw error}
-  window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
+  window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
  }
 }

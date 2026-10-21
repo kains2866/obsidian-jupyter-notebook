@@ -1,0 +1,17 @@
+import {expect,it} from 'vitest';
+import {updateNotebookProperties} from '../src/notebook-property-edit';
+import {parseNotebook,serializeNotebook,type Notebook} from '../src/notebook';
+const codec={parse:JSON.parse,stringify:(value:unknown)=>JSON.stringify(value)+'\n'};
+function fixture(source='---\n{"title":"Old"}\n---\n\n# Body\nKeep exactly\n'):Notebook{return {nbformat:4,nbformat_minor:5,metadata:{custom:true},vendor:'keep',cells:[{id:'code',cell_type:'code',metadata:{custom:1},source:'print(1)',outputs:[],execution_count:null},{id:'md',cell_type:'markdown',metadata:{keep:1},source,attachments:{'a.png':{'image/png':'AA=='}}}]}}
+it('changes only Markdown YAML while preserving body, attachments, unknown fields and code identity',()=>{const n=fixture();const before=serializeNotebook(n);const updated=updateNotebookProperties(n,{title:'New'},codec);expect(updated.cells[1].source).toBe('---\n{"title":"New"}\n---\n\n# Body\nKeep exactly\n');expect(updated.cells[0]).toBe(n.cells[0]);expect(updated.cells[1].attachments).toEqual(n.cells[1].attachments);expect(updated.metadata).toBe(n.metadata);expect(updated.vendor).toBe('keep');expect(serializeNotebook(n)).toBe(before);expect(parseNotebook(serializeNotebook(updated))).toEqual(updated)});
+it('preserves existing CRLF body and uses CRLF YAML delimiters',()=>{const n=fixture('---\r\n{"title":"Old"}\r\n---\r\n\r\n# Body\r\n');expect(updateNotebookProperties(n,{title:'New'},codec).cells[1].source).toBe('---\r\n{"title":"New"}\r\n---\r\n\r\n# Body\r\n')});
+it('adds YAML to a Markdown cell without changing its body',()=>{expect(updateNotebookProperties(fixture('# Body\n'),{title:'New'},codec).cells[1].source).toBe('---\n{"title":"New"}\n---\n\n# Body\n')});
+it('creates a standard Markdown cell when the notebook has only executable code',()=>{const original=fixture();const n={...original,cells:[original.cells[0]]};const next=updateNotebookProperties(n,{title:'New'},codec);expect(next.cells.map(cell=>cell.cell_type)).toEqual(['markdown','code']);expect(next.cells[1]).toBe(n.cells[0]);expect(next.cells[0]).not.toHaveProperty('outputs');expect(parseNotebook(serializeNotebook(next))).toEqual(next)});
+it('removing all properties retains the exact body and refuses malformed existing YAML',()=>{expect(updateNotebookProperties(fixture(),{},codec).cells[1].source).toBe('\n# Body\nKeep exactly\n');expect(()=>updateNotebookProperties(fixture('---\n[broken\n---\nBody'),{title:'New'},codec)).toThrow();expect(()=>updateNotebookProperties(fixture('---\n[broken'),{title:'New'},codec)).toThrow()});
+it('does not create an empty YAML cell or mutate the notebook for unchanged properties',()=>{const n=fixture();expect(updateNotebookProperties(n,{title:'Old'},codec)).toBe(n);const codes={...n,cells:[n.cells[0]]};expect(updateNotebookProperties(codes,{},codec)).toBe(codes)});
+it('rejects dangerous keys, non-record roots and invalid serialized properties',()=>{const n=fixture();expect(()=>updateNotebookProperties(n,JSON.parse('{"__proto__":{}}'),codec)).toThrow();expect(()=>updateNotebookProperties(n,[] as unknown as Record<string,unknown>,codec)).toThrow()});
+it('preserves serializer trailing blank lines which can be meaningful in YAML block strings',()=>{
+ const n=fixture('# Body');const value={text:'hello\n\n'};const yaml='text: |+\n  hello\n\n';
+ const next=updateNotebookProperties(n,value,{parse:()=>value,stringify:()=>yaml});
+ expect(next.cells[1].source).toBe('---\n'+yaml+'---\n\n# Body');
+});

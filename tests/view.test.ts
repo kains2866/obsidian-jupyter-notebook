@@ -2,7 +2,8 @@ const trust=vi.hoisted(()=>({isNotebookTrusted:vi.fn(async()=>true),rememberNote
 vi.mock('../src/notebook-trust',()=>trust);
 vi.mock('../src/script-assets',()=>({ensurePythonScripts:async(directory:string)=>({bridge:directory+'/kernel_bridge.py',checker:directory+'/import_check.py'})}));
 import {describe,it,expect,vi} from 'vitest';
-vi.mock('../src/editor',()=>({NotebookEditor:class{actions:any;session:any;constructor(_root:any,_session:any,actions:any){this.actions=actions;this.session=_session}destroy(){}refresh(){}showMessage(){}perform(action:()=>unknown){return action()}}}));
+vi.mock('../src/native-properties',()=>({NotebookPropertiesEditor:class{constructor(_app:any,_leaf:any,_parent:any,_host:any,public hooks:any){}update=vi.fn();setDisabled=vi.fn();destroy=vi.fn()}}));
+vi.mock('../src/editor',()=>({NotebookEditor:class{actions:any;session:any;constructor(_root:any,_session:any,actions:any){this.actions=actions;this.session=_session}destroy(){}refresh(){}applyProperties(next:any){this.session.structure(next)}propertyHistory(redo=false){redo?this.session.redo():this.session.undo()}showMessage(){}perform(action:()=>unknown){return action()}}}));
 const kernelMock=vi.hoisted(()=>({start:vi.fn(async()=>{}),close:vi.fn(async()=>{}),execute:vi.fn(async()=>({status:'ok',execution_count:1})),interrupt:vi.fn(async()=>{}),restart:vi.fn(async()=>{})}));
 vi.mock('../src/environment-manager',()=>({EnvironmentManager:class{async validate(){return {missing:[]}}}}));
 vi.mock('../src/kernel',()=>({KernelClient:class{start=kernelMock.start;close=kernelMock.close;execute=kernelMock.execute;interrupt=kernelMock.interrupt;restart=kernelMock.restart}}));
@@ -166,4 +167,15 @@ it('依赖调度复用未变 source，重排不串位且强制刷新清缓存',(
   const clear=vi.spyOn(view.importChecker,'clear');view.scheduleImportCheck(true);expect(clear).toHaveBeenCalled();
   expect(view.importGeneration).toBe(generation+1);
  }finally{vi.useRealTimers();vi.restoreAllMocks()}
+});
+
+function propertyView(){const s=setup();s.view.createEditor(s.view.session);s.view.editor.actions.properties({});return s}
+it('native Properties writes standard Markdown YAML through the same session and supports undo',async()=>{
+ const {view,app}=propertyView();const code=view.session.notebook.cells[0];view.propertiesEditor.hooks.change({title:'Native title',aliases:['My Notebook']});
+ expect(view.session.notebook.cells[0].cell_type).toBe('markdown');expect(view.session.notebook.cells[1]).toBe(code);
+ expect(view.session.dirty).toBe(true);await view.save();const written=JSON.parse(view.session.savedText);expect(written.cells[0].source).toContain('Native title');expect(written.cells[0]).not.toHaveProperty('outputs');expect(app.vault.process).toHaveBeenCalled();
+ view.propertiesEditor.hooks.undo();expect(view.session.notebook.cells).toHaveLength(1);view.propertiesEditor.hooks.redo();expect(view.session.notebook.cells).toHaveLength(2);
+});
+it('rejects stale native Properties writes after session replacement, closure or while busy',()=>{
+ const {view}=propertyView();const controller=view.propertiesEditor;const release=view.session.lock();expect(()=>controller.hooks.change({title:'Busy'})).toThrow();release();view.session=new NotebookSession(data);expect(()=>controller.hooks.change({title:'Stale'})).toThrow();expect(view.session.dirty).toBe(false);view.disposed=true;expect(()=>controller.hooks.change({title:'Closed'})).toThrow()
 });

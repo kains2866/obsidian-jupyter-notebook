@@ -10,7 +10,7 @@ import {syntaxHighlighting,HighlightStyle,bracketMatching} from '@codemirror/lan
 import {tags} from '@lezer/highlight';
 import {python} from '@codemirror/lang-python';
 import {markdown} from '@codemirror/lang-markdown';
-import {newCell,insertCell,removeCell,moveCell,editCell,sourceText,type CellType,type Cell} from './notebook';
+import {newCell,insertCell,removeCell,moveCell,editCell,sourceText,type CellType,type Cell,type Notebook} from './notebook';
 import type {NotebookSession} from './session';
 import {OutputRenderer,outputImageDimensions,type RenderOutputMarkdown,type OutputSnapshot} from './outputs';
 import {createTranslator,type Translator} from './i18n';
@@ -34,6 +34,7 @@ export interface EditorActions {
  environment():string;chooseEnvironment():Promise<void>;
  sanitize(html:string):DocumentFragment;
  markdown(text:string,parent:HTMLElement):Promise<void>;
+ properties?(parent:HTMLElement):void;
  clearMarkdown?():void;
  disposeMarkdown?(parent:HTMLElement):void;
  outputMarkdown?:RenderOutputMarkdown;
@@ -108,6 +109,7 @@ export class NotebookEditor {
   this.status=this.el('span','ipynb-status',this.toolbar);this.status.setAttribute('aria-live','polite');
   this.inputHost=this.el('div','ipynb-input-host',this.toolbar);
   this.message=this.el('div','ipynb-message',root);this.message.setAttribute('role','status');this.message.hidden=true;
+  if(actions.properties)actions.properties(this.el('div','ipynb-notebook-properties',root));
   this.list=this.el('div','ipynb-cell-list',root);
   const measureToolbar=()=>{root.style.setProperty('--ipynb-toolbar-height',`${this.toolbar.getBoundingClientRect().height||48}px`);this.enableVirtualization()};
   measureToolbar();this.toolbarObserver=new ResizeObserver(measureToolbar);this.toolbarObserver.observe(this.toolbar);this.toolbarObserver.observe(root);
@@ -249,6 +251,8 @@ export class NotebookEditor {
  }
  private pruneCellState():void{const ids=new Set(this.session.notebook.cells.map(cell=>this.cellIdentity(cell)));for(const id of this.savedSelections.keys())if(!ids.has(id))this.savedSelections.delete(id);for(const id of this.outputSnapshots.keys())if(!ids.has(id))this.outputSnapshots.delete(id)}
  private cellIdentity(cell:object):string{let id=this.identities.get(cell);if(!id){id=`cell-${++this.identitySequence}`;this.identities.set(cell,id)}return id}
+ applyProperties(next:Notebook):void{this.historyChange(()=>this.session.structure(next))}
+ propertyHistory(redo=false):void{this.historyChange(()=>redo?this.session.redo():this.session.undo())}
  private historyChange(action:()=>void):void{this.captureAnchor();this.structureChanging=true;try{action()}finally{this.structureChanging=false}this.renderCells(true)}
  private insertAt(index:number,type:CellType):void{this.structure(()=>insertCell(this.session.notebook,index,newCell(type)));this.anchor=undefined;this.focusCell(index);this.cellNodes[index]?.scrollIntoView({block:'nearest'})}
  private captureAnchor():void{

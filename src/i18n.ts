@@ -6,6 +6,10 @@ import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
+ '原生属性编辑器不可用。':'The native Properties editor is unavailable.',
+ '原生属性编辑器不可用，当前仅预览属性；可在 Markdown 中编辑 YAML。':'The native Properties editor is unavailable. Properties are read-only here; edit YAML in a Markdown cell.',
+ '请等待当前运行结束后再修改 Notebook 属性。':'Wait for execution to finish before changing Notebook properties.',
+ 'Notebook YAML 无法解析，请先修复 Markdown 中的 YAML。':'Notebook YAML could not be parsed. Fix the YAML in the Markdown cell first.',
  '恢复会话 lease 不是普通文件，已保留草稿。':'The recovery session lease is not a regular file. The draft has been kept.',
  '恢复会话 lease 损坏，已保留草稿。':'The recovery session lease is damaged. The draft has been kept.',
  '缓存':'Cache','恢复':'Recovery',

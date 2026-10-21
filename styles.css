@@ -159,3 +159,11 @@
 .ipynb-input-panel input{flex:1;min-width:140px}
 
 .ipynb-input-context{flex-basis:100%;color:var(--text-muted)}
+
+/* Reuse native Properties styling; only Notebook layout is supplied here. */
+.ipynb-notebook-properties{margin:12px 0 8px 42px;min-width:0}
+.ipynb-notebook-properties:empty{display:none}
+.ipynb-notebook-properties .metadata-container{margin:0;max-width:100%}
+.ipynb-properties-hint,.ipynb-properties-error{font-size:var(--font-smallest);color:var(--text-muted);overflow-wrap:anywhere}
+.ipynb-properties-error{color:var(--text-error)}
+@media(max-width:650px){.ipynb-notebook-properties{margin-left:34px}}

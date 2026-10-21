@@ -15,3 +15,6 @@ export class TFile{path:string;parent:TFolder|null;constructor(path='',parent:TF
 export function normalizePath(path:string){return path.replace(/\\/g,'/').replace(/\/+/g,'/').replace(/^\//,'').replace(/\/$/,'')}
 
 export async function requestUrl(options:{url:string}){const response=await fetch(options.url);return {status:response.status,headers:Object.fromEntries(response.headers),arrayBuffer:await response.arrayBuffer()}}
+
+export const parseYaml=(source:string):unknown=>JSON.parse(source);
+export const stringifyYaml=(value:unknown):string=>JSON.stringify(value)+"\n";

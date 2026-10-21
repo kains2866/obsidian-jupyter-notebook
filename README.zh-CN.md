@@ -177,6 +177,8 @@ status: 学习中
 ---
 ```
 
+当前源码包含 Notebook 顶部的实验性原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑会重新序列化 YAML，注释和引号格式可能变化；复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心侧栏、图谱或 Bases 索引。
+
 保存后，属性可由已启用的 Dataview 查询。例如，在 Markdown 单元格或普通笔记中添加：
 
 ````markdown
@@ -186,7 +188,7 @@ FROM #Python
 ```
 ````
 
-Markdown 单元格的预览可以显示查询结果。插件通过内存适配提供 Notebook 属性索引，不修改 Obsidian 核心元数据缓存，也不接入原生 Properties 面板。Dataview 适配依赖其内部接口，已验证版本为 **0.5.68**；不兼容时会提示并安全跳过索引。
+Markdown 单元格的预览可以显示查询结果。插件通过内存适配提供 Notebook 属性索引，不修改 Obsidian 核心元数据缓存，也不接入核心侧栏“文件属性”。Dataview 适配依赖其内部接口，已验证版本为 **0.5.68**；不兼容时会提示并安全跳过索引。
 
 Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导出到 Jupyter 或 VS Code 后，YAML 是普通 Markdown 内容，不影响 Python 执行；Dataview 查询仅在 Obsidian 与 Dataview 环境中生效。
 

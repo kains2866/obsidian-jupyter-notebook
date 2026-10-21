@@ -4,7 +4,7 @@
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — 原生 Notebook、本机 Python、统一工作区" width="100%" />
   <p><strong>在你的知识库里，编写笔记、运行代码、保留结果。</strong></p>
   <p>
-    <a href="release-archives/v0.6.10/"><img src="https://img.shields.io/badge/version-0.6.10-8B5CF6?style=flat-square" alt="版本 0.6.10" /></a>
+    <a href="https://github.com/kains2866/obsidian-jupyter-notebook/releases/latest"><img src="https://img.shields.io/github/v/release/kains2866/obsidian-jupyter-notebook?style=flat-square&amp;label=release&amp;color=8B5CF6" alt="最新发行版" /></a>
     <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 及以上" /></a>
     <a href="#yaml-属性与-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#平台与运行方式"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="桌面端编辑与运行" /></a>
@@ -21,6 +21,8 @@
 
 **Jupyter Notebook** 为 `.ipynb` 文件提供独立的单元格编辑视图，将 Markdown、Python 代码及运行结果整合在同一工作区中。Notebook 保持标准文件格式，无需转换为 Markdown，也不会生成 Markdown 镜像。
 
+**版本说明**：最近发布版本为 0.6.11；当前源码还包含未发布的恢复缓存、局部更新、增量依赖检测和过滤说明等改进。以下说明以当前源码为准，Release 安装包的具体变更请查看对应版本的更新记录。
+
 ## 文档导航
 
 [主要功能](#主要功能) · [平台](#平台与运行方式) · [安装](#安装) · [快速开始](#快速开始) · [环境与依赖](#python-环境与依赖) · [YAML 与 Dataview](#yaml-属性与-dataview) · [输出与保存](#输出与文件保存) · [限制](#当前限制) · [开发](#开发与验证)
@@ -28,7 +30,8 @@
 ## 主要功能
 
 - **原生 Notebook 编辑**：创建 `.ipynb` 文件，编辑 Code、Markdown 和 Raw 单元格，支持拖动排序、就地插入、类型切换及撤销、重做。
-- **本机 Python 执行**：运行单个单元格或全部代码，共享内核变量，支持中断和重启。
+- **本机 Python 执行**：运行单个单元格或全部代码，共享内核变量，支持中断、重启和清理变量；显示耗时与运行状态。
+- **交互输入**：在顶部工具栏下方显示 `input()` 提示，密码输入隐藏内容，取消输入会中断执行。
 - **环境与依赖管理**：选择已有 Python 环境，或为当前设备创建仓库专用环境；支持依赖查询、安装、卸载和重新安装。
 - **编辑时依赖检查**：识别 `import` 与 `from … import …`，在代码块内提示缺失模块，并提供安装与重新检查入口。
 - **Markdown 与主题适配**：使用 Obsidian 的 Markdown 渲染与主题样式，支持表格、代码块、双链跳转、标签搜索和嵌入预览。
@@ -42,7 +45,7 @@
 | --- | --- |
 | 桌面端查看、编辑和保存 Notebook | 支持 |
 | 桌面端本机 Python 执行 | 支持 |
-| 手机端 | 0.6.10 商店版为桌面专用；手机只读仅为旧版能力 |
+| 手机端 | 当前发行版仅桌面端；手机只读仅为旧版能力 |
 | 云同步仓库 | 文件须在本机可访问；每台电脑使用独立环境 |
 | 远程 Jupyter 服务 | 暂不支持 |
 
@@ -50,14 +53,14 @@
 
 ## 安装
 
-0.6.10 为桌面专用发行版，正在准备商店上架。插件名称改为 **Jupyter Notebook**，ID 为 `jupyter-notebook`。升级前备份旧目录 `obsidian-ipynb`，停用旧插件后安装新插件；如需保留设置，可在 Obsidian 关闭时将旧目录的 `data.json` 复制到新目录。不要同时启用两个版本；不删除 `.obsidian/ipynb-envs/` 或 `.obsidian/ipynb-runtimes/`，然后重新选择并验证本机环境。标准安装只需三个文件，Python 脚本已内嵌并按需恢复。
+当前发行版仅支持桌面端。插件名称为 **Jupyter Notebook**，ID 为 `jupyter-notebook`。升级前备份旧目录 `obsidian-ipynb`，停用旧插件后安装新插件；如需保留设置，可在 Obsidian 关闭时将旧目录的 `data.json` 复制到新目录。不要同时启用两个版本；不删除 `.obsidian/ipynb-envs/` 或 `.obsidian/ipynb-runtimes/`，然后重新选择并验证本机环境。标准安装只需三个文件，Python 脚本已内嵌并按需恢复。
 
-目前采用手动安装方式。
+下面介绍手动安装方式。
 
-1. 从 [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
+1. 从 [最新 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/latest) 下载独立 `main.js`、`manifest.json` 和 `styles.css`。
 
-   [历史安装包](release-archives) 仍使用旧 `obsidian-ipynb/` 目录及原清单，必须保留包内全部五个文件；不要按下方新版三文件步骤安装旧包。
-2. 创建 `jupyter-notebook` 文件夹，将上述三个 0.6.10 文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
+   使用旧 `obsidian-ipynb/` 目录的历史安装包可能需要保留包内全部五个文件；请遵循该版本的说明，不要套用当前三文件布局。
+2. 创建 `jupyter-notebook` 文件夹，将上述三个安装文件放入，再将该文件夹放入仓库的 `.obsidian/plugins/` 目录。使用自定义配置目录时，请替换 `.obsidian`。
 3. 确认插件目录包含以下三个文件：
 
    ```text
@@ -80,7 +83,7 @@
 
 - 左侧工具栏中的 Notebook 图标。
 - 文件夹或文件的右键菜单：**新建 Jupyter Notebook**。
-- 命令面板：**Obsidian Jupyter Notebook: 新建 Jupyter Notebook**。
+- 命令面板：**Jupyter Notebook: 新建 Jupyter Notebook**。
 
 右键入口在所选文件夹或文件所在目录创建 Notebook；其他入口遵循 Obsidian 的新文件位置设置。重名文件会自动编号，不覆盖已有文件。创建和查看 Notebook 不要求预先安装 Python。
 
@@ -144,6 +147,8 @@
 
 代码编辑停顿约 **900ms** 后，插件识别静态 `import` 与 `from … import …`，检查当前 Notebook 选择的 Python 环境。
 
+检测只重新解析内容改变的代码块，相同代码会复用解析结果；删除或替换的历史代码不会长期留在缓存中。模块可发现性按当前解释器和项目目录缓存最多 45 秒，过期后在下一次检测时重新查询。手动「重新检查」、切换环境或关闭依赖窗口会刷新缓存。仅缺失必要或可选模块时显示提示，其余检测状态保持隐藏。
+
 检测不会执行 Notebook 代码、导入用户模块或启动 Jupyter 内核。它会处理别名、多行导入、标准库、本地模块及部分可选导入；未完成的语法暂不下结论。
 
 缺失模块在对应代码块内提示，可进入依赖管理窗口查找发行包。切换环境、关闭依赖窗口后会重新检测，也可点击 **重新检查**。如果当前使用外部环境，安装到仓库环境的包不会改变外部环境，需要切换内核后使用。
@@ -187,10 +192,11 @@ Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导�
 
 ## 输出与文件保存
 
-支持文本、PNG/JPEG 图片、经过净化的 HTML 表格以及错误输出。设置页提供输出折叠、清空、大小警示和可选限制。
+支持文本、PNG/JPEG 图片、静态 Markdown、经过净化的 HTML 表格以及错误输出。设置页提供输出折叠、清空、大小警示和可选限制。
 
-- 超过 600px 的输出默认折叠。
-- 图片接近视口时加载，离屏时卸载显示节点；原始输出仍保存在 Notebook 中。
+- 长文本与表格默认按 600px 高度折叠；图片默认展开，超出折叠高度时可手动收起。只有需要时才显示展开／收起入口。
+- 图片接近视口时加载；启用离屏回收的文档会释放远离视口的显示节点，原始输出仍保存在 Notebook 中。
+- 文本提供复制，表格优先复制为 TSV；图片可放大或保存，位置遵循 Obsidian 附件设置，命名沿用输出提供的文件名，无名多图增加序号。
 - 默认在单元格输出达到 50MiB、Notebook 输出达到 200MiB 时警示。
 - 硬上限、自动丢弃旧输出和清空时释放撤销历史默认关闭。
 
@@ -202,12 +208,14 @@ Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导�
 
 在设置的「缓存与恢复」中，可配置缓存保留时间（1–365 天，默认 7 天）、打开当前设备的缓存目录，或立即清理过期缓存。过期按文件最后修改时间计算，包含未接受恢复、保存失败、损坏的草稿及临时文件。插件启动、打开 Notebook 及每小时检查；Obsidian 关闭时不会在后台清理，下次启动会继续。当前仍打开的会话受到保护，无法确认状态或没有权限的文件会跳过并提示。
 
+运行结果中的 HTML/SVG 会过滤脚本、活动嵌入、危险链接和自动远程资源；Markdown 输出使用独立静态解析器，不运行 Obsidian 插件处理器。发生过滤时，输出内提供折叠的「部分输出已过滤」说明，列出原因，并不代表代码运行失败。普通 Markdown 单元格仍使用 Obsidian 原生渲染。
+
 HTML `div` 提示块使用主题底色和边框；`alert-success`、`alert-info`、`alert-warning`、`alert-danger` 分别使用主题的对应颜色，不改变原始 Notebook 内容。
 
 ## 当前限制
 
 - 代码编辑与运行目前面向 Python，不支持远程内核。
-- 暂不支持 Notebook widgets 和活动 JavaScript 输出。静态 SVG 会经过安全过滤；支持顶部内联 stdin 输入。
+- 暂不支持 Notebook widgets 和活动 JavaScript 输出。HTML 输出内的静态 SVG 会经过安全过滤；支持顶部内联 stdin 输入。
 - 单元格附件数据保留，附件引用图片的预览支持有限。
 - 不提供 `.ipynb` 的 Obsidian 原生图谱、反链或 Properties 索引。
 - 单元格类型依据文件中的 `cell_type`，不会根据内容自动推断。误标为代码的 HTML 提示块可手动改为 Markdown。
@@ -253,7 +261,7 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 
 ## 版本历史
 
-功能变更见 [CHANGELOG](CHANGELOG.md)。历史安装包与 SHA-256 校验文件位于 [release-archives](release-archives/)；安装包归档提交不代表对应版本拥有完整的历史源码快照。
+功能变更见 [CHANGELOG](CHANGELOG.md)，已发布的安装文件见 [GitHub Releases](https://github.com/kains2866/obsidian-jupyter-notebook/releases)。早期安装包的归档提交不代表对应版本拥有完整的历史源码快照。
 
 ## 支持作者
 
@@ -290,7 +298,7 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 
 ## 发布维护
 
-新版本执行一次 `npm run release:version -- 0.6.11`，同步 package/lock、manifest、兼容记录并新增更新日志章节，不覆盖已有发布历史。发布前填写该章节。`npm run release:preflight` 检查版本、测试、lint、类型与构建；Python 集成测试需要安装了 `jupyter_client` 和 `ipykernel` 的 `.venv`。PR 和 main 自动执行相同预检。
+新版本将 `X.Y.Z` 替换为大于现有版本的版本号，再执行一次 `npm run release:version -- X.Y.Z`，同步 package/lock、manifest、兼容记录并新增更新日志章节，不覆盖已有发布历史。发布前填写该章节。`npm run release:preflight` 检查版本、测试、lint、类型与构建；Python 集成测试需要安装了 `jupyter_client` 和 `ipykernel` 的 `.venv`。PR 和 main 自动执行相同预检。
 
 `npm run release:package` 在 `release/` 生成 `main.js`、`manifest.json`、`styles.css`、内含 `jupyter-notebook/` 的直接安装 ZIP、`SHA256SUMS` 和从当前更新日志提取的发布说明。将三个文件复制到 `.obsidian/plugins/jupyter-notebook/`，或把 ZIP 解压到 `.obsidian/plugins/`。标签工作流先测试和构建，只上传 `main.js`、`manifest.json`、`styles.css` 并为它们生成构建来源证明。ZIP 和 SHA256SUMS 仅供本地使用，不上传到 GitHub Release。重跑历史任务仍使用旧工作流；需要手动重建时，应从 main 分支运行最新工作流并填写目标标签。已有 Release 的标题和说明保持不变。
 

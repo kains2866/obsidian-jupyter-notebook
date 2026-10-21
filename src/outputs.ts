@@ -1,11 +1,11 @@
 import {enlargeOutputImage,saveOutput,wrapOutputTables,outputImageFilename,outputCopyText,type OutputActions} from './output-actions';
 import type {Output} from './notebook';
-import {hardenOutputDom} from './output-security';
+import {hardenOutputDom,inspectOutputHtml,mergeOutputFilterReports,type OutputFilterReport,type OutputFilterCategory} from './output-security';
 import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {createTranslator,type Translator} from './i18n';
 export const outputText=(value:unknown):string=>{if(value==null)return '';if(Array.isArray(value))return value.map((item:unknown)=>outputText(item)).join('');if(typeof value==='object')return JSON.stringify(value)??'';if(typeof value==='string'||typeof value==='number'||typeof value==='boolean'||typeof value==='bigint')return String(value);return ''};
 export interface OutputSnapshot {expanded:boolean|undefined}
-export interface MarkdownOutput {ready:Promise<void>;dispose():void}
+export interface MarkdownOutput {ready:Promise<void>;filtered?:OutputFilterReport;dispose():void}
 export type RenderOutputMarkdown=(source:string,parent:HTMLElement)=>MarkdownOutput;
 export class OutputRenderer {
  private markdownDisposers=new Map<HTMLElement,()=>void>();
@@ -43,15 +43,22 @@ export class OutputRenderer {
   const data=output.data as Record<string,unknown>|undefined;if(!data)return block;
   const mime=['image/png','image/jpeg'].find(type=>typeof data[type]==='string'||Array.isArray(data[type]));
   if(mime){const img=block.createEl('img');const source=`data:${mime};base64,${outputText(data[mime])}`;img.alt=this.t('Notebook 输出图像');img.loading=this.options.lazyImages?'lazy':'eager';img.addEventListener('load',()=>this.updateCollapse());img.addEventListener('error',()=>this.updateCollapse());const dimensions=outputImageDimensions(output,mime);if(dimensions){img.setAttribute('width',String(dimensions.width));img.setAttribute('height',String(dimensions.height))}if(this.observer){img.dataset.source=source;this.observer.observe(img)}else img.src=source;const enlarge=block.createEl('button');enlarge.type='button';enlarge.className='ipynb-output-image-button';enlarge.setAttribute('aria-label',this.t('放大图像'));enlarge.append(img);enlarge.addEventListener('click',()=>{this.previews.get(block)?.();try{this.previews.set(block,enlargeOutputImage(img,source,this.t))}catch{const error=block.createDiv();error.setAttribute('role','alert');error.textContent=this.t('图像预览失败，请重试')}});this.action(block,'保存图像',()=>this.save(source,mime,outputImageFilename(output,mime,`${this.actions.imageName?.()??'output'}-${this.records.filter(record=>{const data=record.output.data as Record<string,unknown>|undefined;return data?.['image/png']||data?.['image/jpeg']}).findIndex(record=>record.block===block)+1}`),block))}
-  else if(data['text/html']){const fragment=this.sanitize(outputText(data['text/html']));hardenOutputDom(fragment);block.append(fragment);wrapOutputTables(block,this.t);const text=outputText(data['text/plain']??block.textContent);this.textActions(block,()=>outputCopyText(block,text))}
+  else if(data['text/html']){const html=outputText(data['text/html']);const inspected=block.ownerDocument?inspectOutputHtml(html,block.ownerDocument):{};const fragment=this.sanitize(html);const filtered=mergeOutputFilterReports(inspected,hardenOutputDom(fragment));const host=block.createDiv();host.append(fragment);wrapOutputTables(host,this.t);const text=outputText(data['text/plain']??host.textContent);this.textActions(block,()=>outputCopyText(host,text));this.filterHint(block,filtered)}
   else if(data['text/markdown']){
    const source=outputText(data['text/markdown']);const host=block.createDiv();host.className='ipynb-output-markdown markdown-rendered';
    if(this.markdown){
     const failure=(error:unknown)=>{host.replaceChildren();host.createEl('pre').textContent=this.t('Markdown 输出渲染失败：{error}',{error:String(error)})+'\n\n'+source;this.updateCollapse()};
-    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block)){hardenOutputDom(host);wrapOutputTables(host,this.t);this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
+    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block)){const filtered=mergeOutputFilterReports(rendering.filtered,hardenOutputDom(host));wrapOutputTables(host,this.t);this.filterHint(block,filtered);this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
    }else host.createEl('pre').textContent=source;this.textActions(block,()=>outputCopyText(host,source));
   }
   else{const pre=block.createEl('pre');pre.textContent=outputText(data['text/plain']??JSON.stringify(data,null,2));block.append(pre);this.textActions(block,()=>pre.textContent??'')}return block;
+ }
+ private filterHint(block:HTMLElement,report:OutputFilterReport):void{
+  const categories=Object.keys(report).filter(key=>(report[key as OutputFilterCategory]??0)>0) as OutputFilterCategory[];if(!categories.length)return;
+  const labels:Record<OutputFilterCategory,string>={scripts:'脚本',activeContent:'交互嵌入与活动内容',remoteResources:'自动加载的外部资源',unsafeUrls:'不安全链接',attributes:'不安全属性',styles:'不安全样式',rawHtml:'Markdown 原始 HTML',markdownImages:'Markdown 图片（保留替代文字）'};
+  const details=block.createEl('details');details.className='ipynb-output-filter-hint';details.createEl('summary').textContent=this.t('部分输出已过滤');
+  details.createEl('p').textContent=this.t('为保持输出静态显示，已过滤：{categories}。',{categories:categories.map(category=>this.t(labels[category])).join(this.t('、'))});
+  details.createEl('p').textContent=this.t('这不代表代码运行失败。');
  }
  private save(content:string,mime:string,filename:string,block:HTMLElement):void|Promise<void>{if(this.actions.save)return this.actions.save(content,mime,filename);else saveOutput(content,mime,filename,block.ownerDocument)}
  private action(block:HTMLElement,label:string,run:()=>void|Promise<void>):void{

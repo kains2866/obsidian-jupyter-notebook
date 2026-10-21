@@ -154,3 +154,16 @@ it('undo to saved state clears only owned draft and guards edits queued during c
  const {view}=setup();const clear=vi.fn(async(check:()=>boolean)=>{expect(check()).toBe(true)});view.recovery={clear};view.session.change(editCell(view.session.notebook,0,{source:'discarded by undo'}));view.session.undo();expect(view.session.dirty).toBe(false);await view.flushRecovery();expect(clear).toHaveBeenCalledOnce();
  let mayDelete=true;view.recovery={clear:async(check:()=>boolean)=>{view.session.change(editCell(view.session.notebook,0,{source:'new edit during cleanup'}));mayDelete=check()}};await view.flushRecovery();expect(mayDelete).toBe(false);expect(view.session.notebook.cells[0].source).toBe('new edit during cleanup');window.clearTimeout(view.recoveryTimer);
 });
+
+it('依赖调度复用未变 source，重排不串位且强制刷新清缓存',()=>{
+ vi.useFakeTimers();
+ try{
+  const {view}=setup();view.editor={setImportStatuses:vi.fn()};
+  const stringify=vi.spyOn(JSON,'stringify');view.scheduleImportCheck();
+  expect(stringify).not.toHaveBeenCalled();stringify.mockRestore();
+  expect(view.editor.setImportStatuses).not.toHaveBeenCalled();
+  const generation=view.importGeneration;view.scheduleImportCheck();expect(view.importGeneration).toBe(generation);
+  const clear=vi.spyOn(view.importChecker,'clear');view.scheduleImportCheck(true);expect(clear).toHaveBeenCalled();
+  expect(view.importGeneration).toBe(generation+1);
+ }finally{vi.useRealTimers();vi.restoreAllMocks()}
+});

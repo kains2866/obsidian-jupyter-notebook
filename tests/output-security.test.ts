@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {hardenOutputDom} from '../src/output-security';
+import {hardenOutputDom,inspectOutputHtml} from '../src/output-security';
 
 // The renderer-independent policy walks native Element APIs; fixtures do not parse HTML.
 class Node {
@@ -33,4 +33,20 @@ it('blocks automatic remote resources and permits only embedded raster images',(
 it('preserves static SVG plot geometry and local definitions without external references',()=>{
  const path=new Node('path',{d:'M0 0L1 1',style:'fill: #fff; stroke: #000; stroke-width: 0.8; opacity: 0.5', 'clip-path':'url(#clip)'}),use=new Node('use',{'xlink:href':'#point'}),external=new Node('use',{'xlink:href':'https://bad.test/a.svg#point'}),paint=new Node('rect',{fill:'url(https://track)',stroke:'url(#stroke)'});const svg=new Node('svg',{viewBox:'0 0 10 10'},[path,use,external,paint]);clean(svg);
  expect(path.attrs.d).toBe('M0 0L1 1');expect(path.attrs.style).toContain('stroke-width');expect(path.attrs['clip-path']).toBe('url(#clip)');expect(use.attrs['xlink:href']).toBe('#point');expect(external.attrs['xlink:href']).toBeUndefined();expect(paint.attrs.fill).toBeUndefined();expect(paint.attrs.stroke).toBe('url(#stroke)');
+});
+it('reports removed categories while leaving safe plots silent',()=>{
+ const root=new Node('fragment',{},[new Node('script'),new Node('iframe'),new Node('img',{src:'https://track'}),new Node('a',{href:'javascript:run',onclick:'run'}),new Node('div',{style:'color: red; position: fixed'})]);
+ expect(hardenOutputDom(root as unknown as ParentNode)).toMatchObject({scripts:1,activeContent:1,remoteResources:1,unsafeUrls:1,attributes:1,styles:1});
+ expect(hardenOutputDom(new Node('fragment',{},[new Node('table')]) as unknown as ParentNode)).toEqual({});
+});
+
+it('inspects raw script evidence through inert template content before native sanitization',()=>{
+ const content=new Node('fragment',{},[new Node('script')]);let inspected='';
+ const document={createElement:(tag:string)=>{expect(tag).toBe('template');return {content,set innerHTML(value:string){inspected=value}}}};
+ expect(inspectOutputHtml('<script>secret()</script>',document as unknown as Document)).toEqual({scripts:1});
+ expect(inspected).toBe('<script>secret()</script>');expect(content.children).toHaveLength(0);
+});
+it('does not report safe links or its own rel and target on repeated hardening',()=>{
+ const root=new Node('fragment',{},[new Node('a',{href:'https://example.org'})]);
+ expect(hardenOutputDom(root as unknown as ParentNode)).toEqual({});expect(hardenOutputDom(root as unknown as ParentNode)).toEqual({});
 });

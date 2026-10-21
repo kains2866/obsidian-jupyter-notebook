@@ -64,6 +64,15 @@ class ImportCheckTest(unittest.TestCase):
             Path(directory, 'pkg/__init__.py').write_text('raise RuntimeError("do not execute")')
             self.assertEqual(self.check('from pkg.submodule import x', directory)['missing'], [])
 
+class IncrementalProtocolTest(unittest.TestCase):
+    def test_cached_availability_skips_probes_and_duplicate_sources_parse_once(self):
+        with patch.object(helper.ast, 'parse', wraps=helper.ast.parse) as parse, patch.object(helper, 'module_exists', return_value=False) as probe:
+            result = helper.check_cells(['import absent_new', 'import absent_new'], '.', {'known': True}, ['known'])
+            self.assertEqual(parse.call_count, 1)
+            self.assertEqual(probe.call_count, 1)
+            self.assertEqual(result['availability'], {'known': True, 'absent_new': False})
+            self.assertEqual(result['parsed'][0]['modules'], ['absent_new'])
+
 
 if __name__ == '__main__':
     unittest.main()

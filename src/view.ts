@@ -1,3 +1,4 @@
+import {IncrementalImportChecker} from './import-check';
 import {RecoveryDrafts,recoveryHash,type RecoveryDraft} from './recovery-drafts';
 import {recoveryCacheDirectory} from './recovery-cache';
 import {renderStaticOutputMarkdown} from './output-markdown';
@@ -16,7 +17,8 @@ import {environmentName,belongsToEnvironmentDirectory} from './environments';
 export const NOTEBOOK_VIEW='native-ipynb';
 export class NotebookView extends FileView{
  private recoveredDraft?:RecoveryDraft;private recovery?:RecoveryDrafts;private recoveryTimer?:number;private recoveryBaseline='';private recoveryNotebook?:Notebook;
- private importTimer?:number;private importController?:AbortController;private importGeneration=0;private importKey='';
+ private importTimer?:number;private importController?:AbortController;private importGeneration=0;
+ private importChecker=new IncrementalImportChecker();private importSources:string[]=[];private importPython?:string;private importPath?:string;private importSourceText=new WeakMap<string[],string>();
  private session?:NotebookSession;private editor?:NotebookEditor;
  private kernel?:KernelClient;private starting?:Promise<KernelClient>;
  private loadedNotebook?:Notebook;private trustedSession=false;private lastExecution?:'success'|'error';private lastExecutionCode?:string;
@@ -33,7 +35,7 @@ export class NotebookView extends FileView{
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
  async onLoadFile(file:TFile):Promise<void>{
-  this.disposed=false;this.importKey='';
+  this.disposed=false;this.importSources=[];this.importChecker.clear();
   const text=await this.app.vault.read(file);
   try{this.loadNotebook(text);await this.openRecovery(file,text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
  }
@@ -106,12 +108,16 @@ export class NotebookView extends FileView{
  }
  private scheduleImportCheck(force=false):void{
   if(Platform.isMobile||this.disposed||!this.session)return;
-  const cells=this.session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText);
-  const key=JSON.stringify([this.kernelPython,this.file?.path,cells]);if(!force&&key===this.importKey)return;this.importKey=key;
+  const cells=this.session.notebook.cells.filter(cell=>cell.cell_type==='code').map(cell=>{
+   if(typeof cell.source==='string')return cell.source;
+   let text=this.importSourceText.get(cell.source);if(text===undefined){text=sourceText(cell);this.importSourceText.set(cell.source,text)}return text;
+  });
+  if(!force&&this.importPython===this.kernelPython&&this.importPath===this.file?.path&&cells.length===this.importSources.length&&cells.every((source,index)=>source===this.importSources[index]))return;
+  if(force)this.importChecker.clear();
+  this.importPython=this.kernelPython;this.importPath=this.file?.path;this.importSources=cells;
   window.clearTimeout(this.importTimer);this.importController?.abort();const generation=++this.importGeneration;
   if(!cells.length){this.editor?.setImportStatuses?.([]);return}
   if(!this.kernelPython){this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'no-environment'})));return}
-  this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'checking'})));
   this.importTimer=window.setTimeout(()=>{void this.checkImports(cells,generation)},900);
  }
  private async checkImports(cells:string[],generation:number):Promise<void>{
@@ -119,18 +125,17 @@ export class NotebookView extends FileView{
   const controller=new AbortController();this.importController=controller;
   try{
    const adapter=this.app.vault.adapter;if(!(adapter instanceof FileSystemAdapter))throw new Error('Local filesystem required');
-   const {checkNotebookImports}=await import('./import-check');
    if(controller.signal.aborted)return;
    const {ensurePythonScripts}=await import('./script-assets');
    const {checker}=await ensurePythonScripts(adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`));
    if(controller.signal.aborted)return;
-   const result=await checkNotebookImports(this.kernelPython,checker,this.projectDir()??'',cells,controller.signal);
+   const result=await this.importChecker.check(this.kernelPython,checker,this.projectDir()??'',cells,controller.signal);
    if(!this.disposed&&generation===this.importGeneration)this.editor?.setImportStatuses?.(result.cells);
   }catch(error){if(!this.disposed&&generation===this.importGeneration&&!controller.signal.aborted){console.error('[Obsidian Jupyter Notebook] Import check failed',this.kernelPython,error);this.editor?.setImportStatuses?.(cells.map(()=>({modules:[],missing:[],state:'error'})))}}
   finally{if(this.importController===controller)this.importController=undefined}
  }
  private renderOutputMarkdown(text:string,parent:HTMLElement):import('./outputs').MarkdownOutput{
-  renderStaticOutputMarkdown(text,parent,sanitizeHTMLToDom);return {ready:Promise.resolve(),dispose(){}};
+  const filtered=renderStaticOutputMarkdown(text,parent,sanitizeHTMLToDom);return {ready:Promise.resolve(),dispose(){},filtered};
  }
  private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement):Promise<void>{
   const child=new Component();this.addChild(child);this.markdownChildren.push(child);this.markdownHosts.set(parent,child);
@@ -338,7 +343,7 @@ export class NotebookView extends FileView{
  async onUnloadFile(_file:TFile):Promise<void>{await this.dispose()}
  async onClose():Promise<void>{await this.dispose()}
  private async dispose():Promise<void>{
-  if(this.disposed)return;this.disposed=true;this.stopAll=true;window.clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;
+  if(this.disposed)return;this.disposed=true;this.stopAll=true;window.clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;this.importChecker.clear();
   await this.flushRecovery();
   const starting=this.starting;
   try{

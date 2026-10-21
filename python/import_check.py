@@ -70,23 +70,31 @@ def module_exists(name, cwd):
     return importlib.machinery.PathFinder.find_spec(name, [cwd]) is not None
 
 
-def check_cells(cells, cwd):
-    results = []
-    availability = {}
+def check_cells(cells, cwd, cached_availability=None, probe=None):
+    availability = dict(cached_availability or {})
+    parsed_by_source = {}
+    parsed = []
     for source in cells:
-        visitor = ImportVisitor()
-        try:
-            visitor.visit(ast.parse(source))
-        except SyntaxError:
-            results.append({'modules': [], 'missing': [], 'syntaxError': True, 'optional': []})
-            continue
-        for name in visitor.modules + visitor.optional:
-            if name not in availability:
-                availability[name] = module_exists(name, cwd)
-        results.append({'modules': visitor.modules,
-                        'missing': [name for name in visitor.modules if not availability[name]],
-                        'optional': [name for name in visitor.optional if name not in visitor.modules and not availability[name]]})
-    return {'cells': results}
+        if source not in parsed_by_source:
+            visitor = ImportVisitor()
+            try:
+                visitor.visit(ast.parse(source))
+                record = {'modules': visitor.modules, 'optional': visitor.optional}
+            except SyntaxError:
+                record = {'modules': [], 'optional': [], 'syntaxError': True}
+            parsed_by_source[source] = record
+        parsed.append(parsed_by_source[source])
+    names = list(probe or []) + [name for record in parsed for name in record['modules'] + record['optional']]
+    for name in names:
+        if name not in availability:
+            availability[name] = module_exists(name, cwd)
+    results = []
+    for record in parsed:
+        results.append({'modules': record['modules'],
+                        'missing': [name for name in record['modules'] if not availability[name]],
+                        'optional': [name for name in record['optional'] if name not in record['modules'] and not availability[name]],
+                        **({'syntaxError': True} if record.get('syntaxError') else {})})
+    return {'cells': results, 'parsed': parsed, 'availability': availability}
 
 
 def main():
@@ -97,7 +105,14 @@ def main():
     cells, cwd = payload['cells'], payload['cwd']
     if not isinstance(cells, list) or not all(isinstance(cell, str) for cell in cells) or not isinstance(cwd, str):
         raise ValueError('Invalid import-check input')
-    print(json.dumps(check_cells(cells, cwd)))
+    availability, probe = payload.get('availability', {}), payload.get('probe', [])
+    def module_name(name):
+        return isinstance(name, str) and name.isascii() and name.isidentifier()
+    if not isinstance(availability, dict) or not all(module_name(name) and type(value) is bool for name, value in availability.items()):
+        raise ValueError('Invalid cached availability')
+    if not isinstance(probe, list) or not all(module_name(name) for name in probe):
+        raise ValueError('Invalid module probes')
+    print(json.dumps(check_cells(cells, cwd, availability, probe)))
 
 
 if __name__ == '__main__':

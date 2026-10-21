@@ -14,3 +14,7 @@
 .ipynb-image-dialog > button { display: block; position: sticky; top: 0; margin-bottom: 8px; }
 .ipynb-image-dialog > img { display: block; max-width: none; height: auto; }
 .ipynb-output-toggle[hidden] { display: none; }
+.ipynb-output-filter-hint { margin: 6px 0 2px; color: var(--text-muted); font-size: var(--font-smallest); }
+.ipynb-output-filter-hint > summary { cursor: pointer; width: fit-content; }
+.ipynb-output-filter-hint > summary:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 3px; }
+.ipynb-output-filter-hint > p { margin: 4px 0; }

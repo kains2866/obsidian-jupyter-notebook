@@ -1,4 +1,9 @@
 export const outputTranslations:Record<string,string>={
+ '部分输出已过滤':'Some output was filtered',
+ '为保持输出静态显示，已过滤：{categories}。':'To keep output static, filtered: {categories}.',
+ '这不代表代码运行失败。':'This does not mean the code failed to run.',
+ '脚本':'Scripts','交互嵌入与活动内容':'Interactive embeds and active content','自动加载的外部资源':'Automatically loaded external resources','不安全链接':'Unsafe links','不安全属性':'Unsafe attributes','不安全样式':'Unsafe styles','Markdown 原始 HTML':'Raw Markdown HTML','Markdown 图片（保留替代文字）':'Markdown images (alt text retained)','、':', ',
+
  '输出已保存：{path}':'Output saved: {path}',
  '输出图像来源无效。':'Invalid output image source.',
  '图像预览失败，请重试':'Image preview failed; try again',

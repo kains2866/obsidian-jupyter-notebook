@@ -1,7 +1,7 @@
 vi.mock('../src/script-assets',()=>({ensurePythonScripts:async(directory:string)=>({bridge:directory+'/kernel_bridge.py',checker:directory+'/import_check.py'})}));
 import {describe,it,expect,vi,afterEach} from 'vitest';
 const checker=vi.hoisted(()=>vi.fn(async(..._args:unknown[])=>({cells:[{modules:['numpy'],missing:['numpy']}]})));
-vi.mock('../src/import-check',()=>({checkNotebookImports:checker}));
+vi.mock('../src/import-check',()=>({checkNotebookImports:checker,IncrementalImportChecker:class{check=checker;clear(){}}}));
 vi.mock('../src/editor',()=>({NotebookEditor:class{constructor(){}destroy(){}refresh(){}setImportStatuses=vi.fn()}}));
 vi.mock('../src/settings',()=>({EnvironmentPicker:{show:vi.fn()},confirm:vi.fn()}));
 import {NotebookView} from '../src/view';

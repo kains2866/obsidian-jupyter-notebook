@@ -4,7 +4,7 @@
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — native notebooks, local Python, one workspace" width="100%" />
   <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
   <p>
-    <a href="release-archives/v0.6.10/"><img src="https://img.shields.io/badge/version-0.6.10-8B5CF6?style=flat-square" alt="Version 0.6.10" /></a>
+    <a href="https://github.com/kains2866/obsidian-jupyter-notebook/releases/latest"><img src="https://img.shields.io/github/v/release/kains2866/obsidian-jupyter-notebook?style=flat-square&amp;label=release&amp;color=8B5CF6" alt="Latest release" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 or later" /></a>
     <a href="#yaml-properties-and-dataview"><img src="https://img.shields.io/badge/nbformat-4-F37726?style=flat-square&amp;logo=jupyter" alt="nbformat 4" /></a>
     <a href="#platforms-and-execution"><img src="https://img.shields.io/badge/Desktop-edit%20%26%20run-4C8C68?style=flat-square" alt="Desktop editing and execution" /></a>
@@ -21,6 +21,8 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 
 **Jupyter Notebook** provides a dedicated cell editor for `.ipynb` files, bringing Markdown, Python code, and execution results into one workspace. Notebooks retain their standard file format: no conversion to Markdown or Markdown mirror files is required.
 
+**Version note:** the most recently published release is 0.6.11. The current source also includes unreleased recovery-cache, incremental rendering, dependency-check, and filtering-notice improvements. This README describes the current source; consult the changelog for features included in a downloaded release.
+
 ## Documentation
 
 [Features](#features) · [Platforms](#platforms-and-execution) · [Installation](#installation) · [Quick start](#quick-start) · [Environments](#python-environments-and-dependencies) · [YAML & Dataview](#yaml-properties-and-dataview) · [Outputs](#outputs-and-file-saving) · [Limitations](#current-limitations) · [Development](#development-and-verification)
@@ -28,7 +30,8 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 ## Features
 
 - **Native Notebook editing**: create `.ipynb` files and edit Code, Markdown, and Raw cells, with drag-and-drop reordering, inline insertion, cell type switching, undo, and redo.
-- **Local Python execution**: run individual cells or all code cells in a shared kernel, with interrupt and restart controls.
+- **Local Python execution**: run individual cells or all code cells in a shared kernel, with interrupt, restart, variable-reset, timing, and execution-status controls.
+- **Interactive input**: respond to `input()` prompts below the toolbar, hide password input, or cancel to interrupt execution.
 - **Environment and package management**: select an existing Python environment or create a vault-managed environment for the current device; search, install, uninstall, and reinstall packages.
 - **Dependency checks while editing**: detect `import` and `from … import …` statements, show missing modules in the relevant code cell, and provide installation and recheck actions.
 - **Markdown and theme integration**: use Obsidian's Markdown renderer and theme styles, with tables, fenced code blocks, wikilink navigation, tag search, and embedded previews.
@@ -42,7 +45,7 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 | --- | --- |
 | View, edit, and save Notebooks on desktop | Supported |
 | Run Python locally on desktop | Supported |
-| Mobile | The 0.6.10 store edition is desktop-only; mobile viewing belongs to earlier versions |
+| Mobile | Current releases are desktop-only; mobile viewing belongs to earlier versions |
 | Cloud-synced vaults | Files must be accessible locally; each computer uses its own environment |
 | Remote Jupyter servers | Not currently supported |
 
@@ -50,14 +53,14 @@ Standalone Python installation has been verified on **macOS Apple Silicon**. Win
 
 ## Installation
 
-Version 0.6.10 is a desktop-only release being prepared for community directory submission. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
+Current releases are desktop-only. The plugin name is **Jupyter Notebook**, with ID `jupyter-notebook`. Back up the old `obsidian-ipynb` directory and disable it before installing the new plugin. To preserve settings, copy its `data.json` into the new directory while Obsidian is closed. Never enable both versions together. Keep `ipynb-envs/` and `ipynb-runtimes/` intact, then select and validate the local environment again. A standard installation needs only three files; Python helpers are embedded and restored on demand.
 
-The plugin currently uses manual installation.
+For manual installation:
 
-1. Download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [0.6.10 Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.6.10).
+1. Download the individual `main.js`, `manifest.json`, and `styles.css` assets from the [latest Release](https://github.com/kains2866/obsidian-jupyter-notebook/releases/latest).
 
-   [Historical packages](release-archives/) retain the old `obsidian-ipynb/` directory and manifest and require all five included files. Do not apply the new three-file instructions to those packages.
-2. Create a `jupyter-notebook` folder containing the three 0.6.10 files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
+   Older packages using the `obsidian-ipynb/` directory may require all five files they include. Follow the instructions for that package instead of applying the current three-file layout.
+2. Create a `jupyter-notebook` folder containing the three installation files and place it in your vault's `.obsidian/plugins/` directory. If you use a custom configuration directory, replace `.obsidian` accordingly.
 3. Confirm that the plugin directory contains these three files:
 
    ```text
@@ -80,7 +83,7 @@ You can create a Notebook using any of these entry points:
 
 - The Notebook icon in the left ribbon.
 - The **New Jupyter Notebook** action in a folder or file's context menu.
-- The **Obsidian Jupyter Notebook: New Jupyter Notebook** command in the command palette.
+- The **Jupyter Notebook: Create Jupyter Notebook** command in the command palette.
 
 The context menu creates the Notebook in the selected folder or the selected file's parent directory. Other entry points follow Obsidian's new-file location setting. Conflicting names receive a numeric suffix, preserving existing files. Python is not required to create or view a Notebook.
 
@@ -144,6 +147,8 @@ An executing kernel prevents environment removal or package changes. Package cha
 
 After a pause of approximately **900 ms** in code editing, the plugin detects static `import` and `from … import …` statements and checks the Python environment selected for the current Notebook.
 
+Only changed code sources are parsed again; identical sources share parsing results, and removed or replaced historical sources are dropped. Module discoverability is cached for the current interpreter and project directory for up to 45 seconds, then refreshed on the next check. Recheck, environment switches, and closing the dependency window refresh the cache. Hints appear only for missing required or optional modules; other check states stay hidden.
+
 The check does not execute Notebook code, import user modules, or start a Jupyter kernel. It handles aliases, multiline imports, standard-library modules, local modules, and some optional imports. Incomplete syntax does not produce a definitive result.
 
 Missing modules are shown in the relevant code cell, with an action to search for the distribution in the dependency manager. Checks run again after switching environments or closing the dependency window, and can also be triggered using **Recheck**. If you are using an external environment, packages installed in the vault environment do not change that external environment; switch kernels to use them.
@@ -189,16 +194,19 @@ Notebooks retain standard nbformat structure, including unknown metadata and fie
 
 ## Outputs and file saving
 
-Supported outputs include text, PNG/JPEG images, sanitized HTML tables, and errors. Settings provide output collapsing, clearing, size warnings, and optional limits.
+Supported outputs include text, PNG/JPEG images, static Markdown, sanitized HTML tables, and errors. Settings provide output collapsing, clearing, size warnings, and optional limits.
 
-- Outputs taller than 600 px are collapsed by default.
-- Images load near the viewport and their display nodes are removed when offscreen. Original outputs remain stored in the Notebook.
+- Long text and table outputs collapse at 600 px by default. Images start expanded and can be collapsed manually; expand/collapse controls appear only when needed.
+- Images load near the viewport. Documents with recycling enabled release distant display nodes; original outputs remain stored in the Notebook.
+- Text can be copied and tables preferentially copy as TSV. Images can be enlarged or saved through Obsidian attachment settings, retaining provided filenames or using numbered fallbacks for unnamed images.
 - Default warnings appear when cell outputs reach 50 MiB or Notebook outputs reach 200 MiB.
 - Hard limits, automatic removal of old outputs, and releasing undo history when clearing outputs are disabled by default.
 
 Output limits measure serialized data size, not Obsidian's total memory usage. Offscreen editor and output recycling is supported. Clearing outputs does not clear kernel variables; saving writes the cleared outputs to the file.
 
 The plugin supports explicit saving and saving on close. It does not write to disk after every keystroke. Before saving, it checks for external changes and refuses to overwrite conflicting content. If saving the original file on close fails, it attempts to write an `.ipynb` recovery copy and notifies you.
+
+HTML/SVG outputs filter scripts, active embeds, unsafe links, and automatic remote resources. Markdown outputs use a separate static parser without Obsidian plugin processors. When content is filtered, a collapsed **Some output was filtered** explanation lists the reasons; it does not indicate execution failure. Regular Markdown cells retain Obsidian native rendering.
 
 ### Local recovery and incremental rendering
 
@@ -211,7 +219,7 @@ Offscreen recycling considers cell count, source/output size, image count, and e
 ## Current limitations
 
 - Code editing and execution currently target Python. Remote kernels are not supported.
-- Notebook widgets and active JavaScript outputs are not supported. Static SVG is filtered for safety; inline stdin prompts are supported.
+- Notebook widgets and active JavaScript outputs are not supported. Static SVG within HTML output is filtered for safety; inline stdin prompts are supported.
 - Cell attachment data is preserved, but preview support for attachment-referenced images is limited.
 - `.ipynb` files are not integrated with Obsidian's native graph, backlinks, or Properties index.
 - Cell types follow the file's `cell_type` field rather than being inferred from content. HTML callouts incorrectly marked as code can be changed to Markdown manually.
@@ -257,7 +265,7 @@ The real Obsidian test on macOS is `tests/obsidian.e2e.cjs`, which uses a separa
 
 ## Version history
 
-See [CHANGELOG](CHANGELOG.md) for feature changes. Historical installation packages and SHA-256 checksums are available in [release-archives](release-archives/). Archive commits do not imply that a complete source snapshot exists for each historical version.
+See [CHANGELOG](CHANGELOG.md) for feature changes and [GitHub Releases](https://github.com/kains2866/obsidian-jupyter-notebook/releases) for published packages. Early archive commits do not imply that a complete source snapshot exists for each historical version.
 
 ## Support
 
@@ -294,7 +302,7 @@ Desktop execution inspects local interpreters and device-specific environment di
 
 ## Release maintenance
 
-Run `npm run release:version -- 0.6.11` once for a new version; it updates package/lock, manifest, compatibility history and adds a changelog section without overwriting an existing release. Fill in that section before publishing. `npm run release:preflight` checks metadata, tests, lint, types and the build (Python integration tests require `.venv` with `jupyter_client` and `ipykernel`). PRs and main run the same preflight.
+Run `npm run release:version -- X.Y.Z` (replace `X.Y.Z` with a version greater than all existing versions) once for a new version; it updates package/lock, manifest, compatibility history and adds a changelog section without overwriting an existing release. Fill in that section before publishing. `npm run release:preflight` checks metadata, tests, lint, types and the build (Python integration tests require `.venv` with `jupyter_client` and `ipykernel`). PRs and main run the same preflight.
 
 `npm run release:package` builds `release/` with `main.js`, `manifest.json`, `styles.css`, a direct-install ZIP containing `jupyter-notebook/`, `SHA256SUMS`, and release notes extracted from the current changelog section. Copy the three files into `.obsidian/plugins/jupyter-notebook/`, or extract the ZIP into `.obsidian/plugins/`. The tag workflow tests and builds, then uploads and attests only `main.js`, `manifest.json`, and `styles.css`. ZIP and SHA256SUMS remain local and are not uploaded to GitHub Releases. Historical run re-runs still use their original workflow; dispatch the latest workflow from main with the target tag for a manual rebuild. Existing release titles and notes are preserved.
 

@@ -122,3 +122,14 @@ it('numbers unnamed images by image order, preserves named images, and resets af
 });
 
 it('preserves explicit output expansion across renderer replacement',()=>{const host=new Element();const options={...DEFAULT_OUTPUT_OPTIONS,collapse:true};const renderer=new OutputRenderer(host as any,()=>new Element() as any,options);renderer.update([image]);host.children[1].events.click();const state=renderer.captureState();renderer.destroy();const next=new OutputRenderer(host as any,()=>new Element() as any,options);next.restoreState(state);next.update([image]);expect(host.children[0].style.maxHeight).toBe('600px');expect(host.children[1].attrs['aria-expanded']).toBe('false')});
+it('shows one passive filtering explanation and never copies its text',async()=>{
+ const host=new Element(),copyText=vi.fn();
+ const markdown=(_source:string,parent:Element)=>{parent.createEl('p').textContent='safe content';return {ready:Promise.resolve(),dispose:vi.fn(),filtered:{scripts:1,markdownImages:1}}};
+ const renderer=new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,markdown as any,{copyText});
+ const output={output_type:'display_data',data:{'text/markdown':'safe content'}};
+ renderer.update([output]);await Promise.resolve();renderer.update([output]);
+ expect(host.querySelectorAll('details')).toHaveLength(1);expect(host.querySelector('summary')?.textContent).toBe('部分输出已过滤');
+ expect(host.querySelectorAll('p').map(p=>p.textContent)).toContain('这不代表代码运行失败。');
+ host.querySelectorAll('button').find(button=>button.attrs['aria-label']==='复制输出')!.events.click();await Promise.resolve();expect(copyText).toHaveBeenCalledWith('safe content');
+ renderer.destroy();expect(host.children).toHaveLength(0);
+});

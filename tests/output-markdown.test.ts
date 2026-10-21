@@ -10,3 +10,9 @@ it('treats active raw HTML as literal text and never invokes JavaScript links',(
 it('does not emit automatic images or Obsidian embeds before sanitization',()=>{
  const {html}=render('![plot](https://track/pixel) ![inline](data:image/png;base64,AA==)\n\n![[other-note]]');expect(html).not.toContain('<img');expect(html).not.toContain('src=');expect(html).toContain('plot');expect(html).toContain('![[other-note]]');
 });
+it('reports suppressed Markdown features without flagging fenced or inline code',()=>{
+ const parent={append:vi.fn()} as unknown as HTMLElement;
+ const sanitize=()=>({children:[]} as unknown as DocumentFragment);
+ expect(renderStaticOutputMarkdown('![plot](https://track)\n\n<script>run()</script>',parent,sanitize)).toMatchObject({markdownImages:1,rawHtml:1});
+ expect(renderStaticOutputMarkdown('```html\n<script>run()</script>\n![plot](https://track)\n```\n\n`<iframe>`',parent,sanitize)).toEqual({});
+});

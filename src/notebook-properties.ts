@@ -20,7 +20,7 @@ export function parseNotebookProperties(notebook:Notebook):{properties:Record<st
 }
 
 type Index={pages:Map<string,unknown>;tags:{delete(path:string):unknown};etags:{delete(path:string):unknown};links:{delete(path:string):unknown};finish(file:TFile,data:unknown):void;touch():void;trigger(...args:unknown[]):void};
-type DataviewApi={index:Index;luxon:{DateTime:{fromMillis(value:number):unknown}}};
+type DataviewApi={index:Index;literal(value:string):unknown;value:{isLink(value:unknown):boolean};luxon:{DateTime:{fromMillis(value:number):unknown}}};
 /** Dataview has no public custom-file importer. Guard the optional adapter and own only inserted pages. */
 export class NotebookDataviewBridge{
  private versions=new Map<string,number>();private owned=new Map<string,{index:Index;page:unknown;file:TFile}>();private disposed=false;private warned=false;
@@ -52,10 +52,19 @@ export class NotebookDataviewBridge{
    if(this.disposed||this.versions.get(path)!==version||file.path!==path||this.api()!==api)return;
    this.removeOwned(path);if(!properties)return;
    const strings=(value:unknown):string[]=>typeof value==='string'?value.split(/[,\s]+/).filter(Boolean):Array.isArray(value)?value.filter((v):v is string=>typeof v==='string'):[];
-   const tags=new Set(strings(properties.tags??properties.tag).map(tag=>tag.startsWith('#')?tag:'#'+tag));const aliases=new Set(strings(properties.aliases??properties.alias));
-   const convert=(value:unknown):unknown=>value instanceof Date?api.luxon.DateTime.fromMillis(value.getTime()):Array.isArray(value)?value.map(convert):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,child])=>[key,convert(child)])):value;
+   const tags=new Set(strings(properties.tags??properties.tag).map(tag=>tag.startsWith('#')?tag:'#'+tag));const aliasValue=properties.aliases??properties.alias;const aliases=new Set(typeof aliasValue==='string'?[aliasValue]:Array.isArray(aliasValue)?aliasValue.filter((value):value is string=>typeof value==='string'):[]);
+   const links:unknown[]=[];
+   // Use Dataview's own parser so aliases, heading/block targets and embeds retain its Link type.
+   const convert=(value:unknown):unknown=>{
+    if(typeof value==='string'&&/^!?\[\[[\s\S]*\]\]$/.test(value)){
+     const parsed=api.literal(value);if(api.value.isLink(parsed)){links.push(parsed);return parsed}return value;
+    }
+    if(value instanceof Date)return api.luxon.DateTime.fromMillis(value.getTime());
+    if(Array.isArray(value))return value.map(convert);
+    return value&&typeof value==='object'?Object.fromEntries(Object.entries(value).map(([key,child])=>[key,convert(child)])):value;
+   };
    const fields=new Map(Object.entries(properties).map(([key,value])=>[key,convert(value)]));
-   const data={path,ctime:api.luxon.DateTime.fromMillis(file.stat.ctime),mtime:api.luxon.DateTime.fromMillis(file.stat.mtime),size:file.stat.size,fields,tags,aliases,links:[],lists:[],frontmatter:properties};
+   const data={path,ctime:api.luxon.DateTime.fromMillis(file.stat.ctime),mtime:api.luxon.DateTime.fromMillis(file.stat.mtime),size:file.stat.size,fields,tags,aliases,links,lists:[],frontmatter:properties};
    api.index.finish(file,data);this.owned.set(path,{index:api.index,page:api.index.pages.get(path),file});
   }catch(error){if(this.disposed||this.versions.get(path)!==version)return;this.removeOwned(path);console.error('[Obsidian Jupyter Notebook] 属性索引失败',path,error);this.warn(`Notebook 属性索引失败（${path}）：${String(error)}`)}
  }
@@ -70,7 +79,7 @@ export class NotebookDataviewBridge{
 function isRecord(value:unknown):value is Record<string,unknown>{return value!==null&&typeof value==='object'&&!Array.isArray(value)}
 function hasDataviewEvents(value:unknown):value is {on(name:string,callback:()=>void):EventRef}{return isRecord(value)&&typeof value.on==='function'}
 function isDataviewApi(value:unknown):value is DataviewApi{
- if(!isRecord(value)||!isRecord(value.index)||!isRecord(value.luxon)||!hasFromMillis(value.luxon.DateTime))return false;
+ if(!isRecord(value)||typeof value.literal!=='function'||!isRecord(value.value)||typeof value.value.isLink!=='function'||!isRecord(value.index)||!isRecord(value.luxon)||!hasFromMillis(value.luxon.DateTime))return false;
  const index=value.index;
  return index.pages instanceof Map&&typeof index.finish==='function'&&typeof index.touch==='function'&&typeof index.trigger==='function'&&[index.tags,index.etags,index.links].every(item=>isRecord(item)&&typeof item.delete==='function')&&typeof value.luxon.DateTime.fromMillis==='function';
 }

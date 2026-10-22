@@ -177,7 +177,7 @@ status: Learning
 ---
 ```
 
-The current source includes an experimental native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Editing properties reserializes YAML, so comments and quoting may change; nested values remain available in YAML source. This does not add core sidebar, graph, or Bases indexing.
+The current source includes an experimental native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Editing properties reserializes YAML, so comments and quoting may change; nested values remain available in YAML source. This does not add core File properties sidebar or Bases indexing.
 
 After saving, the properties can be queried by an enabled Dataview plugin. For example, add this to a Markdown cell or a regular note:
 
@@ -193,6 +193,12 @@ Markdown previews style HTML `div` containers and Jupyter-style `alert` blocks w
 Markdown cell previews can display query results. The plugin provides an in-memory adapter for indexing Notebook properties. It does not modify Obsidian's core metadata cache or the core File properties sidebar. The Dataview adapter relies on internal interfaces and has been verified with **0.5.68**. If incompatible, it reports the issue and safely skips indexing.
 
 Notebooks retain standard nbformat structure, including unknown metadata and fields. When opened in Jupyter or VS Code, YAML remains ordinary Markdown content and does not affect Python execution. Dataview queries work only in an Obsidian environment with Dataview enabled.
+
+## Native links and navigation
+
+Saved Markdown cells and YAML tags/links participate in native backlinks, tags, search, and graph relationships. Enable **Show attachments** in Obsidian graph settings to display Notebook nodes and their connections. Code and execution output are excluded. Heading and block links navigate to the corresponding Markdown cell.
+
+The adapter uses an in-memory Markdown projection, without creating companion files or changing Notebook JSON. Native bulk property/task writers are excluded. Links inside Notebooks are currently not rewritten automatically after a target rename; update them manually. Compatibility depends on internal Obsidian interfaces and is checked at runtime.
 
 ## Outputs and file saving
 
@@ -223,7 +229,7 @@ Offscreen recycling considers cell count, source/output size, image count, and e
 - Code editing and execution currently target Python. Remote kernels are not supported.
 - Notebook widgets and active JavaScript outputs are not supported. Static SVG within HTML output is filtered for safety; inline stdin prompts are supported.
 - Cell attachment data is preserved, but preview support for attachment-referenced images is limited.
-- `.ipynb` files are not integrated with Obsidian's native graph, backlinks, or Properties index.
+- Native Notebook indexing uses guarded internal Obsidian interfaces. If unavailable, editing and execution remain available. The core File properties sidebar and Bases are not integrated.
 - Cell types follow the file's `cell_type` field rather than being inferred from content. HTML callouts incorrectly marked as code can be changed to Markdown manually.
 - Special third-party theme styles written exclusively for the native reading view may require additional adaptation.
 

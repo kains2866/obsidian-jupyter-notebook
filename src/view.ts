@@ -1,3 +1,5 @@
+import {resolveNotebookNavigation} from './notebook-navigation';
+import {projectNotebookMarkdown} from './notebook-markdown';
 import {IncrementalImportChecker} from './import-check';
 import {RecoveryDrafts,recoveryHash,type RecoveryDraft} from './recovery-drafts';
 import {recoveryCacheDirectory} from './recovery-cache';
@@ -20,6 +22,7 @@ export class NotebookView extends FileView{
  private recoveredDraft?:RecoveryDraft;private recovery?:RecoveryDrafts;private recoveryTimer?:number;private recoveryBaseline='';private recoveryNotebook?:Notebook;
  private importTimer?:number;private importController?:AbortController;private importGeneration=0;
  private importChecker=new IncrementalImportChecker();private importSources:string[]=[];private importPython?:string;private importPath?:string;private importSourceText=new WeakMap<string[],string>();
+ private pendingNavigation?:unknown;private navigationGeneration=0;private loadingNotebook=false;private fileLoadGeneration=0;
  private session?:NotebookSession;private editor?:NotebookEditor;
  private kernel?:KernelClient;private starting?:Promise<KernelClient>;
  private loadedNotebook?:Notebook;private trustedSession=false;private lastExecution?:'success'|'error';private lastExecutionCode?:string;
@@ -37,9 +40,27 @@ export class NotebookView extends FileView{
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
  async onLoadFile(file:TFile):Promise<void>{
-  this.disposed=false;this.importSources=[];this.importChecker.clear();
+  this.disposed=false;this.loadingNotebook=true;this.navigationGeneration++;this.importSources=[];this.importChecker.clear();
+  const loadGeneration=++this.fileLoadGeneration;
   const text=await this.app.vault.read(file);
-  try{this.loadNotebook(text);await this.openRecovery(file,text)}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
+  if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;
+  try{this.loadNotebook(text);await this.openRecovery(file,text);if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;this.loadingNotebook=false;void this.navigatePending()}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
+ }
+ setEphemeralState(state:unknown):void{
+  super.setEphemeralState(state);this.pendingNavigation=state;this.navigationGeneration++;void this.navigatePending();
+ }
+ private async navigatePending():Promise<void>{
+  const session=this.session,editor=this.editor,state=this.pendingNavigation;
+  if(this.disposed||this.loadingNotebook||!session||!editor||state===undefined)return;
+  const generation=this.navigationGeneration,notebook=session.notebook;
+  const saved=this.file?this.plugin.notebookMetadata?.get(this.file.path):undefined;
+  const projection=projectNotebookMarkdown(notebook);
+  try{
+   const entry=saved?.document.text===projection.text?saved:await this.plugin.notebookMetadata?.metadataForNotebook(notebook);
+   if(this.disposed||generation!==this.navigationGeneration||this.session!==session||this.editor!==editor||session.notebook!==notebook)return;
+   const target=resolveNotebookNavigation(projection,entry?.cache??{},state);
+   this.pendingNavigation=undefined;if(target)await editor.revealCell(target);
+  }catch(error){if(!this.disposed&&generation===this.navigationGeneration){this.pendingNavigation=undefined;console.error('[Jupyter Notebook] Navigation failed',error)}}
  }
  private loadNotebook(text:string):void{
   const session=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});
@@ -377,6 +398,6 @@ export class NotebookView extends FileView{
     }
    }
   }catch(error){this.disposed=false;throw error}
-  window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
+  this.fileLoadGeneration++;this.navigationGeneration++;this.pendingNavigation=undefined;window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
  }
 }

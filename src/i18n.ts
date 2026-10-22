@@ -6,6 +6,8 @@ import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
+ '图谱中的 Notebook':'Notebooks in Graph view',
+ '在 Obsidian 的图谱中开启“附件”显示，才能看到 Notebook 节点及连接关系。仅索引 Markdown 单元格和 YAML 属性，不索引代码或输出。':'Enable “Attachments” in Obsidian’s Graph view to see Notebook nodes and their connections. Only Markdown cells and YAML properties are indexed, not code or outputs.',
  '原生属性编辑器不可用。':'The native Properties editor is unavailable.',
  '原生属性编辑器不可用，当前仅预览属性；可在 Markdown 中编辑 YAML。':'The native Properties editor is unavailable. Properties are read-only here; edit YAML in a Markdown cell.',
  '请等待当前运行结束后再修改 Notebook 属性。':'Wait for execution to finish before changing Notebook properties.',
@@ -62,7 +64,14 @@ const common:Record<string,string>={
  'Python · 选择环境':'Python · Select kernel','Python · 仓库环境':'Python · Vault environment','Python · 默认':'Python · Default','Python · 系统':'Python · System',
 };
 export function resolveLanguage(setting:LanguageSetting='auto',locale='en'): 'zh'|'en'{return setting==='auto'?(locale.toLowerCase().startsWith('zh')?'zh':'en'):setting}
-const englishDictionary={...common,...workflowTranslations,...outputTranslations,...environmentTranslations,...importCheckTranslations,...errorTranslations};
+const notebookIndexTranslations:Record<string,string>={
+ '图谱':'Graph','附件':'Attachments',
+ 'Notebook Markdown 索引解析失败。':'Notebook Markdown parsing failed.',
+ '当前 Obsidian 版本无法接入 Notebook 原生索引；编辑和运行仍可使用。':'Notebook native indexing is unavailable in this Obsidian version. Editing and execution remain available.',
+ 'Notebook 内的链接暂不自动改写，请在重命名目标后手动更新相关 Markdown 链接。':'Links inside Notebooks are not rewritten automatically. Update the Markdown links manually after renaming their targets.',
+ 'Notebook Markdown 索引失败，已跳过此文件；原文件未修改。':'Notebook Markdown indexing failed. This file was skipped and its contents were preserved.',
+};
+const englishDictionary={...common,...workflowTranslations,...outputTranslations,...environmentTranslations,...importCheckTranslations,...notebookIndexTranslations,...errorTranslations};
 const errorTemplates=compileTemplates(errorTranslations);
 const reverseErrorTemplates=compileTemplates(englishErrorTranslations);
 type ErrorTemplate={pattern:RegExp;keys:string[];translated:string};

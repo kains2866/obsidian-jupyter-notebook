@@ -4,6 +4,7 @@ import {Plugin,Notice,normalizePath,setTooltip,Platform,FileSystemAdapter,getLan
 import {NotebookView,NOTEBOOK_VIEW} from './view';
 import {DEFAULT_SETTINGS,NotebookSettingsTab,type NotebookSettings,type EnvironmentPickerOptions} from './settings';
 import {newCell,serializeNotebook} from './notebook';
+import {NotebookMetadataBridge} from './notebook-metadata';
 import {NotebookDataviewBridge} from './notebook-properties';
 import {syncedEnvironmentSettings} from './environment-config';
 import {normalizePreferences} from './preferences';
@@ -11,6 +12,7 @@ import {createTranslator,type Translator} from './i18n';
 import {belongsToEnvironmentDirectory,type Environment} from './environments';
 export default class NotebookPlugin extends Plugin{
  settings:NotebookSettings={...DEFAULT_SETTINGS,outputOptions:{...DEFAULT_SETTINGS.outputOptions}};
+ notebookMetadata?:NotebookMetadataBridge;
  environmentRemovalActive=false;
  private commandIds:string[]=[];private commandLabels='';private ribbon?:HTMLElement;
  private creationQueue:Promise<void>=Promise.resolve();
@@ -43,6 +45,7 @@ export default class NotebookPlugin extends Plugin{
   }else await this.saveData(syncedEnvironmentSettings(this.settings));
   this.registerView(NOTEBOOK_VIEW,leaf=>new NotebookView(leaf,this));
   this.registerExtensions(['ipynb'],NOTEBOOK_VIEW);
+  this.notebookMetadata=new NotebookMetadataBridge(this,message=>new Notice(this.getTranslator()(message),10000));this.notebookMetadata.start();
   new NotebookDataviewBridge(this,message=>new Notice(this.getTranslator()(message),10000)).start();
   if(!Platform.isMobile)this.addSettingTab(new NotebookSettingsTab(this.app,this));
   if(Platform.isMobile)return;

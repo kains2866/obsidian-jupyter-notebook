@@ -179,3 +179,25 @@ it('native Properties writes standard Markdown YAML through the same session and
 it('rejects stale native Properties writes after session replacement, closure or while busy',()=>{
  const {view}=propertyView();const controller=view.propertiesEditor;const release=view.session.lock();expect(()=>controller.hooks.change({title:'Busy'})).toThrow();release();view.session=new NotebookSession(data);expect(()=>controller.hooks.change({title:'Stale'})).toThrow();expect(view.session.dirty).toBe(false);view.disposed=true;expect(()=>controller.hooks.change({title:'Closed'})).toThrow()
 });
+
+describe('native navigation requests',()=>{
+ const markdown=()=>JSON.stringify({nbformat:4,nbformat_minor:5,metadata:{},cells:[{id:'md',cell_type:'markdown',source:'# Target\nbody',metadata:{}}]});
+ it('maps a cached projection to current cell indices after inserting a code cell',async()=>{
+  const {view}=setup();const {projectNotebookMarkdown}=await import('../src/notebook-markdown');
+  view.session=new NotebookSession(markdown());const saved={document:projectNotebookMarkdown(view.session.notebook),cache:{}};
+  view.session.structure(insertCell(view.session.notebook,0,newCell('code')));
+  view.plugin.notebookMetadata={get:()=>saved};view.editor={revealCell:vi.fn()};view.pendingNavigation={line:0};
+  await view.navigatePending();expect(view.editor.revealCell).toHaveBeenCalledWith({index:1,line:0,offset:0});
+ });
+ it('queues until loaded and consumes the pending target once',async()=>{
+  const {view}=setup();view.session=new NotebookSession(markdown());view.editor={revealCell:vi.fn()};view.loadingNotebook=true;view.pendingNavigation={line:1};
+  await view.navigatePending();expect(view.editor.revealCell).not.toHaveBeenCalled();
+  view.loadingNotebook=false;await view.navigatePending();await view.navigatePending();expect(view.editor.revealCell).toHaveBeenCalledTimes(1);expect(view.editor.revealCell).toHaveBeenCalledWith({index:0,line:1,offset:9});
+ });
+ it('ignores asynchronous resolution superseded by a newer request or changed notebook',async()=>{
+  const {view}=setup();view.session=new NotebookSession(markdown());view.editor={revealCell:vi.fn()};view.pendingNavigation={line:0};
+  let finish!:(value:unknown)=>void;view.plugin.notebookMetadata={get:()=>undefined,metadataForNotebook:()=>new Promise(resolve=>{finish=resolve})};
+  const pending=view.navigatePending();view.navigationGeneration++;finish(undefined);await pending;expect(view.editor.revealCell).not.toHaveBeenCalled();
+  const changed=view.navigatePending();view.session.structure(insertCell(view.session.notebook,0,newCell('code')));finish(undefined);await changed;expect(view.editor.revealCell).not.toHaveBeenCalled();
+ });
+});

@@ -22,13 +22,18 @@ export class NotebookSettingsTab extends PluginSettingTab {
  getSettingDefinitions():SettingDefinitionItem[]{
   const t=this.plugin.getTranslator();
   const language:SettingDefinitionItem={name:t('语言'),aliases:['language','语言'],control:{type:'dropdown',key:'language',defaultValue:'auto',options:{auto:t('跟随 Obsidian'),zh:'中文',en:'English'}}};
-  if(Platform.isMobile)return [language,{name:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')}];
-  return [{type:'group',heading:t('Notebook 设置'),items:[language,{name:t('默认内核'),desc:t('新打开的 Notebook 使用此环境；当前内核保持运行。'),aliases:['Python','kernel','内核'],render:setting=>{setting.addButton(button=>button.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}))}}]},
+  const graph=this.graphGuidance();
+  if(Platform.isMobile)return [language,graph,{name:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')}];
+  return [{type:'group',heading:t('Notebook 设置'),items:[language,graph,{name:t('默认内核'),desc:t('新打开的 Notebook 使用此环境；当前内核保持运行。'),aliases:['Python','kernel','内核'],render:setting=>{setting.addButton(button=>button.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}))}}]},
    {type:'group',heading:t('输出管理'),items:[
     ...OUTPUT_TOGGLES.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'toggle' as const,key:`outputOptions.${key}`,defaultValue:Boolean(DEFAULT_OUTPUT_OPTIONS[key])}})),
     ...OUTPUT_NUMBERS.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'number' as const,key:`outputOptions.${key}`,defaultValue:Number(DEFAULT_OUTPUT_OPTIONS[key]),validate:(value:number)=>Number.isFinite(value)&&value>0?undefined:t('请输入大于零的有限数值。')}}))]},
    {type:'group',heading:t('缓存与恢复'),items:this.recoverySettings()},
    {type:'group',heading:t('高级：手动 Python 路径'),items:PYTHON_PATHS.map(([key,label])=>({name:t(label),aliases:[key,'Python','解释器'],control:{type:'text' as const,key}}))}];
+ }
+ private graphGuidance():SettingGroupItem{
+  const t=this.plugin.getTranslator();
+  return {name:t('图谱中的 Notebook'),desc:t('在 Obsidian 的图谱中开启“附件”显示，才能看到 Notebook 节点及连接关系。仅索引 Markdown 单元格和 YAML 属性，不索引代码或输出。'),aliases:['graph','attachments','图谱','附件']};
  }
  private recoverySettings():SettingGroupItem[]{
   const t=this.plugin.getTranslator();
@@ -61,6 +66,7 @@ export class NotebookSettingsTab extends PluginSettingTab {
  private renderLegacy():void{
   const t=this.plugin.getTranslator();this.containerEl.empty();new Setting(this.containerEl).setName(t('Notebook 设置')).setHeading();
   new Setting(this.containerEl).setName(t('语言')).addDropdown(d=>d.addOption('auto',t('跟随 Obsidian')).addOption('zh','中文').addOption('en','English').setValue(this.plugin.settings.language).onChange(value=>{void this.updateSettings({...this.plugin.settings,language:value as LanguageSetting}).then(()=>this.refreshSettings())}));
+  const graph=this.graphGuidance();new Setting(this.containerEl).setName(graph.name).setDesc(graph.desc||'');
   if(Platform.isMobile){this.containerEl.createEl('p',{text:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')});return}
   new Setting(this.containerEl).setName(t('默认内核')).setDesc(t('新打开的 Notebook 使用此环境；当前内核保持运行。')).addButton(b=>b.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}));
   new Setting(this.containerEl).setName(t('输出管理')).setHeading();

@@ -177,7 +177,7 @@ status: 学习中
 ---
 ```
 
-当前源码包含 Notebook 顶部的实验性原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑会重新序列化 YAML，注释和引号格式可能变化；复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心侧栏、图谱或 Bases 索引。
+当前源码包含 Notebook 顶部的实验性原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑会重新序列化 YAML，注释和引号格式可能变化；复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心“文件属性”侧栏或 Bases 索引。
 
 保存后，属性可由已启用的 Dataview 查询。例如，在 Markdown 单元格或普通笔记中添加：
 
@@ -191,6 +191,12 @@ FROM #Python
 Markdown 单元格的预览可以显示查询结果。插件通过内存适配提供 Notebook 属性索引，不修改 Obsidian 核心元数据缓存，也不接入核心侧栏“文件属性”。Dataview 适配依赖其内部接口，已验证版本为 **0.5.68**；不兼容时会提示并安全跳过索引。
 
 Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导出到 Jupyter 或 VS Code 后，YAML 是普通 Markdown 内容，不影响 Python 执行；Dataview 查询仅在 Obsidian 与 Dataview 环境中生效。
+
+## 原生链接与定位
+
+保存后的 Markdown 单元格和 YAML 标签、链接可接入原生反链、标签、搜索和图谱关系。需要在 **Obsidian 图谱设置中开启“显示附件”**，才能显示 Notebook 节点及其连接。代码与运行输出不参与索引。标题和块链接可定位到对应的 Markdown 单元格。
+
+适配使用内存中的 Markdown 投影，不创建伴随文件，也不改写 Notebook JSON。核心批量属性与任务写入操作不会接入该投影。Notebook 内部链接暂不支持目标重命名后的自动改写，需要手动更新。相关能力依赖 Obsidian 内部接口，并在运行时检查兼容性。
 
 ## 输出与文件保存
 
@@ -219,7 +225,7 @@ HTML `div` 提示块使用主题底色和边框；`alert-success`、`alert-info`
 - 代码编辑与运行目前面向 Python，不支持远程内核。
 - 暂不支持 Notebook widgets 和活动 JavaScript 输出。HTML 输出内的静态 SVG 会经过安全过滤；支持顶部内联 stdin 输入。
 - 单元格附件数据保留，附件引用图片的预览支持有限。
-- 不提供 `.ipynb` 的 Obsidian 原生图谱、反链或 Properties 索引。
+- Notebook 原生索引依赖经过能力检查的 Obsidian 内部接口；不兼容时仍可编辑和运行。尚未接入核心“文件属性”侧栏和 Bases。
 - 单元格类型依据文件中的 `cell_type`，不会根据内容自动推断。误标为代码的 HTML 提示块可手动改为 Markdown。
 - 第三方主题仅针对原生阅读视图编写的特殊样式，可能需要额外适配。
 

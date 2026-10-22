@@ -1,3 +1,4 @@
+import type {NotebookNavigationTarget} from './notebook-navigation';
 import {shouldVirtualizeNotebook} from './virtualization-policy';
 import type {OutputActions} from './output-actions';
 import {requestKernelInput} from './kernel-input-modal';
@@ -62,6 +63,7 @@ export class NotebookEditor {
  private indexSetters=new WeakMap<HTMLElement,(index:number)=>void>();
  private syncingSource=false;
  private markdownSources=new WeakMap<HTMLElement,string>();
+ private markdownRenders=new WeakMap<HTMLElement,Promise<void>>();private revealGeneration=0;
  private recycleFrame?:number;
  private savedSelections=new Map<string,NonNullable<EditorSnapshot['selections'][number]>>();
  private editors:(EditorView|undefined)[]=[];
@@ -210,7 +212,7 @@ export class NotebookEditor {
    }
    const body=this.el('div','ipynb-cell-body',node);
    if(cell.cell_type==='markdown'&&(this.actions.readOnly||this.preview.has(this.cellIdentity(cell)))){
-    body.classList.add('ipynb-preview-body');const preview=this.el('div','ipynb-markdown-preview markdown-rendered',body);preview.tabIndex=0;const hint=this.el('span','ipynb-cell-hint',body);hint.id=`ipynb-hint-${crypto.randomUUID()}`;hint.textContent=this.t(this.actions.readOnly?'Markdown 预览':'Markdown 预览，按 Enter 编辑');preview.setAttribute('aria-labelledby',hint.id);preview.setAttribute('role','group');if(!this.actions.readOnly)preview.addEventListener('dblclick',event=>{if(!(event.target as Element).closest('a,button,input,textarea,select,summary'))this.editMarkdown(index)});preview.addEventListener('keydown',event=>{if(!this.actions.readOnly&&event.target===preview&&event.key==='Enter'){event.preventDefault();this.editMarkdown(index)}});this.markdownSources.set(node,sourceText(cell));void this.actions.markdown(sourceText(cell),preview).catch(error=>this.showMessage(String(error)));
+    body.classList.add('ipynb-preview-body');const preview=this.el('div','ipynb-markdown-preview markdown-rendered',body);preview.tabIndex=0;const hint=this.el('span','ipynb-cell-hint',body);hint.id=`ipynb-hint-${crypto.randomUUID()}`;hint.textContent=this.t(this.actions.readOnly?'Markdown 预览':'Markdown 预览，按 Enter 编辑');preview.setAttribute('aria-labelledby',hint.id);preview.setAttribute('role','group');if(!this.actions.readOnly)preview.addEventListener('dblclick',event=>{if(!(event.target as Element).closest('a,button,input,textarea,select,summary'))this.editMarkdown(index)});preview.addEventListener('keydown',event=>{if(!this.actions.readOnly&&event.target===preview&&event.key==='Enter'){event.preventDefault();this.editMarkdown(index)}});this.markdownSources.set(node,sourceText(cell));const rendering=this.actions.markdown(sourceText(cell),preview).catch(error=>this.showMessage(String(error)));this.markdownRenders.set(node,rendering);
    }else{
     node.classList.add('ipynb-editable-cell');const host=this.el('div','ipynb-code',body);
     const editor=new EditorView({parent:host,state:this.cachedState(index,sourceText(cell))??EditorState.create({doc:sourceText(cell),extensions:[
@@ -312,6 +314,26 @@ export class NotebookEditor {
  private mountCell(index:number):boolean{const mount=this.pendingCells.get(index);if(!mount)return false;this.pendingCells.delete(index);const node=this.cellNodes[index];node.classList.remove('ipynb-cell-pending');node.style.removeProperty('min-height');mount();this.mountedCells.add(index);return true}
  private selectCell(index:number):void{const node=this.cellNodes[index];if(!node)return;this.selectedCellId=node.dataset.cellId;this.cellNodes.forEach(cell=>cell.classList.toggle('is-selected',cell.dataset.cellId===this.selectedCellId))}
  focusCell(index:number):void{const target=Math.min(index,this.session.notebook.cells.length-1);if(this.mountCell(target))this.refresh();this.selectCell(target);this.editors[target]?.focus()}
+ async revealCell(target:NotebookNavigationTarget):Promise<void>{
+  const generation=++this.revealGeneration;
+  const {index,offset,heading,block}=target;const cell=this.session.notebook.cells[index];
+  if(this.destroyed||cell?.cell_type!=='markdown'||!Number.isInteger(offset)||offset<0||offset>sourceText(cell).length)return;
+  if(this.mountCell(index))this.refresh();this.selectCell(index);
+  const node=this.cellNodes[index];if(!node)return;
+  this.anchor=undefined;
+  const rendering=this.markdownRenders.get(node);if(rendering)await rendering;
+  if(this.destroyed||generation!==this.revealGeneration||this.cellNodes[index]!==node||this.session.notebook.cells[index]!==cell)return;
+  const preview=node.querySelector<HTMLElement>('.ipynb-markdown-preview');
+  const headingNodes=heading&&preview?[...preview.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')].filter(element=>element.dataset.heading===heading||element.textContent===heading):[];
+  const headingNode=headingNodes.length===1?headingNodes[0]:undefined;
+  const blockNode=block&&preview?[...preview.querySelectorAll<HTMLElement>('[data-block-id]')].find(element=>element.dataset.blockId===block):undefined;
+  const rendered=headingNode||blockNode;
+  if(rendered){rendered.scrollIntoView({block:'center'});return}
+  if(preview&&!this.actions.readOnly)this.editMarkdown(index);
+  const editor=this.editors[index];
+  if(editor){editor.dispatch({selection:{anchor:offset},effects:EditorView.scrollIntoView(offset,{y:'center'}),annotations:Transaction.addToHistory.of(false)});editor.focus()}
+  node.scrollIntoView({block:'nearest'});
+ }
  setImportStatuses(statuses:ImportStatus[]):void{this.importStatuses=statuses;this.renderImportStatuses()}
  private renderImportStatuses():void{
   let codeIndex=0;this.session.notebook.cells.forEach((cell,index)=>{
@@ -362,5 +384,5 @@ export class NotebookEditor {
   this.waitingInput=true;const context=this.t('单元格 {index} · 第 {count} 次输入',{index:(this.session.runningIndex??0)+1,count:++this.inputSequence});this.refresh();
   return requestKernelInput(this.inputHost,request,controller.signal,this.t,context).finally(()=>{signal.removeEventListener('abort',abort);if(this.inputController===controller){this.inputController=undefined;this.waitingInput=false;if(!this.destroyed)this.refresh()}});
  }
- destroy():void{this.destroyed=true;this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.cellMounts?.clear();this.cellGaps?.clear();this.cachedEditorStates?.clear();this.mountedCells?.clear();this.visibleCells?.clear();if(this.recycleFrame!==undefined)this.root.win.cancelAnimationFrame(this.recycleFrame);this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.outputSnapshots?.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor?.destroy());this.session.onChange=()=>{};this.root.removeEventListener('focusout',this.scheduleRecycle);this.root.ownerDocument.removeEventListener('selectionchange',this.scheduleRecycle);this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
+ destroy():void{this.revealGeneration++;this.destroyed=true;this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.cellMounts?.clear();this.cellGaps?.clear();this.cachedEditorStates?.clear();this.mountedCells?.clear();this.visibleCells?.clear();if(this.recycleFrame!==undefined)this.root.win.cancelAnimationFrame(this.recycleFrame);this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.outputSnapshots?.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor?.destroy());this.session.onChange=()=>{};this.root.removeEventListener('focusout',this.scheduleRecycle);this.root.ownerDocument.removeEventListener('selectionchange',this.scheduleRecycle);this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
 }

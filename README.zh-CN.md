@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — 原生 Notebook、本机 Python、统一工作区" width="100%" />
-  <p><strong>在你的知识库里，编写笔记、运行代码、保留结果。</strong></p>
+  <p><strong>在 Obsidian 里运行 Python，让 Notebook 接入你的知识库。</strong></p>
   <p>
     <a href="https://github.com/kains2866/obsidian-jupyter-notebook/releases/latest"><img src="https://img.shields.io/github/v/release/kains2866/obsidian-jupyter-notebook?style=flat-square&amp;label=release&amp;color=8B5CF6" alt="最新发行版" /></a>
     <a href="#安装"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 及以上" /></a>
@@ -17,11 +17,13 @@
 
 ---
 
-在 Obsidian 中原生创建、编辑和运行 Jupyter Notebook。
+**在记笔记的地方，直接运行 Python。** 在 Obsidian 中创建和编辑 `.ipynb`，将 Markdown、代码与已保存的运行结果放在同一份文档里。
 
-**Jupyter Notebook** 为 `.ipynb` 文件提供独立的单元格编辑视图，将 Markdown、Python 代码及运行结果整合在同一工作区中。Notebook 保持标准文件格式，无需转换为 Markdown，也不会生成 Markdown 镜像。
+- **让 Notebook 成为知识库的一部分**：顶部可编辑 Properties，接入反链、标签搜索、图谱，以及标题和块定位。
+- **在本机完成代码工作流**：选择 Python 环境、管理依赖、交互输入、查看运行耗时与丰富输出。
+- **带走文件，继续使用**：同一份标准 `.ipynb` 可在 Jupyter 或 VS Code 中打开。属性保存在 Markdown YAML 块内，不生成伴随 Markdown 文件。
 
-**版本说明**：最近发布版本为 0.6.11；当前源码还包含未发布的恢复缓存、局部更新、增量依赖检测和过滤说明等改进。以下说明以当前源码为准，Release 安装包的具体变更请查看对应版本的更新记录。
+**[0.7.0 更新](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.0)**：原生 Properties 与笔记索引、异常退出草稿恢复、编辑历史保留及增量依赖检测。完整变更见 [更新记录](CHANGELOG.md)。
 
 ## 文档导航
 
@@ -29,15 +31,14 @@
 
 ## 主要功能
 
-- **原生 Notebook 编辑**：创建 `.ipynb` 文件，编辑 Code、Markdown 和 Raw 单元格，支持拖动排序、就地插入、类型切换及撤销、重做。
-- **本机 Python 执行**：运行单个单元格或全部代码，共享内核变量，支持中断、重启和清理变量；显示耗时与运行状态。
-- **交互输入**：在顶部工具栏下方显示 `input()` 提示，密码输入隐藏内容，取消输入会中断执行。
-- **环境与依赖管理**：选择已有 Python 环境，或为当前设备创建仓库专用环境；支持依赖查询、安装、卸载和重新安装。
-- **编辑时依赖检查**：识别 `import` 与 `from … import …`，在代码块内提示缺失模块，并提供安装与重新检查入口。
-- **Markdown 与主题适配**：使用 Obsidian 的 Markdown 渲染与主题样式，支持表格、代码块、双链跳转、标签搜索和嵌入预览。
-- **Notebook 属性查询**：读取首个 Markdown 单元格中的 YAML 属性，通过可选的 Dataview 插件查询 Notebook。
-- **输出与保存保护**：显示文本、图片、HTML 表格及错误输出，提供输出折叠与清理；保存时检测外部修改，避免覆盖冲突。
-- **中英文界面**：支持中文、English，以及跟随 Obsidian 的语言设置。
+- **可编辑属性与 Dataview**：在首个 Markdown 块中写入 YAML，即可在 Notebook 顶部编辑 Properties，并通过可选的 Dataview 查询已保存的属性；带空格的别名保持完整。
+- **原生笔记关联**：保存后的 Markdown 与 YAML 链接、标签接入反链、标签搜索和图谱，支持标题与块定位。在图谱中开启 **“附件”** 显示，即可看到 Notebook 节点。
+- **原生 Notebook 编辑**：创建 Code、Markdown、Raw 单元格，拖动排序、就地插入和切换类型；切换 Markdown 模式或增删移动单元格时，保留其他块的编辑器与撤销历史。
+- **本机 Python 与交互输入**：运行单块或全部代码，共享内核变量，显示耗时与状态，支持中断、重启和清理变量；在工具栏下方回答 `input()`，密码隐藏，取消输入会中断执行。
+- **环境与依赖管理**：选择已有环境，或为每台设备创建仓库专用环境，支持包查询、安装、卸载和重装；增量检测只解析修改过的块，仅缺库时显示提示。
+- **丰富输出**：显示 Markdown 表格、安全过滤后的 HTML、文本、图片及错误；表格复制为 TSV，图片可放大，并按 Obsidian 附件设置保存。
+- **草稿恢复与保存保护**：异常退出后确认恢复未保存草稿，自动清理期限可配置（默认 7 天）；保存前检测外部修改，避免覆盖冲突。
+- **主题与语言跟随**：字体、字号和颜色跟随 Obsidian，支持 Notebook 内嵌图片预览；界面可使用中文、English 或跟随 Obsidian 语言。
 
 ## 平台与运行方式
 
@@ -169,7 +170,9 @@
 
 ```yaml
 ---
-title: Notebook 演示
+title: My Notebook in Obsidian
+aliases:
+  - My Notebook
 tags:
   - Python
   - Notebook
@@ -177,7 +180,7 @@ status: 学习中
 ---
 ```
 
-当前源码包含 Notebook 顶部的实验性原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑会重新序列化 YAML，注释和引号格式可能变化；复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心“文件属性”侧栏或 Bases 索引。
+0.7.0 在 Notebook 顶部提供原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑会重新序列化 YAML，注释和引号格式可能变化；复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心“文件属性”侧栏或 Bases 索引。
 
 保存后，属性可由已启用的 Dataview 查询。例如，在 Markdown 单元格或普通笔记中添加：
 
@@ -196,7 +199,7 @@ Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导�
 
 Notebook 正文、代码、行号及界面文字跟随 Obsidian 字体与字号变量；切换主题、字体和字号通过 CSS 生效，不替换编辑器或清空撤销历史。
 
-Markdown 单元格可预览自己 `attachments` 中的 `attachment:` 图片，支持 PNG、JPEG、GIF、WebP 及安全过滤后的 SVG，也支持编码后的文件名。附件继续保留在 `.ipynb` 内，预览不会提取或改写附件；缺失、损坏及不支持的格式显示简短说明。SVG 脚本与自动加载的外部资源会被过滤。临时预览 URL 在单元格回收、模式切换和关闭文件时释放。本轮尚不包括通过粘贴或拖入新增图片。
+Markdown 单元格可预览自己 `attachments` 中的 `attachment:` 图片，支持 PNG、JPEG、GIF、WebP 及安全过滤后的 SVG，也支持编码后的文件名。附件继续保留在 `.ipynb` 内，预览不会提取或改写附件；缺失、损坏及不支持的格式显示简短说明。SVG 脚本与自动加载的外部资源会被过滤。临时预览 URL 在单元格回收、模式切换和关闭文件时释放。暂不支持通过粘贴或拖入新增内嵌图片。
 
 ## 原生链接与定位
 
@@ -316,4 +319,4 @@ macOS 的真实 Obsidian 测试为 `tests/obsidian.e2e.cjs`，使用独立临时
 
 `npm run release:package` 在 `release/` 生成 `main.js`、`manifest.json`、`styles.css`、内含 `jupyter-notebook/` 的直接安装 ZIP、`SHA256SUMS` 和从当前更新日志提取的发布说明。将三个文件复制到 `.obsidian/plugins/jupyter-notebook/`，或把 ZIP 解压到 `.obsidian/plugins/`。标签工作流先测试和构建，只上传 `main.js`、`manifest.json`、`styles.css` 并为它们生成构建来源证明。ZIP 和 SHA256SUMS 仅供本地使用，不上传到 GitHub Release。重跑历史任务仍使用旧工作流；需要手动重建时，应从 main 分支运行最新工作流并填写目标标签。已有 Release 的标题和说明保持不变。
 
-0.6.10 还补充大型 Notebook 回归场景、过期结果提示、等待输入上下文、安装重试与残留恢复、脱敏诊断，以及图片、表格和单项输出操作。大型 Notebook 测试覆盖指定场景，不代表所有滚动或内存问题都已解决。
+大型 Notebook 回归测试覆盖指定场景下的滚动、编辑、撤销和资源释放，不代表所有滚动或内存问题都已解决。

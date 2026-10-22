@@ -2,7 +2,7 @@
 
 <div align="center">
   <img src="docs/assets/readme-banner.svg" alt="Obsidian Jupyter Notebook — native notebooks, local Python, one workspace" width="100%" />
-  <p><strong>Write notes. Run Python. Keep the results in your vault.</strong></p>
+  <p><strong>Run Python in Obsidian. Connect notebooks to your knowledge.</strong></p>
   <p>
     <a href="https://github.com/kains2866/obsidian-jupyter-notebook/releases/latest"><img src="https://img.shields.io/github/v/release/kains2866/obsidian-jupyter-notebook?style=flat-square&amp;label=release&amp;color=8B5CF6" alt="Latest release" /></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?style=flat-square&amp;logo=obsidian" alt="Obsidian 1.8.7 or later" /></a>
@@ -17,11 +17,13 @@
 
 ---
 
-Create, edit, and run Jupyter Notebooks natively in Obsidian.
+**Run Python where you keep your notes.** Create and edit `.ipynb` files directly in Obsidian, with Markdown, code, and saved results in the same document.
 
-**Jupyter Notebook** provides a dedicated cell editor for `.ipynb` files, bringing Markdown, Python code, and execution results into one workspace. Notebooks retain their standard file format: no conversion to Markdown or Markdown mirror files is required.
+- **A notebook that belongs in your vault:** editable Properties, backlinks, tags, graph connections, and links to headings and blocks.
+- **A complete local workflow:** Python environments, package management, interactive input, execution timing, and rich outputs.
+- **A standard file you can keep using elsewhere:** open the same `.ipynb` in Jupyter or VS Code. Properties stay in a Markdown YAML cell; no companion Markdown files are created.
 
-**Version note:** the most recently published release is 0.6.11. The current source also includes unreleased recovery-cache, incremental rendering, dependency-check, and filtering-notice improvements. This README describes the current source; consult the changelog for features included in a downloaded release.
+**New in [0.7.0](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.0):** native Properties and notebook indexing, crash-recovery drafts, preserved editing history, and incremental dependency checks. See the [changelog](CHANGELOG.md) for details.
 
 ## Documentation
 
@@ -29,15 +31,14 @@ Create, edit, and run Jupyter Notebooks natively in Obsidian.
 
 ## Features
 
-- **Native Notebook editing**: create `.ipynb` files and edit Code, Markdown, and Raw cells, with drag-and-drop reordering, inline insertion, cell type switching, undo, and redo.
-- **Local Python execution**: run individual cells or all code cells in a shared kernel, with interrupt, restart, variable-reset, timing, and execution-status controls.
-- **Interactive input**: respond to `input()` prompts below the toolbar, hide password input, or cancel to interrupt execution.
-- **Environment and package management**: select an existing Python environment or create a vault-managed environment for the current device; search, install, uninstall, and reinstall packages.
-- **Dependency checks while editing**: detect `import` and `from … import …` statements, show missing modules in the relevant code cell, and provide installation and recheck actions.
-- **Markdown and theme integration**: use Obsidian's Markdown renderer and theme styles, with tables, fenced code blocks, wikilink navigation, tag search, and embedded previews.
-- **Notebook property queries**: read YAML properties from the first Markdown cell and query Notebooks through the optional Dataview plugin.
-- **Output and save protection**: display text, images, HTML tables, and errors; collapse or clear outputs; detect external changes before saving to prevent conflicting overwrites.
-- **Bilingual interface**: choose Chinese or English, or follow Obsidian's language setting.
+- **Editable Properties and Dataview**: use YAML in the first Markdown cell to edit properties at the top of the Notebook and query saved values through optional Dataview integration. Aliases containing spaces stay intact.
+- **Native notebook connections**: connect saved Markdown cells and YAML links/tags to backlinks, tag search, and the graph; navigate to headings and blocks. Enable **Attachments** in Graph view to see Notebook nodes.
+- **Native Notebook editing**: create Code, Markdown, and Raw cells, reorder by dragging, insert inline, and switch cell types. Unaffected cells keep their editors and undo history during structural changes and Markdown mode switches.
+- **Local Python execution and input**: run one cell or all cells in a shared kernel, see timing and execution status, interrupt, restart, or reset variables. Answer `input()` below the toolbar; password input is masked, and cancelling interrupts execution.
+- **Environments and dependencies**: select an existing Python environment or create a vault-managed environment per device. Search, install, uninstall, and reinstall packages. Incremental checks parse changed cells and show prompts only for missing modules.
+- **Rich outputs**: view Markdown tables, sanitized HTML, text, images, and errors. Copy tables as TSV, enlarge images, and save images using Obsidian attachment settings.
+- **Recovery and save protection**: restore unsaved drafts after an unexpected shutdown, configure automatic cleanup (7 days by default), and detect external edits before saving.
+- **Theme and language integration**: follow Obsidian fonts, sizes, and theme colors; preview embedded Notebook images; choose Chinese, English, or Obsidian's language.
 
 ## Platforms and execution
 
@@ -169,7 +170,9 @@ Add YAML at the start of the first Markdown cell:
 
 ```yaml
 ---
-title: Notebook demo
+title: My Notebook in Obsidian
+aliases:
+  - My Notebook
 tags:
   - Python
   - Notebook
@@ -177,7 +180,7 @@ status: Learning
 ---
 ```
 
-The current source includes an experimental native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Editing properties reserializes YAML, so comments and quoting may change; nested values remain available in YAML source. This does not add core File properties sidebar or Bases indexing.
+Version 0.7.0 includes a native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Editing properties reserializes YAML, so comments and quoting may change; nested values remain available in YAML source. This does not add core File properties sidebar or Bases indexing.
 
 After saving, the properties can be queried by an enabled Dataview plugin. For example, add this to a Markdown cell or a regular note:
 
@@ -320,4 +323,4 @@ Run `npm run release:version -- X.Y.Z` (replace `X.Y.Z` with a version greater t
 
 `npm run release:package` builds `release/` with `main.js`, `manifest.json`, `styles.css`, a direct-install ZIP containing `jupyter-notebook/`, `SHA256SUMS`, and release notes extracted from the current changelog section. Copy the three files into `.obsidian/plugins/jupyter-notebook/`, or extract the ZIP into `.obsidian/plugins/`. The tag workflow tests and builds, then uploads and attests only `main.js`, `manifest.json`, and `styles.css`. ZIP and SHA256SUMS remain local and are not uploaded to GitHub Releases. Historical run re-runs still use their original workflow; dispatch the latest workflow from main with the target tag for a manual rebuild. Existing release titles and notes are preserved.
 
-Version 0.6.10 also adds large-notebook regression coverage, stale-result indicators, input-wait context, installation retry/recovery and redacted diagnostics, and expanded image/table/output controls. Large-notebook coverage checks specific scenarios; it does not guarantee all scrolling or memory issues are resolved.
+Large-notebook regression tests cover scrolling, editing, undo, and resource release in specific scenarios; they do not guarantee all scrolling or memory issues are resolved.

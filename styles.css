@@ -1,24 +1,24 @@
-.ipynb-editor{box-sizing:border-box;height:100%;overflow-y:auto;overflow-x:hidden;padding:0 24px 40px;color:var(--text-normal);background:var(--background-primary);font-size:14px}
+.ipynb-editor{box-sizing:border-box;height:100%;overflow-y:auto;overflow-x:hidden;padding:0 24px 40px;color:var(--text-normal);background:var(--background-primary);font-family:var(--font-text);font-size:var(--font-text-size);line-height:var(--line-height-normal)}
 .ipynb-toolbar{position:sticky;top:0;z-index:4;display:flex;gap:4px;align-items:center;min-height:48px;background:var(--background-primary);border-bottom:1px solid var(--background-modifier-border)}
-.ipynb-editor button{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:inherit;font-size:12px;padding:5px 8px;border:0;border-radius:4px;cursor:pointer;min-height:28px;background:transparent;color:var(--text-muted);box-shadow:none;white-space:nowrap}
+.ipynb-editor button{font-family:var(--font-interface);display:inline-flex;align-items:center;justify-content:center;gap:6px;font-size:var(--font-ui-small);padding:5px 8px;border:0;border-radius:4px;cursor:pointer;min-height:28px;background:transparent;color:var(--text-muted);box-shadow:none;white-space:nowrap}
 .ipynb-editor button:hover,.ipynb-menu-trigger:hover{background:var(--background-secondary);color:var(--text-normal)}
 .ipynb-editor button:disabled{opacity:.4;cursor:default}
 .ipynb-editor svg{width:16px;height:16px;flex-shrink:0}
 .ipynb-editor button.ipynb-icon-button{width:28px;padding:4px}
 .ipynb-editor button:focus-visible,.ipynb-editor select:focus-visible,.ipynb-editor summary:focus-visible,.ipynb-markdown-preview:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:2px}
 .ipynb-editor button.ipynb-environment{margin-left:auto;max-width:210px;overflow:hidden;text-overflow:ellipsis;display:block}
-.ipynb-status{color:var(--text-muted);font-size:11px;white-space:nowrap;padding-left:8px}
+.ipynb-status{color:var(--text-muted);font-size:var(--font-ui-smaller);white-space:nowrap;padding-left:8px}
 .ipynb-insert-toolbar{display:flex;gap:10px;padding:12px 0 14px 42px}
 .ipynb-menu{position:relative;flex-shrink:0}
 .ipynb-menu-trigger{list-style:none;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:4px;color:var(--text-muted);cursor:pointer}
 .ipynb-menu-trigger::-webkit-details-marker{display:none}
 .ipynb-menu-panel{position:absolute;right:0;top:32px;z-index:8;min-width:144px;padding:5px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:6px;box-shadow:0 4px 16px #0002}
 .ipynb-menu-panel button{width:100%;justify-content:flex-start}
-.ipynb-menu-panel select{width:100%;margin:4px 0;padding:4px;background:var(--background-secondary);color:var(--text-normal);border:1px solid var(--background-modifier-border);border-radius:4px;font-size:12px}
+.ipynb-menu-panel select{width:100%;margin:4px 0;padding:4px;background:var(--background-secondary);color:var(--text-normal);border:1px solid var(--background-modifier-border);border-radius:4px;font-size:var(--font-ui-small)}
 .ipynb-cell{position:relative;margin:0;padding-left:42px;min-width:0}
 .ipynb-cell-gutter{position:absolute;left:0;top:5px;width:34px;display:flex;flex-direction:column;align-items:center;gap:3px}
 .ipynb-cell-gutter button{color:var(--interactive-accent)}
-.ipynb-count{font-family:var(--font-monospace);font-size:11px;color:var(--text-muted)}
+.ipynb-count{font-family:var(--font-monospace);font-size:var(--font-ui-smaller);color:var(--text-muted)}
 .ipynb-cell-body{border:1px solid var(--background-modifier-border);border-radius:5px;min-width:0}
 .ipynb-markdown-cell .ipynb-cell-body{border-color:transparent}
 .ipynb-editable-cell:focus-within .ipynb-cell-body{border-color:var(--interactive-accent);box-shadow:0 0 0 1px var(--interactive-accent)}
@@ -26,27 +26,28 @@
 .ipynb-cell-tools-anchor + .ipynb-cell-body{margin-top:-32px}
 .ipynb-cell-toolbar{position:absolute;right:8px;top:-13px;z-index:2;display:flex;gap:2px;align-items:center;padding:2px;background:var(--background-primary);border:1px solid var(--background-modifier-border);border-radius:5px;opacity:0;pointer-events:none;transition:opacity .12s}
 .ipynb-cell:hover .ipynb-cell-toolbar,.ipynb-cell:focus-within .ipynb-cell-toolbar,.ipynb-cell-toolbar.ipynb-menu-open{opacity:1;pointer-events:auto}
-.ipynb-code .cm-editor{min-height:46px;padding:8px 0;background:transparent}
+.ipynb-code .cm-editor{min-height:46px;padding:8px 0;background:transparent;font-size:var(--code-size)}
+.ipynb-code .cm-scroller{font-family:var(--font-monospace);line-height:var(--line-height-normal)}
 .ipynb-code .cm-editor.cm-focused{outline:none}
-.ipynb-code .cm-gutters{background:transparent;color:var(--text-muted);font-size:11px;min-width:30px}
+.ipynb-code .cm-gutters{background:transparent;color:var(--text-muted);font-size:inherit;min-width:30px}
 .ipynb-code .cm-activeLine,.ipynb-code .cm-activeLineGutter{background:transparent}
 .ipynb-code .cm-focused .cm-activeLine{background:var(--background-secondary)}
-.ipynb-code .cm-content{padding:2px 0;line-height:1.6}
+.ipynb-code .cm-content{padding:2px 0;line-height:var(--line-height-normal)}
 .ipynb-output:not(:empty){padding:12px 16px;border-top:1px solid var(--background-modifier-border);overflow:auto;max-width:100%}
-.ipynb-output pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-monospace);font-size:13px;background:transparent}
+.ipynb-output pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font-family:var(--font-monospace);font-size:var(--code-size);line-height:var(--line-height-normal);background:transparent}
 .ipynb-output img{max-width:100%;height:auto}
-.ipynb-output table{border-collapse:collapse;font-size:13px}
+.ipynb-output table{border-collapse:collapse;font-size:var(--font-text-size)}
 .ipynb-output th,.ipynb-output td{padding:5px 10px;border:1px solid var(--background-modifier-border)}
 .ipynb-error,.ipynb-stderr{color:var(--text-error)}
-.ipynb-markdown-preview{padding:8px 12px;overflow-wrap:anywhere;cursor:text}
-.ipynb-message{margin:12px 0 4px 42px;padding:10px 12px;border-left:1px solid var(--text-error);border-radius:3px;background:var(--background-secondary);font-size:12px}
+.ipynb-markdown-preview{font-family:var(--font-text);font-size:var(--font-text-size);line-height:var(--line-height-normal);padding:8px 12px;overflow-wrap:anywhere;cursor:text}
+.ipynb-message{margin:12px 0 4px 42px;padding:10px 12px;border-left:1px solid var(--text-error);border-radius:3px;background:var(--background-secondary);font-size:var(--font-ui-small)}
 .ipynb-message[hidden]{display:none}
 .ipynb-message-heading{display:flex;align-items:center;gap:10px}
 .ipynb-message-heading strong{font-weight:500;overflow-wrap:anywhere}
 .ipynb-message-heading button{margin-left:auto;flex-shrink:0}
 .ipynb-message-hint{margin:3px 0;color:var(--text-muted);line-height:1.5}
 .ipynb-error-details summary{cursor:pointer;color:var(--text-muted);margin-top:6px}
-.ipynb-error-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:240px;overflow:auto}
+.ipynb-error-details pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--font-ui-smaller);max-height:240px;overflow:auto}
 .ipynb-empty{text-align:center;color:var(--text-muted);padding:60px 20px}
 .ipynb-environment-dialog input{width:100%;margin-bottom:12px}
 @media(hover:none){.ipynb-cell-toolbar{opacity:1;pointer-events:auto}}
@@ -93,7 +94,7 @@
 .ipynb-properties dd { margin: 0; overflow-wrap: anywhere; }
 
 .ipynb-preview-body{position:relative;padding-bottom:22px}
-.ipynb-cell-hint{position:absolute;right:10px;bottom:4px;font-size:10px;color:var(--text-faint);opacity:0;pointer-events:none}
+.ipynb-cell-hint{position:absolute;right:10px;bottom:4px;font-size:var(--font-ui-smaller);color:var(--text-faint);opacity:0;pointer-events:none}
 .ipynb-cell:hover .ipynb-cell-hint,.ipynb-cell:focus-within .ipynb-cell-hint{opacity:1}
 .ipynb-word-match{background:var(--text-selection);box-shadow:inset 0 -1px var(--interactive-accent)}
 .ipynb-code .cm-activeLineGutter{color:var(--text-normal);background:var(--background-secondary)}
@@ -102,11 +103,11 @@
 
 .ipynb-sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
-.ipynb-import-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 12px;border-top:1px solid var(--background-modifier-border);font-size:11px;color:var(--text-muted);background:var(--background-secondary)}
+.ipynb-import-status{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:6px 12px;border-top:1px solid var(--background-modifier-border);font-size:var(--font-ui-smaller);color:var(--text-muted);background:var(--background-secondary)}
 .ipynb-import-status.is-missing{border-left:2px solid var(--text-warning,var(--interactive-accent))}
 .ipynb-import-label{overflow-wrap:anywhere}
 .ipynb-import-external,.ipynb-import-optional{flex-basis:100%;color:var(--text-muted)}
-.ipynb-import-status button{font-size:11px;padding:2px 6px;min-height:24px;color:var(--interactive-accent)}
+.ipynb-import-status button{font-size:var(--font-ui-smaller);padding:2px 6px;min-height:24px;color:var(--interactive-accent)}
 
 /* Jupyter HTML callouts and plain raw-HTML containers, scoped to Notebook previews. */
 .ipynb-markdown-preview .alert,
@@ -141,7 +142,7 @@
 
 /* One scroll anchor owner: native compensation must not compete with the editor. */
 .ipynb-editor{overflow-anchor:none}
-.ipynb-execution-time{font-family:var(--font-monospace);font-size:10px;color:var(--text-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ipynb-execution-time{font-family:var(--font-monospace);font-size:var(--font-ui-smaller);color:var(--text-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
 .ipynb-execution-time[hidden]{display:none}
 .ipynb-output-markdown{overflow-wrap:anywhere}
 .ipynb-output img{display:block;max-width:100%;height:auto}
@@ -167,3 +168,6 @@
 .ipynb-properties-hint,.ipynb-properties-error{font-size:var(--font-smallest);color:var(--text-muted);overflow-wrap:anywhere}
 .ipynb-properties-error{color:var(--text-error)}
 @media(max-width:650px){.ipynb-notebook-properties{margin-left:34px}}
+
+.ipynb-markdown-preview img{max-width:100%;height:auto}
+.ipynb-attachment-warning{display:block;margin:4px 0;color:var(--text-muted);font-size:var(--font-smallest)}

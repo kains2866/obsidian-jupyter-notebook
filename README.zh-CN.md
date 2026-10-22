@@ -192,6 +192,12 @@ Markdown 单元格的预览可以显示查询结果。插件通过内存适配�
 
 Notebook 保持标准 nbformat 格式，未知元数据和字段会保留。导出到 Jupyter 或 VS Code 后，YAML 是普通 Markdown 内容，不影响 Python 执行；Dataview 查询仅在 Obsidian 与 Dataview 环境中生效。
 
+## 主题字号与内嵌附件
+
+Notebook 正文、代码、行号及界面文字跟随 Obsidian 字体与字号变量；切换主题、字体和字号通过 CSS 生效，不替换编辑器或清空撤销历史。
+
+Markdown 单元格可预览自己 `attachments` 中的 `attachment:` 图片，支持 PNG、JPEG、GIF、WebP 及安全过滤后的 SVG，也支持编码后的文件名。附件继续保留在 `.ipynb` 内，预览不会提取或改写附件；缺失、损坏及不支持的格式显示简短说明。SVG 脚本与自动加载的外部资源会被过滤。临时预览 URL 在单元格回收、模式切换和关闭文件时释放。本轮尚不包括通过粘贴或拖入新增图片。
+
 ## 原生链接与定位
 
 保存后的 Markdown 单元格和 YAML 标签、链接可接入原生反链、标签、搜索和图谱关系。需要在 **Obsidian 图谱设置中开启“显示附件”**，才能显示 Notebook 节点及其连接。代码与运行输出不参与索引。标题和块链接可定位到对应的 Markdown 单元格。
@@ -224,7 +230,7 @@ HTML `div` 提示块使用主题底色和边框；`alert-success`、`alert-info`
 
 - 代码编辑与运行目前面向 Python，不支持远程内核。
 - 暂不支持 Notebook widgets 和活动 JavaScript 输出。HTML 输出内的静态 SVG 会经过安全过滤；支持顶部内联 stdin 输入。
-- 单元格附件数据保留，附件引用图片的预览支持有限。
+- 内嵌附件预览支持 PNG、JPEG、GIF、WebP 与安全 SVG；其他 MIME 数据会保留，但不提供预览。
 - Notebook 原生索引依赖经过能力检查的 Obsidian 内部接口；不兼容时仍可编辑和运行。尚未接入核心“文件属性”侧栏和 Bases。
 - 单元格类型依据文件中的 `cell_type`，不会根据内容自动推断。误标为代码的 HTML 提示块可手动改为 Markdown。
 - 第三方主题仅针对原生阅读视图编写的特殊样式，可能需要额外适配。

@@ -65,6 +65,10 @@ const common:Record<string,string>={
 };
 export function resolveLanguage(setting:LanguageSetting='auto',locale='en'): 'zh'|'en'{return setting==='auto'?(locale.toLowerCase().startsWith('zh')?'zh':'en'):setting}
 const notebookIndexTranslations:Record<string,string>={
+ '内嵌 SVG 无法安全解析。':'The embedded SVG could not be parsed safely.',
+ '未找到内嵌附件。':'Embedded attachment not found.',
+ '此内嵌附件格式暂不支持预览。':'Preview is not available for this embedded attachment format.',
+ '内嵌附件损坏或无法安全显示。':'The embedded attachment is damaged or cannot be displayed safely.',
  '图谱':'Graph','附件':'Attachments',
  'Notebook Markdown 索引解析失败。':'Notebook Markdown parsing failed.',
  '当前 Obsidian 版本无法接入 Notebook 原生索引；编辑和运行仍可使用。':'Notebook native indexing is unavailable in this Obsidian version. Editing and execution remain available.',

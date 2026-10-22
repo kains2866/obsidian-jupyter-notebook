@@ -194,6 +194,12 @@ Markdown cell previews can display query results. The plugin provides an in-memo
 
 Notebooks retain standard nbformat structure, including unknown metadata and fields. When opened in Jupyter or VS Code, YAML remains ordinary Markdown content and does not affect Python execution. Dataview queries work only in an Obsidian environment with Dataview enabled.
 
+## Theme typography and embedded attachments
+
+Notebook text, code, line numbers, and interface labels follow Obsidian’s font and size variables. Theme and font changes apply through CSS without replacing editors or clearing undo history.
+
+Markdown cells can preview their own `attachment:` images (PNG, JPEG, GIF, WebP, and sanitized SVG), including encoded filenames. Attachments remain inside the `.ipynb`; previews do not extract or rewrite them. Missing, damaged, and unsupported attachments display a short explanation. SVG scripts and automatic external resource loads are filtered. Temporary preview URLs are released when cells are recycled, modes change, or the document closes. Adding images through paste or drag-and-drop is not included yet.
+
 ## Native links and navigation
 
 Saved Markdown cells and YAML tags/links participate in native backlinks, tags, search, and graph relationships. Enable **Show attachments** in Obsidian graph settings to display Notebook nodes and their connections. Code and execution output are excluded. Heading and block links navigate to the corresponding Markdown cell.
@@ -228,7 +234,7 @@ Offscreen recycling considers cell count, source/output size, image count, and e
 
 - Code editing and execution currently target Python. Remote kernels are not supported.
 - Notebook widgets and active JavaScript outputs are not supported. Static SVG within HTML output is filtered for safety; inline stdin prompts are supported.
-- Cell attachment data is preserved, but preview support for attachment-referenced images is limited.
+- Embedded attachment preview supports PNG, JPEG, GIF, WebP, and sanitized SVG; other MIME types are preserved without preview.
 - Native Notebook indexing uses guarded internal Obsidian interfaces. If unavailable, editing and execution remain available. The core File properties sidebar and Bases are not integrated.
 - Cell types follow the file's `cell_type` field rather than being inferred from content. HTML callouts incorrectly marked as code can be changed to Markdown manually.
 - Special third-party theme styles written exclusively for the native reading view may require additional adaptation.

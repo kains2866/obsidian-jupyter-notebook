@@ -201,3 +201,14 @@ describe('native navigation requests',()=>{
   const changed=view.navigatePending();view.session.structure(insertCell(view.session.notebook,0,newCell('code')));finish(undefined);await changed;expect(view.editor.revealCell).not.toHaveBeenCalled();
  });
 });
+
+it('binds attachments from the exact Markdown cell and releases URLs on disposal',async()=>{
+ const {view}=setup();const attachment=await import('../src/notebook-attachments');const dispose=vi.fn();const bind=vi.spyOn(attachment,'bindNotebookAttachments').mockReturnValue(dispose);
+ const cell={cell_type:'markdown',source:'![x](attachment:same.png)',metadata:{},attachments:{'same.png':{'image/png':'AA=='}}};const parent={querySelectorAll:()=>[],addEventListener(){}};
+ try{await view.renderNotebookMarkdown(view.session,cell.source,parent,cell);expect(bind).toHaveBeenCalledWith(parent,cell,expect.anything());view.disposeMarkdown(parent);view.disposeMarkdown(parent);expect(dispose).toHaveBeenCalledTimes(1)}finally{bind.mockRestore()}
+});
+it('does not bind attachments after a Markdown host was disposed during rendering',async()=>{
+ const {view}=setup();const {MarkdownRenderer}=await import('obsidian');const attachment=await import('../src/notebook-attachments');let finish!:()=>void;
+ const render=vi.spyOn(MarkdownRenderer,'render').mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}));const bind=vi.spyOn(attachment,'bindNotebookAttachments');const parent={querySelectorAll:()=>[]};const cell={cell_type:'markdown',source:'![x](attachment:x)',metadata:{}};
+ try{const pending=view.renderNotebookMarkdown(view.session,cell.source,parent,cell);view.disposeMarkdown(parent);finish();await pending;expect(bind).not.toHaveBeenCalled()}finally{render.mockRestore();bind.mockRestore()}
+});

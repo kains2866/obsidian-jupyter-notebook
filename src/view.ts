@@ -1,3 +1,4 @@
+import {bindNotebookAttachments,sanitizeNotebookSvg,type AttachmentError} from './notebook-attachments';
 import {resolveNotebookNavigation} from './notebook-navigation';
 import {projectNotebookMarkdown} from './notebook-markdown';
 import {IncrementalImportChecker} from './import-check';
@@ -33,6 +34,7 @@ export class NotebookView extends FileView{
  private propertiesEditor?:NotebookPropertiesEditor;private propertiesSource?:string;
  private markdownChildren:Component[]=[];
  private markdownHosts=new Map<HTMLElement,Component>();
+ private markdownAttachments=new Map<HTMLElement,()=>void>();
  private removalUnlock?:()=>void;
  private t:Translator=(text,values)=>this.plugin.getTranslator?.()(text,values)??createTranslator('zh')(text,values);
  constructor(leaf:WorkspaceLeaf,private plugin:NotebookPlugin){super(leaf);this.kernelPython=plugin.settings.kernelPython}
@@ -77,7 +79,7 @@ export class NotebookView extends FileView{
    kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),disposeMarkdown:parent=>this.disposeMarkdown(parent),
-   markdown:(text,parent)=>this.renderNotebookMarkdown(session,text,parent),
+   markdown:(text,parent,cell)=>this.renderNotebookMarkdown(session,text,parent,cell),
    properties:parent=>{
     this.propertiesEditor=new NotebookPropertiesEditor(this.app,this.leaf,this,parent,{
      getFile:()=>this.file,translate:this.t,focus:()=>this.editor?.focusCell(0),error:error=>this.editor?.showMessage(this.t(String(error))),
@@ -179,7 +181,8 @@ export class NotebookView extends FileView{
  private renderOutputMarkdown(text:string,parent:HTMLElement):import('./outputs').MarkdownOutput{
   const filtered=renderStaticOutputMarkdown(text,parent,sanitizeHTMLToDom);return {ready:Promise.resolve(),dispose(){},filtered};
  }
- private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement):Promise<void>{
+ private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement,cell?:import('./notebook').Cell):Promise<void>{
+  this.disposeMarkdown(parent);
   const child=new Component();this.addChild(child);this.markdownChildren.push(child);this.markdownHosts.set(parent,child);
   let body=text;
   const first=session.notebook.cells.find(cell=>cell.cell_type==='markdown');
@@ -189,7 +192,13 @@ export class NotebookView extends FileView{
     body=text.replace(/^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/,'');
    }else if(result.error)parent.createEl('p',{cls:'ipynb-properties-error',text:this.t('Notebook YAML 无法解析：{error}',{error:result.error})});
   }
-  await MarkdownRenderer.render(this.app,body,parent,this.file?.path??'',child);if(this.markdownHosts.get(parent)===child)this.bindMarkdownLinks(parent);
+  await MarkdownRenderer.render(this.app,body,parent,this.file?.path??'',child);if(this.markdownHosts.get(parent)!==child)return;
+  if(cell)this.markdownAttachments.set(parent,bindNotebookAttachments(parent,cell,{
+   create:({mime,data})=>URL.createObjectURL(new Blob([data],{type:mime})),revoke:url=>URL.revokeObjectURL(url),
+   sanitizeSvg:source=>sanitizeNotebookSvg(source,html=>sanitizeHTMLToDom(html)),
+   warn:(image,error)=>{const messages:Record<AttachmentError,string>={missing:'未找到内嵌附件。',unsupported:'此内嵌附件格式暂不支持预览。',invalid:'内嵌附件损坏或无法安全显示。'};const hint=parent.createSpan({cls:'ipynb-attachment-warning',text:this.t(messages[error])});image.setAttribute('title',hint.textContent??'');},
+  }));
+  this.bindMarkdownLinks(parent);
  }
  private bindMarkdownLinks(parent:HTMLElement):void{
   parent.addEventListener?.('click',event=>{
@@ -210,8 +219,8 @@ export class NotebookView extends FileView{
  finishEnvironmentRemoval():void{this.removalUnlock?.();this.removalUnlock=undefined}
  clearRemovedEnvironment(python:string):void{if(belongsToEnvironmentDirectory(this.kernelPython,python))this.kernelPython='';this.editor?.refresh();this.scheduleImportCheck(true)}
  private guardRemoval():void{if(this.plugin.environmentRemovalActive)throw new Error(this.t('正在卸载运行环境，请稍后重试。'))}
- private disposeMarkdown(parent:HTMLElement):void{const child=this.markdownHosts.get(parent);if(!child)return;this.markdownHosts.delete(parent);this.markdownChildren=this.markdownChildren.filter(item=>item!==child);this.removeChild(child)}
- private clearMarkdown():void{for(const c of this.markdownChildren)this.removeChild(c);this.markdownChildren=[];this.markdownHosts.clear()}
+ private disposeMarkdown(parent:HTMLElement):void{this.markdownAttachments.get(parent)?.();this.markdownAttachments.delete(parent);const child=this.markdownHosts.get(parent);if(!child)return;this.markdownHosts.delete(parent);this.markdownChildren=this.markdownChildren.filter(item=>item!==child);this.removeChild(child)}
+ private clearMarkdown():void{for(const dispose of this.markdownAttachments.values())dispose();this.markdownAttachments.clear();for(const c of this.markdownChildren)this.removeChild(c);this.markdownChildren=[];this.markdownHosts.clear()}
  private requireDesktop():void{if(Platform.isMobile)throw new Error(this.t('手机端只读，Python 与编辑功能仅在电脑端提供。'))}
  async save():Promise<void>{
   this.requireDesktop();

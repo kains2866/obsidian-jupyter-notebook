@@ -1,6 +1,6 @@
 {
   "name": "obsidian-jupyter-notebook",
-  "version": "0.6.11",
+  "version": "0.7.0",
   "private": true,
   "scripts": {
     "test": "vitest run",

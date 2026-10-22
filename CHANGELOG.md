@@ -1,14 +1,41 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-17
-version: "0.6.11"
+updated: 2026-10-22
+version: "0.7.0"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.7.0] - 2026-10-22
+
+- 为异常退出提供恢复草稿，重开时确认恢复；添加过期清理机制，在设置里提供清理时间配置与缓存目录查看入口。默认草稿保存 7 天，清理崩溃、未恢复等过期临时文件，不影响当前编辑的 Notebook。
+- 切换 Markdown 模式、增删移动单元格时，保留其他块的编辑器和撤销状态。
+- 添加增量依赖检测，只对修改过的块进行依赖检测，仅缺失库时显示提示。
+- 修复空格别名拆分问题。
+- 完善 Dataview 链接属性。
+- 为 Notebook 实现原生 Properties：在 `.ipynb` 文件开头设置 Markdown 块，并用两行 `---` 包裹 YAML，即可在 Notebook 顶部显示并编辑属性；保存后也可供 Dataview 查询。
+
+```yaml
+---
+title: My Notebook in Obsidian
+tags:
+  - Python
+  - study
+aliases:
+  - My Notebook
+status: review
+---
+```
+
+- 接入反链、标签搜索、图谱关系及标题／块定位。
+- 设置中补充说明：需在 Obsidian 图谱开启“附件”显示，才能看到 Notebook 节点与连接。
+
+以上内容与特性均保持标准 `.ipynb` 格式，在 Jupyter / VS Code 中可正常显示内容与执行。
+
 
 ## [0.6.11] - 2026-10-17
 

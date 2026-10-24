@@ -1,0 +1,16 @@
+<!doctype html><meta charset="utf-8"><title>Short cell gutter regression</title>
+<link rel="stylesheet" href="/styles.css?gutter-layout">
+<style>:root{--font-text-size:18px;--font-ui-smaller:14px;--font-ui-small:16px;--font-text:system-ui;--font-monospace:monospace;--line-height-normal:1.5;--background-primary:white;--background-modifier-border:#ddd;--interactive-accent:#7964ef;--text-normal:#222;--text-muted:#777;--code-size:18px}html,body{height:100%;margin:0}.code{padding:10px;line-height:1.5}.ipynb-editor{height:100vh}</style>
+<main class="ipynb-editor"><div class="ipynb-toolbar">Notebook</div><div class="ipynb-cell-list" id="cells"></div></main>
+<script>
+const params=new URLSearchParams(location.search);
+const size=Number(params.get('font')||18);
+document.documentElement.style.setProperty('--font-ui-smaller',size+'px');
+document.documentElement.style.setProperty('--font-ui-small',size+'px');
+for(const timed of [false,true])for(const lines of [1,2,20]){
+ const cell=document.createElement('section');cell.className='ipynb-cell ipynb-code-cell';
+ cell.innerHTML=`<div class="ipynb-cell-gutter"><button class="ipynb-icon-button">▶</button><span class="ipynb-count">[12]</span></div><div class="ipynb-cell-tools-anchor"><div class="ipynb-cell-toolbar"><button>…</button></div></div><div class="ipynb-cell-body"><div class="ipynb-code"><div class="cm-editor code">${Array(lines).fill('array_1d').join('<br>')}</div></div><div class="ipynb-execution-time" ${timed?'':'hidden'}>0.4 s</div><div class="ipynb-output"></div></div>`;
+ document.getElementById('cells').append(cell);
+ const gap=document.createElement('div');gap.className='ipynb-insert-gap';document.getElementById('cells').append(gap);
+}
+</script>

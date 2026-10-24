@@ -108,7 +108,7 @@ The list shows each environment's version, dependency status, and whether it is 
 | Run code | Click the run button to the left of the cell or press `Shift+Enter` |
 | Run all code cells | Click **Run all** in the top toolbar |
 | Save the Notebook | Click the save button or press `⌘/Ctrl+S` |
-| Reorder cells | Drag the left handle or use the move-up and move-down buttons |
+| Reorder cells | Drag the left gutter outside the Run button, or use the move-up and move-down buttons |
 | Add a cell | Hover between cells and choose Code or Markdown |
 
 When editing a long cell, its toolbar stays below the top navigation bar and remains within that cell's boundaries. The editing border, active line, matching brackets, and same-word highlights within the current cell use theme colors. Same-word matching is not Python semantic reference analysis.

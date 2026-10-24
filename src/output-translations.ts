@@ -1,4 +1,5 @@
 export const outputTranslations:Record<string,string>={
+ '公式渲染失败，已显示 LaTeX 源码。':'Math rendering failed; showing the LaTeX source.',
  '部分输出已过滤':'Some output was filtered',
  '为保持输出静态显示，已过滤：{categories}。':'To keep output static, filtered: {categories}.',
  '这不代表代码运行失败。':'This does not mean the code failed to run.',

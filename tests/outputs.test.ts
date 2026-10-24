@@ -1,3 +1,5 @@
+import {renderMath,finishRenderMath} from 'obsidian';
+vi.mock('obsidian',async original=>({...await original<typeof import('obsidian')>(),renderMath:vi.fn(),finishRenderMath:vi.fn(()=>Promise.resolve())}));
 import {expect,it,vi,afterEach} from 'vitest';
 import {enlargeOutputImage,saveOutput,outputImageFilename} from '../src/output-actions';
 import {OutputRenderer} from '../src/outputs';
@@ -132,4 +134,27 @@ it('shows one passive filtering explanation and never copies its text',async()=>
  expect(host.querySelectorAll('p').map(p=>p.textContent)).toContain('这不代表代码运行失败。');
  host.querySelectorAll('button').find(button=>button.attrs['aria-label']==='复制输出')!.events.click();await Promise.resolve();expect(copyText).toHaveBeenCalledWith('safe content');
  renderer.destroy();expect(host.children).toHaveLength(0);
+});
+
+it.each([['$$x^2$$','x^2'],['$x^2$','x^2'],['\\[x^2\\]','x^2'],['\\(x^2\\)','x^2'],['x^2','x^2']])('renders text/latex %s using native display math',async(source,expected)=>{
+ const host=new Element(),math=new Element();vi.mocked(renderMath).mockReturnValue(math as any);
+ const renderer=new OutputRenderer(host as any,()=>new Element() as any);
+ renderer.update([{output_type:'display_data',data:{'text/latex':[source],'text/plain':'<IPython.core.display.Math object>'}}]);
+ expect(renderMath).toHaveBeenLastCalledWith(expected,true);expect(math.parent).toBeDefined();expect(host.querySelectorAll('pre')).toHaveLength(0);
+ await Promise.resolve();expect(finishRenderMath).toHaveBeenCalled();renderer.destroy();
+});
+it('keeps LaTeX source and copy action when native rendering throws',()=>{
+ vi.mocked(renderMath).mockImplementationOnce(()=>{throw new Error('MathJax unavailable')});const host=new Element();const renderer=new OutputRenderer(host as any,()=>new Element() as any);
+ renderer.update([{output_type:'display_data',data:{'text/latex':'$$x^2$$','text/plain':'object repr'}}]);
+ expect(host.querySelectorAll('pre')[0].textContent).toBe('$$x^2$$');expect(host.querySelectorAll('button').some(b=>b.attrs['aria-label']==='复制输出')).toBe(true);renderer.destroy();
+});
+it('falls back to source when the MathJax stylesheet flush fails',async()=>{
+ const host=new Element();vi.mocked(renderMath).mockReturnValue(new Element() as any);vi.mocked(finishRenderMath).mockRejectedValueOnce(new Error('stylesheet failed'));
+ const renderer=new OutputRenderer(host as any,()=>new Element() as any);renderer.update([{output_type:'display_data',data:{'text/latex':'\\[x+1\\]'}}]);
+ await Promise.resolve();await Promise.resolve();expect(host.querySelectorAll('pre')[0].textContent).toBe('\\[x+1\\]');renderer.destroy();
+});
+it('ignores delayed math failures after the output has been replaced',async()=>{
+ const host=new Element();let fail!:(reason:Error)=>void;vi.mocked(renderMath).mockReturnValue(new Element() as any);vi.mocked(finishRenderMath).mockReturnValueOnce(new Promise((_,reject)=>{fail=reject}));
+ const renderer=new OutputRenderer(host as any,()=>new Element() as any);renderer.update([{output_type:'display_data',data:{'text/latex':'x'}}]);renderer.update([{output_type:'stream',text:'new output'}]);fail(new Error('old flush'));
+ await Promise.resolve();await Promise.resolve();expect(host.querySelectorAll('pre').map(e=>e.textContent)).toEqual(['new output']);renderer.destroy();
 });

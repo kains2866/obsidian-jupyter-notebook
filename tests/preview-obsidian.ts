@@ -8,3 +8,7 @@ export class Setting {
  private row:HTMLDivElement;constructor(parent:HTMLElement){this.row=document.createElement('div');this.row.style.cssText='display:flex;gap:10px;margin-top:16px';parent.append(this.row)}
  addButton(callback:(button:{setButtonText(text:string):any;setCta():any;onClick(fn:()=>void):any})=>unknown){const element=document.createElement('button');const button={setButtonText(text:string){element.textContent=text;return this},setCta(){return this},onClick(fn:()=>void){element.onclick=fn;return this}};this.row.append(element);callback(button);return this}
 }
+
+// The standalone harness has no MathJax; exercise the source fallback.
+export function renderMath(_source:string,_display:boolean):HTMLElement{throw new Error('Use Obsidian to preview math')}
+export async function finishRenderMath():Promise<void>{}

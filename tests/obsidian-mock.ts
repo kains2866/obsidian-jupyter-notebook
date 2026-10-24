@@ -18,3 +18,6 @@ export async function requestUrl(options:{url:string}){const response=await fetc
 
 export const parseYaml=(source:string):unknown=>JSON.parse(source);
 export const stringifyYaml=(value:unknown):string=>JSON.stringify(value)+"\n";
+
+export function renderMath(_source:string,_display:boolean):HTMLElement{throw new Error('Math renderer unavailable in test')}
+export async function finishRenderMath():Promise<void>{}

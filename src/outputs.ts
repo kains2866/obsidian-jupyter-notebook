@@ -1,3 +1,4 @@
+import {renderMath,finishRenderMath} from 'obsidian';
 import {enlargeOutputImage,saveOutput,wrapOutputTables,outputImageFilename,outputCopyText,type OutputActions} from './output-actions';
 import type {Output} from './notebook';
 import {hardenOutputDom,inspectOutputHtml,mergeOutputFilterReports,type OutputFilterReport,type OutputFilterCategory} from './output-security';
@@ -44,6 +45,12 @@ export class OutputRenderer {
   const mime=['image/png','image/jpeg'].find(type=>typeof data[type]==='string'||Array.isArray(data[type]));
   if(mime){const img=block.createEl('img');const source=`data:${mime};base64,${outputText(data[mime])}`;img.alt=this.t('Notebook 输出图像');img.loading=this.options.lazyImages?'lazy':'eager';img.addEventListener('load',()=>this.updateCollapse());img.addEventListener('error',()=>this.updateCollapse());const dimensions=outputImageDimensions(output,mime);if(dimensions){img.setAttribute('width',String(dimensions.width));img.setAttribute('height',String(dimensions.height))}if(this.observer){img.dataset.source=source;this.observer.observe(img)}else img.src=source;const enlarge=block.createEl('button');enlarge.type='button';enlarge.className='ipynb-output-image-button';enlarge.setAttribute('aria-label',this.t('放大图像'));enlarge.append(img);enlarge.addEventListener('click',()=>{this.previews.get(block)?.();try{this.previews.set(block,enlargeOutputImage(img,source,this.t))}catch{const error=block.createDiv();error.setAttribute('role','alert');error.textContent=this.t('图像预览失败，请重试')}});this.action(block,'保存图像',()=>this.save(source,mime,outputImageFilename(output,mime,`${this.actions.imageName?.()??'output'}-${this.records.filter(record=>{const data=record.output.data as Record<string,unknown>|undefined;return data?.['image/png']||data?.['image/jpeg']}).findIndex(record=>record.block===block)+1}`),block))}
   else if(data['text/html']){const html=outputText(data['text/html']);const inspected=block.ownerDocument?inspectOutputHtml(html,block.ownerDocument):{};const fragment=this.sanitize(html);const filtered=mergeOutputFilterReports(inspected,hardenOutputDom(fragment));const host=block.createDiv();host.append(fragment);wrapOutputTables(host,this.t);const text=outputText(data['text/plain']??host.textContent);this.textActions(block,()=>outputCopyText(host,text));this.filterHint(block,filtered)}
+  else if(typeof data['text/latex']==='string'||Array.isArray(data['text/latex'])){
+   const source=outputText(data['text/latex']);const host=block.createDiv();host.className='ipynb-output-math';
+   const failure=()=>{host.replaceChildren();host.createEl('pre').textContent=source;host.title=this.t('公式渲染失败，已显示 LaTeX 源码。');this.updateCollapse()};
+   try{host.append(renderMath(stripMathDelimiters(source),true));void finishRenderMath().then(()=>{if(!this.destroyed&&this.records.some(record=>record.block===block))this.updateCollapse()}).catch(()=>{if(!this.destroyed&&this.records.some(record=>record.block===block))failure()})}catch{failure()}
+   this.textActions(block,()=>source);
+  }
   else if(data['text/markdown']){
    const source=outputText(data['text/markdown']);const host=block.createDiv();host.className='ipynb-output-markdown markdown-rendered';
    if(this.markdown){
@@ -80,4 +87,13 @@ export function outputImageDimensions(output:Output,mime:string):{width:number;h
  if(valid(declared?.width,declared?.height))return {width:declared.width,height:declared.height as number};
  if(mime==='image/png')try{const data=output.data as Record<string,unknown>;const header=atob(outputText(data[mime]).slice(0,48));if(header.length>=24&&header.slice(0,8)==='\x89PNG\r\n\x1a\n'){const integer=(offset:number)=>[0,1,2,3].reduce((value,index)=>value*256+header.charCodeAt(offset+index),0);const width=integer(16),height=integer(20);if(valid(width,height))return {width,height}}}catch{return undefined}
  return undefined;
+}
+
+/** MIME LaTeX already represents a formula; remove only one matching outer pair. */
+export function stripMathDelimiters(source:string):string{
+ const text=source.trim();
+ for(const [open,close] of [['$$','$$'],['\\[','\\]'],['\\(','\\)'],['$','$']]){
+  if(text.length>=open.length+close.length&&text.startsWith(open)&&text.endsWith(close))return text.slice(open.length,-close.length).trim();
+ }
+ return text;
 }

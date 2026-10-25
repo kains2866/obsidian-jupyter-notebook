@@ -1,3 +1,6 @@
+import {createExportHtmlSanitizer,exportNotebookHtml,exportRasterDataUri,isExportLocalImage,type ExportImage} from './notebook-export';
+import {decodeNotebookAttachment} from './notebook-attachments';
+import {saveOutput as downloadOutput} from './output-actions';
 import {bindNotebookAttachments,sanitizeNotebookSvg,type AttachmentError} from './notebook-attachments';
 import {resolveNotebookNavigation} from './notebook-navigation';
 import {projectNotebookMarkdown} from './notebook-markdown';
@@ -75,7 +78,7 @@ export class NotebookView extends FileView{
   this.editor=new NotebookEditor(this.contentEl,session,{
    translate:this.t,confirm:(title,message)=>confirm(this.app,title,message,this.t),
    notebookChanged:()=>{this.scheduleImportCheck();this.syncProperties(session)},retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
-   readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),reload:()=>this.reload(),
+   readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),exportHtml:()=>this.exportHtml(),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
    kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
@@ -142,6 +145,26 @@ export class NotebookView extends FileView{
   }
   if(notebook===this.recoveryNotebook)return;
   try{await recovery.write(serializeNotebook(notebook),this.recoveryBaseline);if(this.recovery===recovery&&this.session===session)this.recoveryNotebook=notebook}catch(error){this.recoveryError(error)}
+ }
+ private async exportHtml():Promise<void>{
+  const session=this.session,file=this.file;if(this.disposed||!session||!file)return;
+  // Session updates replace notebook objects. Capture once so asynchronous image reads cannot mix revisions.
+  const snapshot=session.notebook,doc=this.contentEl.ownerDocument;
+  const resolveImage=async(uri:string,cell:import('./notebook').Cell):Promise<ExportImage|undefined>=>{
+   const attachment=decodeNotebookAttachment(cell,uri);
+   if(attachment){if('error'in attachment)return;return attachment.mime==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder('utf-8',{fatal:true}).decode(attachment.data),sanitizeHTMLToDom)}:exportRasterDataUri(attachment.mime,attachment.data)}
+   if(!isExportLocalImage(uri)||uri.startsWith('data:'))return;
+   let path:string;try{path=decodeURIComponent(uri.split(/[?#]/,1)[0])}catch{return}
+   const image=this.app.metadataCache.getFirstLinkpathDest(path,file.path);if(!image)return;
+   const mime:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml'};
+   const type=mime[image.extension.toLowerCase()];if(!type)return;
+   const bytes=new Uint8Array(await this.app.vault.readBinary(image));
+   return type==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder('utf-8',{fatal:true}).decode(bytes),sanitizeHTMLToDom)}:exportRasterDataUri(type,bytes);
+  };
+  const html=await exportNotebookHtml(snapshot,{title:file.basename,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:text=>this.t(text)});
+  if(this.disposed||this.session!==session||this.file!==file)return;
+  // Browsers may prompt or cancel; initiating a download is not evidence of a saved filesystem path.
+  downloadOutput(html,'text/html',file.basename+'.html',doc);
  }
  private async saveOutput(content:string,mime:string,filename:string):Promise<void>{
   if(this.disposed||!this.file)throw new Error(this.t('Notebook 已关闭。'));

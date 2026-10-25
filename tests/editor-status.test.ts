@@ -88,7 +88,7 @@ function recyclingFixture(){
  const state={doc:{toString:()=> 'edited'},selection:{ranges:[{anchor:3,head:3}],mainIndex:0}};
  const node:any={dataset:{cellId:'cell-a'},style:{setProperty:vi.fn(),removeProperty:vi.fn()},classList:{add:vi.fn(),remove:vi.fn()},getBoundingClientRect:()=>({height:731}),contains:(value:unknown)=>value===preview,querySelector:(selector:string)=>selector==='.ipynb-output'?output:selector==='.ipynb-markdown-preview'?preview:label,replaceChildren:vi.fn()};
  const mount=vi.fn();const view={state,hasFocus:false,destroy};const renderer={destroy:vi.fn(),captureState:()=>({expanded:false})};
- Object.assign(editor,{root:{ownerDocument:{activeElement:null,getSelection:()=>null}},actions:{disposeMarkdown},session:{running:false,runningIndex:null},cellNodes:[node],editors:[view],cellMounts:new Map([[0,mount]]),pendingCells:new Map(),cachedEditorStates:new Map(),mountedCells:new Set([0]),visibleCells:new Set(),savedSelections:new Map(),outputSnapshots:new Map(),outputRenderers:new Map([[output,renderer]]),cellGaps:new Map([[0,{replaceChildren:vi.fn()}]])});
+ Object.assign(editor,{pendingImages:new Set(),root:{ownerDocument:{activeElement:null,getSelection:()=>null}},actions:{disposeMarkdown},session:{running:false,runningIndex:null},cellNodes:[node],editors:[view],cellMounts:new Map([[0,mount]]),pendingCells:new Map(),cachedEditorStates:new Map(),mountedCells:new Set([0]),visibleCells:new Set(),savedSelections:new Map(),outputSnapshots:new Map(),outputRenderers:new Map([[output,renderer]]),cellGaps:new Map([[0,{replaceChildren:vi.fn()}]])});
  return {editor,node,view,renderer,mount,preview,state,destroy,disposeMarkdown,label};
 }
 it('offscreen recycling destroys views and outputs while preserving editor state and measured height',()=>{
@@ -96,12 +96,12 @@ it('offscreen recycling destroys views and outputs while preserving editor state
  expect(editor.unmountCell(0)).toBe(true);expect(destroy).toHaveBeenCalledOnce();expect(renderer.destroy).toHaveBeenCalledOnce();expect(disposeMarkdown).toHaveBeenCalledWith(preview);expect(editor.cachedEditorStates.get(0)).toBe(state);expect(editor.pendingCells.has(0)).toBe(true);expect(node.style.setProperty).toHaveBeenCalledWith('min-height','731px');expect(node.replaceChildren).toHaveBeenCalledWith(label);
  editor.mountCell(0);expect(editor.mountedCells.has(0)).toBe(true);expect(editor.pendingCells.has(0)).toBe(false);
 });
-it.each(['focus','running','selection','drag'])('offscreen recycling pins %s cell until interaction ends',reason=>{
+it.each(['focus','running','selection','drag','image'])('offscreen recycling pins %s cell until interaction ends',reason=>{
  const {editor,destroy,preview}=recyclingFixture();
  if(reason==='focus')editor.root.ownerDocument.activeElement=preview;
  if(reason==='running'){editor.session.running=true;editor.session.runningIndex=0}
  if(reason==='selection')editor.root.ownerDocument.getSelection=()=>({isCollapsed:false,anchorNode:preview,focusNode:preview});
- if(reason==='drag')editor.dragging={from:0};
+ if(reason==='drag')editor.dragging={from:0};if(reason==='image')editor.pendingImages.add(editor.cellNodes[0]);
  expect(editor.unmountCell(0)).toBe(false);expect(destroy).not.toHaveBeenCalled();
 });
 it('recycling retains cached CodeMirror undo state only while source remains unchanged',()=>{

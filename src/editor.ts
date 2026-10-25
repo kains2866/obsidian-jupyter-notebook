@@ -1,3 +1,5 @@
+import {prepareNotebookImages,insertNotebookImages,imageFiles,attachmentEdit,attachmentHistory,type ImageFile} from './image-insertion';
+import {sanitizeNotebookSvg} from './notebook-attachments';
 import type {NotebookNavigationTarget} from './notebook-navigation';
 import {shouldVirtualizeNotebook} from './virtualization-policy';
 import type {OutputActions} from './output-actions';
@@ -30,7 +32,7 @@ export interface EditorActions {
  readOnly?:boolean;
  translate?:Translator;
  confirm?(title:string,message:string):Promise<boolean>;
- save():Promise<void>;saveCopy():Promise<void>;reload():Promise<void>;
+ save():Promise<void>;saveCopy():Promise<void>;reload():Promise<void>;exportHtml?():Promise<void>;
  run(index:number):Promise<void>;runAll():Promise<void>;interrupt():Promise<void>;restart():Promise<void>;
  environment():string;chooseEnvironment():Promise<void>;
  sanitize(html:string):DocumentFragment;
@@ -62,6 +64,7 @@ export class NotebookEditor {
  private virtualized=false;
  private indexSetters=new WeakMap<HTMLElement,(index:number)=>void>();
  private syncingSource=false;
+ private pendingImages=new Set<HTMLElement>();
  private markdownSources=new WeakMap<HTMLElement,{source:string;attachments:unknown}>();
  private markdownRenders=new WeakMap<HTMLElement,Promise<void>>();private revealGeneration=0;
  private recycleFrame?:number;
@@ -101,6 +104,7 @@ export class NotebookEditor {
   this.iconButton(this.toolbar,'重启内核','restart',()=>actions.restart());
   const more=this.menu(this.toolbar,'更多操作');
   this.button(more,'另存副本',()=>actions.saveCopy());
+  if(actions.exportHtml)this.button(more,'导出为 HTML',()=>actions.exportHtml!());
   this.button(more,'重新加载',()=>actions.reload());
   this.button(more,'撤销',()=>this.historyChange(()=>session.undo()));
   this.button(more,'重做',()=>this.historyChange(()=>session.redo()));
@@ -189,6 +193,8 @@ export class NotebookEditor {
    const gap=!this.actions.readOnly?this.el('div','ipynb-insert-gap',this.list):undefined;
    if(gap)this.cellGaps.set(index,gap);
    const node=this.el('section','ipynb-cell',this.list);const cellLabel=this.el('span','ipynb-sr-only',node);cellLabel.id=`ipynb-cell-label-${crypto.randomUUID()}`;cellLabel.textContent=this.t('单元格 {index}',{index:index+1});node.setAttribute('role','group');node.setAttribute('aria-labelledby',cellLabel.id);node.dataset.index=String(index);node.dataset.cellId=this.cellIdentity(cell);this.cellNodes.push(node);this.indexSetters.set(node,value=>{index=value});if(reconcile){if(gap)place(gap);place(node)}
+   node.addEventListener('paste',event=>this.receiveImages(event,node),true);node.addEventListener('drop',event=>this.receiveImages(event,node),true);
+   node.addEventListener('dragover',event=>{if(!this.actions.readOnly&&this.session.notebook.cells[Number(node.dataset.index)]?.cell_type==='markdown'&&Array.from(event.dataTransfer?.items??[]).some(item=>item.kind==='file'&&item.type.startsWith('image/'))){event.preventDefault();if(event.dataTransfer)event.dataTransfer.dropEffect='copy'}});
    node.classList.add(`ipynb-${cell.cell_type}-cell`);node.classList.toggle('is-selected',node.dataset.cellId===this.selectedCellId);node.addEventListener('pointerdown',()=>this.selectCell(index));node.addEventListener('focusin',()=>this.selectCell(index));
    const mount=()=>{
    const cell=this.session.notebook.cells[index];
@@ -218,10 +224,10 @@ export class NotebookEditor {
     node.classList.add('ipynb-editable-cell');const host=this.el('div','ipynb-code',body);
     const editor=new EditorView({parent:host,state:this.cachedState(index,sourceText(cell))??EditorState.create({doc:sourceText(cell),extensions:[
      lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),bracketMatching(),wordHighlights,history(),syntaxHighlighting(semanticHighlight,{fallback:true}),EditorState.readOnly.of(!!this.actions.readOnly),EditorView.editable.of(!this.actions.readOnly),
-     ...(cell.cell_type==='code'?[python()]:cell.cell_type==='markdown'?[markdown()]:[]),
+     ...(cell.cell_type==='code'?[python()]:cell.cell_type==='markdown'?[markdown(),attachmentHistory]:[]),
      keymap.of([{key:'Shift-Enter',run:()=>{if(this.actions.readOnly)return false;void this.perform(async()=>{if(cell.cell_type==='code')await this.actions.run(index);else{this.preview.add(this.cellIdentity(this.session.notebook.cells[index]));this.remountCell(index)}if(cell.cell_type==='code')this.focusCell(index+1)});return true}},indentWithTab,...defaultKeymap,...historyKeymap]),
      EditorView.lineWrapping,
-     EditorView.updateListener.of(update=>{if(update.docChanged&&!this.syncingSource)this.session.change(editCell(this.session.notebook,index,{source:update.state.doc.toString()}))}),
+     EditorView.updateListener.of(update=>{const attachment=update.transactions.flatMap(transaction=>transaction.effects).filter(effect=>effect.is(attachmentEdit)).at(-1);if((update.docChanged||attachment)&&!this.syncingSource)this.session.change(editCell(this.session.notebook,index,{source:update.state.doc.toString(),...(attachment?{attachments:attachment.value.after}:{})}))}),
      EditorView.theme({'.cm-content':{fontFamily:'var(--font-monospace)',caretColor:'var(--caret-color, var(--text-normal))'},'.cm-cursor':{borderLeftColor:'var(--caret-color, var(--text-normal))'},'&.cm-focused .cm-selectionBackground, .cm-selectionBackground':{backgroundColor:'var(--text-selection)'},'.cm-content ::selection':{backgroundColor:'var(--text-selection)'},'.cm-scroller':{overflow:'auto'},'.cm-gutters':{backgroundColor:'transparent',border:'none'}}),
     ]})});this.editors[index]=editor;const selection=this.savedSelections.get(this.cellIdentity(cell));if(selection)editor.dispatch({selection:EditorSelection.fromJSON(this.clampSelection(selection,editor.state.doc.length))});
    }
@@ -289,6 +295,35 @@ export class NotebookEditor {
    this.insertAt(Number(gap.dataset.index),type);
   },true);
  }
+ private receiveImages(event:ClipboardEvent|DragEvent,node:HTMLElement):void{
+  if(this.actions.readOnly||event.defaultPrevented)return;
+  const files=imageFiles(event.type==='paste'?(event as ClipboardEvent).clipboardData:(event as DragEvent).dataTransfer);if(!files.length)return;
+  event.preventDefault();event.stopPropagation();
+  const index=this.cellNodes.indexOf(node),cell=this.session.notebook.cells[index];
+  if(!cell||cell.cell_type!=='markdown'){this.showMessage(this.t('请在 Markdown 单元格中粘贴或拖入图片。'));return}
+  const editor=this.editors[index];const selection=editor?.state.selection.main;
+  const point=event.type==='drop'&&editor?editor.posAtCoords({x:(event as DragEvent).clientX,y:(event as DragEvent).clientY}):undefined;
+  const from=point??selection?.from??sourceText(cell).length,to=point??selection?.to??from;
+  void this.perform(()=>this.insertImagesFromFiles(node,files,from,to));
+ }
+ private async insertImagesFromFiles(node:HTMLElement,files:readonly ImageFile[],from:number,to:number):Promise<void>{
+  if(this.pendingImages.has(node))throw new Error(this.t('图片正在读取，请稍后重试。'));
+  const index=this.cellNodes.indexOf(node),cell=this.session.notebook.cells[index],editor=this.editors[index];if(!cell||this.destroyed)return;
+  if(this.session.running||this.session.busy)throw new Error(this.t('请等待当前运行结束后再插入图片。'));
+  const source=sourceText(cell);this.pendingImages.add(node);
+  try{
+   const images=await prepareNotebookImages(files,svg=>sanitizeNotebookSvg(svg,html=>this.actions.sanitize(html)));
+   // Decode raster data locally before committing; matching a header alone is insufficient.
+   for(const image of images){const img=new Image();img.src=`data:${image.mime};base64,${image.base64}`;try{await img.decode()}catch{throw new Error(this.t('图片无法解码，未插入。'))}finally{img.removeAttribute('src')}}
+   const currentIndex=this.cellNodes.indexOf(node),current=this.session.notebook.cells[currentIndex];
+   if(this.destroyed||!current||current.cell_type!=='markdown'||sourceText(current)!==source||current.attachments!==cell.attachments||this.editors[currentIndex]!==editor)throw new Error(this.t('读取图片期间单元格已改变，请重新插入。'));
+   if(this.session.running||this.session.busy)throw new Error(this.t('请等待当前运行结束后再插入图片。'));
+   const next=insertNotebookImages(current,from,to,images);
+   if(!this.editors[currentIndex])this.editMarkdown(currentIndex);
+   const target=this.editors[currentIndex];if(!target)throw new Error(this.t('图片插入位置已失效，请重试。'));
+   target.dispatch({changes:{from,to,insert:next.text},effects:attachmentEdit.of({before:current.attachments,after:next.attachments}),selection:{anchor:from+next.text.length},annotations:Transaction.userEvent.of('input.paste'),scrollIntoView:true});target.focus();
+  }catch(error){throw new Error(this.t(error instanceof Error?error.message:String(error)))}finally{this.pendingImages.delete(node)}
+ }
  private startDrag(event:PointerEvent,from:number):void{
   if(event.button!==0||this.actions.readOnly||this.session.running||this.session.busy||(event.target as Element)?.closest('button')||this.pendingDrag||this.dragging)return;
   event.preventDefault();this.cancelDrag();const bounds=this.cellNodes[from].getBoundingClientRect();
@@ -329,7 +364,7 @@ export class NotebookEditor {
  private unmountCell(index:number):boolean{
   const node=this.cellNodes[index];const mount=this.cellMounts.get(index);if(!node||!mount||!this.mountedCells.has(index))return false;
   const document=this.root.ownerDocument;if(document.querySelector?.('.ipynb-image-dialog[open]'))return false;const selection=document.getSelection();
-  if(this.editors[index]?.hasFocus||node.contains(document.activeElement)||(this.session.running&&this.session.runningIndex===index)||(this.dragging??this.pendingDrag)?.from===index||(!selection?.isCollapsed&&(node.contains(selection?.anchorNode??null)||node.contains(selection?.focusNode??null)||selection?.containsNode?.(node,true))))return false;
+  if(this.editors[index]?.hasFocus||node.contains(document.activeElement)||this.pendingImages.has(node)||(this.session.running&&this.session.runningIndex===index)||(this.dragging??this.pendingDrag)?.from===index||(!selection?.isCollapsed&&(node.contains(selection?.anchorNode??null)||node.contains(selection?.focusNode??null)||selection?.containsNode?.(node,true))))return false;
   const height=node.getBoundingClientRect().height;
   const editor=this.editors[index];if(editor){this.cachedEditorStates.set(index,editor.state);this.savedSelections.set(node.dataset.cellId!,{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex});editor.destroy();this.editors[index]=undefined}
   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){const renderer=this.outputRenderers.get(output);if(renderer){this.outputSnapshots.set(node.dataset.cellId!,renderer.captureState());renderer.destroy()}this.outputRenderers.delete(output)}

@@ -201,7 +201,7 @@ Notebooks retain standard nbformat structure, including unknown metadata and fie
 
 Notebook text, code, line numbers, and interface labels follow Obsidian’s font and size variables. Theme and font changes apply through CSS without replacing editors or clearing undo history.
 
-Markdown cells can preview their own `attachment:` images (PNG, JPEG, GIF, WebP, and sanitized SVG), including encoded filenames. Attachments remain inside the `.ipynb`; previews do not extract or rewrite them. Missing, damaged, and unsupported attachments display a short explanation. SVG scripts and automatic external resource loads are filtered. Temporary preview URLs are released when cells are recycled, modes change, or the document closes. Adding images through paste or drag-and-drop is not included yet.
+Markdown cells can preview their own `attachment:` images (PNG, JPEG, GIF, WebP, and sanitized SVG), including encoded filenames. Attachments remain inside the `.ipynb`; previews do not extract or rewrite them. Missing, damaged, and unsupported attachments display a short explanation. SVG scripts and automatic external resource loads are filtered. Temporary preview URLs are released when cells are recycled, modes change, or the document closes. Paste images at the Markdown editor cursor or drop them at a chosen position; dropping onto a preview appends and opens editing. Multiple images are supported, names are numbered on collisions, and attachments and references undo/redo together. Images stay inside the standard `.ipynb` without external vault files. SVG is sanitized before insertion. Limits are 20 MiB per image and 50 MiB per insertion; Code and Raw cells do not accept images.
 
 ## Native links and navigation
 
@@ -210,6 +210,12 @@ Saved Markdown cells and YAML tags/links participate in native backlinks, tags, 
 The index uses an in-memory Markdown projection without companion files. Native bulk property/task writers are excluded. Renaming or moving a linked note, attachment, or folder through Obsidian updates indexed Markdown links and the first Markdown cell’s YAML links, using Obsidian’s own link resolution, link format, and automatic-update preference or confirmation dialog. Aliases, heading/block suffixes, code, output, attachments, and unknown Notebook fields are preserved. Open notebooks retain unsaved changes in other cells and Notebook undo history. Updates are skipped with a notice if a referenced cell has unsaved edits, the file changed externally, or the session is loading, running, or saving; update those links manually. Typing during a rename write is retained and later saves wait for the new disk baseline. If the linked cell changes during that write, its live edits remain intact and a notice asks you to check its links. External filesystem renames are outside this native rename workflow. Compatibility depends on internal Obsidian interfaces and is checked at runtime.
 
 ## Outputs and file saving
+
+### Offline HTML export
+
+Choose **More actions → Export as HTML** to download one self-contained HTML file from the current notebook, including unsaved edits, Markdown, code, raw cells and stored static outputs. This does not run code, start Python, or save the original notebook. The browser may ask where to save the file; canceling that dialog leaves no exported file.
+
+Cell attachments and resolvable vault images are embedded. Remote images are never downloaded; missing or unsupported images retain alternative text. HTML and SVG are sanitized, with no automatically loaded external scripts, stylesheets, or fonts. Formulas retain readable LaTeX source, and interactive widgets are exported as available static/text content. Obsidian-specific plugin processors are not run during export.
 
 Supported outputs include text, PNG/JPEG images, static Markdown, sanitized HTML tables, and errors. Settings provide output collapsing, clearing, size warnings, and optional limits.
 

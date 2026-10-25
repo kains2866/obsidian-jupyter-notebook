@@ -1,3 +1,8 @@
+import MarkdownIt from 'markdown-it';
+import {decodeNotebookAttachment,bindNotebookAttachments,sanitizeNotebookSvg} from '../src/notebook-attachments';
+import {exportNotebookHtml,createExportHtmlSanitizer,exportRasterDataUri} from '../src/notebook-export';
+import {saveOutput} from '../src/output-actions';
+import {hardenOutputDom} from '../src/output-security';
 import {renderStaticOutputMarkdown} from '../src/output-markdown';
 import {undo as undoCode} from '@codemirror/commands';
 import {richOutputFixture} from './rich-output-fixture';
@@ -31,10 +36,13 @@ const post=async(op:string,data:Record<string,unknown>={})=>{
  const controller=new AbortController();inputController=controller;const outputs:Output[]=[];let result:any;let pending='';const decoder=new TextDecoder();
  try{const reader=response.body!.getReader();while(true){const read=await reader.read();pending+=decoder.decode(read.value,{stream:!read.done});let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);if(!line)continue;const event=JSON.parse(line);if(event.event==='output')outputs.push(event.output);else if(event.event==='result')result=event;else if(event.event==='input'){const value=await editor.requestInput(event.request,controller.signal);await fetch('/stdin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:event.token,value})})}}if(read.done)break}if(!result)throw new Error('Missing execution result');return {...result,outputs}}finally{controller.abort();if(inputController===controller)inputController=undefined}
 };
+const attachmentPreviews=new Map<HTMLElement,()=>void>();
+const exportImage=async(uri:string,cell:import('../src/notebook').Cell)=>{const image=decodeNotebookAttachment(cell,uri);if(!image||'error'in image)return;return image.mime==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder().decode(image.data),html=>actions.sanitize(html))}:exportRasterDataUri(image.mime,image.data)};
 const actions:import('../src/editor').EditorActions={
  translate:createTranslator(new URLSearchParams(location.search).get('lang')==='en'?'en':'zh'),
  save:async()=>{await session.save({read:async()=>disk,write:async text=>{disk=text;(window as any).savedNotebook=JSON.parse(text)}})},
  saveCopy:async()=>{},reload:async()=>{},confirm:async()=>true,
+ exportHtml:async()=>{const html=await exportNotebookHtml(session.notebook,{title:'Notebook Export Preview',resolveImage:exportImage,sanitizeHtml:createExportHtmlSanitizer(document,actions.sanitize,{resolveImage:exportImage})});saveOutput(html,'text/html','notebook-preview.html',document)},
  run:async(index)=>{previewExecution=undefined;const code=codeSnapshot();const outcome=await session.run(index,{execute:async(code,emit)=>{const result=await post('execute',{code});result.outputs.forEach((o:Output)=>emit(o));return result}});previewExecution=outcome==='ok'?'success':'error';previewExecutedCode=code;editor.refresh()},
  runAll:async()=>{for(let i=0;i<session.notebook.cells.length;i++)await session.run(i,{execute:async(code,emit)=>{const r=await post('execute',{code});r.outputs.forEach((o:Output)=>emit(o));return r}})},
  interrupt:async()=>{inputController?.abort();await post('interrupt')},restart:async()=>{await post('restart')},
@@ -42,7 +50,12 @@ const actions:import('../src/editor').EditorActions={
  environment:()=>'.venv · Python 3.12',chooseEnvironment:async()=>{},
  sanitize:html=>{const template=document.createElement('template');template.innerHTML=html;template.content.querySelectorAll('script,iframe,object,embed,style').forEach(n=>n.remove());template.content.querySelectorAll('*').forEach(e=>Array.from(e.attributes).filter(a=>a.name.startsWith('on')||a.name==='srcdoc').forEach(a=>e.removeAttribute(a.name)));return template.content},
  outputMarkdown:(text,parent)=>{const filtered=renderStaticOutputMarkdown(text,parent,actions.sanitize);return {filtered,ready:Promise.resolve(),dispose:()=>{parent.replaceChildren()}}},
- markdown:async(text,parent)=>{const h=document.createElement(text.startsWith('# ')?'h1':'p');h.textContent=text.replace(/^# /,'');parent.append(h)},
+ markdown:async(text,parent,cell)=>{
+  if(!new URLSearchParams(location.search).has('images')){const h=document.createElement(text.startsWith('# ')?'h1':'p');h.textContent=text.replace(/^# /,'');parent.append(h);return}
+  const fragment=actions.sanitize(new MarkdownIt({html:true}).render(text)),images=new Map<Element,string>();fragment.querySelectorAll('img[src]').forEach(image=>{const uri=image.getAttribute('src')!;if(uri.startsWith('attachment:')){images.set(image,uri);image.removeAttribute('src')}});hardenOutputDom(fragment);for(const [image,uri] of images)image.setAttribute('src',uri);parent.append(fragment);
+  attachmentPreviews.get(parent)?.();attachmentPreviews.set(parent,bindNotebookAttachments(parent,cell,{create:({mime,data})=>URL.createObjectURL(new Blob([data],{type:mime})),revoke:url=>URL.revokeObjectURL(url),sanitizeSvg:source=>sanitizeNotebookSvg(source,actions.sanitize),warn:(image,error)=>image.setAttribute('title',error)}));
+ },
+ disposeMarkdown:parent=>{attachmentPreviews.get(parent)?.();attachmentPreviews.delete(parent)},clearMarkdown:()=>{for(const dispose of attachmentPreviews.values())dispose();attachmentPreviews.clear()},
 };
 const diagnostics=document.createElement('div');diagnostics.id='preview-diagnostics';diagnostics.style.cssText='position:fixed;top:0;right:0;z-index:10000;background:#252526;color:white;font-size:11px';if(new URLSearchParams(location.search).has('harness'))document.body.append(diagnostics);
 const loadStarted=performance.now();diagnostics.textContent='constructing editor';

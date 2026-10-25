@@ -32,6 +32,7 @@
 ## Features
 
 - **Editable Properties and Dataview**: use YAML in the first Markdown cell to edit properties at the top of the Notebook and query saved values through optional Dataview integration. Aliases containing spaces stay intact.
+- **Native Outline**: browse Markdown heading levels, search and collapse sections, and jump to headings in the original Notebook. Unsaved heading edits update locally; code comments and outputs are excluded. Enable Obsidian’s Outline core plugin.
 - **Native notebook connections**: connect saved Markdown cells and YAML links/tags to backlinks, tag search, and the graph; navigate to headings and blocks. Enable **Attachments** in Graph view to see Notebook nodes.
 - **Native Notebook editing**: create Code, Markdown, and Raw cells, reorder by dragging, insert inline, and switch cell types. Unaffected cells keep their editors and undo history during structural changes and Markdown mode switches.
 - **Local Python execution and input**: run one cell or all cells in a shared kernel, see timing and execution status, interrupt, restart, or reset variables. Answer `input()` below the toolbar; password input is masked, and cancelling interrupts execution.

@@ -4,6 +4,7 @@ import {Plugin,Notice,normalizePath,setTooltip,Platform,FileSystemAdapter,getLan
 import {NotebookView,NOTEBOOK_VIEW} from './view';
 import {DEFAULT_SETTINGS,NotebookSettingsTab,type NotebookSettings,type EnvironmentPickerOptions} from './settings';
 import {newCell,serializeNotebook} from './notebook';
+import {NotebookOutlineBridge} from './notebook-outline';
 import {NotebookMetadataBridge} from './notebook-metadata';
 import {NotebookDataviewBridge} from './notebook-properties';
 import {syncedEnvironmentSettings} from './environment-config';
@@ -46,6 +47,7 @@ export default class NotebookPlugin extends Plugin{
   this.registerView(NOTEBOOK_VIEW,leaf=>new NotebookView(leaf,this));
   this.registerExtensions(['ipynb'],NOTEBOOK_VIEW);
   this.notebookMetadata=new NotebookMetadataBridge(this,message=>new Notice(this.getTranslator()(message),10000));this.notebookMetadata.start();
+  if(!Platform.isMobile)new NotebookOutlineBridge(this,path=>this.notebookMetadata?.get(path),{source:view=>view instanceof NotebookView?view.getOutlineNotebook():undefined,parse:(notebook,previous)=>this.notebookMetadata?.metadataForNotebook(notebook,previous)??Promise.resolve(undefined)}).start();
   new NotebookDataviewBridge(this,message=>new Notice(this.getTranslator()(message),10000)).start();
   if(!Platform.isMobile)this.addSettingTab(new NotebookSettingsTab(this.app,this));
   if(Platform.isMobile)return;

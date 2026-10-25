@@ -12,7 +12,7 @@ vi.mock('../src/settings',()=>({EnvironmentPicker:picker,confirm:picker.confirm}
 import {NotebookView} from '../src/view';import {NotebookSession} from '../src/session';import {editCell,insertCell,newCell} from '../src/notebook';
 import {FileSystemAdapter} from 'obsidian';
 const data=JSON.stringify({nbformat:4,nbformat_minor:5,metadata:{},cells:[{id:'one',cell_type:'code',source:'42',metadata:{},outputs:[],execution_count:null}]});
-function setup(){let disk=data;const app:any={vault:{adapter:new FileSystemAdapter(),configDir:'.obsidian',read:vi.fn(async()=>disk),process:vi.fn(async(_:unknown,fn:(v:string)=>string)=>{disk=fn(disk)}),create:vi.fn(async()=>{})}};const plugin:any={deviceId:'test-device',saveSettings:vi.fn(async()=>{}),vaultRoot:()=>'/tmp',settings:{vaultId:'test-vault',bridgePython:'python',kernelPython:'python'},manifest:{id:'obsidian-ipynb'}};const view:any=new NotebookView({app} as any,plugin);view.file={basename:'测试',path:'测试.ipynb'};view.session=new NotebookSession(data);return {view,app}}
+function setup(){let disk=data;const app:any={workspace:{trigger:vi.fn()},vault:{adapter:new FileSystemAdapter(),configDir:'.obsidian',read:vi.fn(async()=>disk),process:vi.fn(async(_:unknown,fn:(v:string)=>string)=>{disk=fn(disk)}),create:vi.fn(async()=>{})}};const plugin:any={deviceId:'test-device',saveSettings:vi.fn(async()=>{}),vaultRoot:()=>'/tmp',settings:{vaultId:'test-vault',bridgePython:'python',kernelPython:'python'},manifest:{id:'obsidian-ipynb'}};const view:any=new NotebookView({app} as any,plugin);view.file={basename:'测试',path:'测试.ipynb'};view.session=new NotebookSession(data);return {view,app}}
 describe('Obsidian 视图生命周期',()=>{
  it('启动内核期间禁止结构编辑与重新加载',async()=>{const {view}=setup();let ready:any;const wait=new Promise(r=>{ready=r});view.getKernel=()=>wait;const run=view.run(0);expect(()=>view.session.structure(insertCell(view.session.notebook,1,newCell('code')))).toThrow();await expect(view.reload()).rejects.toThrow();ready({execute:async()=>({status:'ok',execution_count:1})});await run});
  it('内核关闭失败仍保存未保存编辑',async()=>{const {view,app}=setup();view.session.change(editCell(view.session.notebook,0,{source:'edited'}));view.kernel={close:async()=>{throw new Error('close failed')}};await view.onClose();expect(app.vault.process).toHaveBeenCalled();expect(app.vault.create).not.toHaveBeenCalled()});
@@ -211,4 +211,10 @@ it('does not bind attachments after a Markdown host was disposed during renderin
  const {view}=setup();const {MarkdownRenderer}=await import('obsidian');const attachment=await import('../src/notebook-attachments');let finish!:()=>void;
  const render=vi.spyOn(MarkdownRenderer,'render').mockImplementationOnce(()=>new Promise<void>(resolve=>{finish=resolve}));const bind=vi.spyOn(attachment,'bindNotebookAttachments');const parent={querySelectorAll:()=>[]};const cell={cell_type:'markdown',source:'![x](attachment:x)',metadata:{}};
  try{const pending=view.renderNotebookMarkdown(view.session,cell.source,parent,cell);view.disposeMarkdown(parent);finish();await pending;expect(bind).not.toHaveBeenCalled()}finally{render.mockRestore();bind.mockRestore()}
+});
+it('notifies native Outline when a Notebook loads or edits, using the live session only',async()=>{
+ const {view,app}=setup();await view.onLoadFile(view.file);
+ expect(view.getOutlineNotebook()).toBe(view.session.notebook);expect(app.workspace.trigger).toHaveBeenCalledWith('native-ipynb-outline-change',view);
+ app.workspace.trigger.mockClear();view.editor.actions.notebookChanged();expect(app.workspace.trigger).toHaveBeenCalledWith('native-ipynb-outline-change',view);
+ await view.onClose();expect(view.getOutlineNotebook()).toBeUndefined();
 });

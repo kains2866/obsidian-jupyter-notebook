@@ -107,7 +107,7 @@ export class NotebookMetadataBridge {
   }catch(error){console.error('[Jupyter Notebook] Link update skipped',file.path,error);this.warn(error instanceof AggregateError?error.message:'Notebook 链接自动更新失败，当前编辑和原有数据已保留；请检查并手动更新相关链接。')}finally{for(const release of releases)release()}
  }
  async scan():Promise<void>{if(this.disposed||!this.installed)return;for(const file of this.owner.app.vault.getFiles())if(isNotebook(file))await this.refresh(file)}
- async metadataForNotebook(notebook:Notebook,previous?:Entry):Promise<NotebookMetadataEntry&{parsed:Map<string,CachedMetadata>}|undefined>{
+ async metadataForNotebook(notebook:Notebook,previous?:{parsed:Map<string,CachedMetadata>}):Promise<NotebookMetadataEntry&{parsed:Map<string,CachedMetadata>}|undefined>{
   if(!this.cache||this.disposed)return;
   const document=projectNotebookMarkdown(notebook),parsed=new Map<string,CachedMetadata>();const caches:CachedMetadata[]=[];
   for(const cell of document.cells){

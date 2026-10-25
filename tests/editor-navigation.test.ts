@@ -20,3 +20,14 @@ describe('Notebook editor navigation',()=>{
   const {editor,heading,finish}=fixture();const pending=editor.revealCell({index:0,offset:0,line:0,heading:'Target'});editor.revealGeneration++;finish();await pending;expect(heading.scrollIntoView).not.toHaveBeenCalled();
  });
 });
+it('reveals the requested duplicate heading in preview without entering edit mode',async()=>{
+ const {editor,node,heading,finish}=fixture();const second={...heading,scrollIntoView:vi.fn()};
+ node.querySelector=()=>({querySelectorAll:()=>[heading,second]}) as any;finish();
+ await editor.revealCell({index:0,offset:3,line:0,heading:'Target',headingOccurrence:1});
+ expect(second.scrollIntoView).toHaveBeenCalledWith({block:'center'});expect(heading.scrollIntoView).not.toHaveBeenCalled();expect(editor.editMarkdown).not.toHaveBeenCalled();
+});
+it.each([1,3])('falls back to the source caret when rendered heading count is %s instead of two',async(count)=>{
+ const {editor,node,heading,finish}=fixture();node.querySelector=()=>({querySelectorAll:()=>Array.from({length:count},()=>heading)}) as any;editor.editors=[{dispatch:vi.fn(),focus:vi.fn()}];finish();
+ await editor.revealCell({index:0,offset:3,line:0,heading:'Target',headingOccurrence:1,headingCount:2});
+ expect(heading.scrollIntoView).not.toHaveBeenCalled();expect(editor.editMarkdown).toHaveBeenCalledWith(0);
+});

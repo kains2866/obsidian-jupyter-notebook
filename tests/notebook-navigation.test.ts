@@ -33,3 +33,8 @@ describe('native notebook navigation',()=>{
   expect(resolveNotebookNavigation(doc,{}, {subpath:'#Bad',line:1},resolver)).toBeUndefined();
  });
 });
+it('maps Outline line clicks to an exact duplicate heading while keeping preview mode',()=>{
+ const document=projectNotebookMarkdown({nbformat:4,nbformat_minor:5,metadata:{},cells:[{cell_type:'markdown',metadata:{},source:'# Root\n\n## Repeat\n\n## Repeat'}]});
+ const headings=[{heading:'Root',level:1,position:pos(0,0)},{heading:'Repeat',level:2,position:pos(8,2)},{heading:'Repeat',level:2,position:pos(19,4)}];
+ expect(resolveNotebookNavigation(document,{headings},{line:4})).toMatchObject({index:0,line:4,offset:19,heading:'Repeat',headingOccurrence:1});
+});

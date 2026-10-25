@@ -46,12 +46,13 @@ export class NotebookView extends FileView{
  getViewType():string{return NOTEBOOK_VIEW}
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
+ getOutlineNotebook():Notebook|undefined{return !this.disposed&&!this.loadingNotebook?this.session?.notebook:undefined}
  async onLoadFile(file:TFile):Promise<void>{
   this.disposed=false;this.loadingNotebook=true;this.navigationGeneration++;this.importSources=[];this.importChecker.clear();
   const loadGeneration=++this.fileLoadGeneration;
   const text=await this.app.vault.read(file);
   if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;
-  try{this.loadNotebook(text);await this.openRecovery(file,text);if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;this.loadingNotebook=false;void this.navigatePending()}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
+  try{this.loadNotebook(text);await this.openRecovery(file,text);if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;this.loadingNotebook=false;this.app.workspace.trigger?.('native-ipynb-outline-change',this);void this.navigatePending()}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
  }
  setEphemeralState(state:unknown):void{
   super.setEphemeralState(state);this.pendingNavigation=state;this.navigationGeneration++;void this.navigatePending();
@@ -78,7 +79,7 @@ export class NotebookView extends FileView{
   this.editor?.destroy();this.clearMarkdown();
   this.editor=new NotebookEditor(this.contentEl,session,{
    translate:this.t,confirm:(title,message)=>confirm(this.app,title,message,this.t),
-   notebookChanged:()=>{this.scheduleImportCheck();this.syncProperties(session)},retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
+   notebookChanged:()=>{this.scheduleImportCheck();this.syncProperties(session);this.app.workspace.trigger?.('native-ipynb-outline-change',this)},retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
    readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),exportHtml:()=>this.exportHtml(),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
    kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),

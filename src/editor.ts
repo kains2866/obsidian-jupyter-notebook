@@ -376,7 +376,7 @@ export class NotebookEditor {
  focusCell(index:number):void{const target=Math.min(index,this.session.notebook.cells.length-1);if(this.mountCell(target))this.refresh();this.selectCell(target);this.editors[target]?.focus()}
  async revealCell(target:NotebookNavigationTarget):Promise<void>{
   const generation=++this.revealGeneration;
-  const {index,offset,heading,block}=target;const cell=this.session.notebook.cells[index];
+  const {index,offset,heading,headingOccurrence,headingCount,block}=target;const cell=this.session.notebook.cells[index];
   if(this.destroyed||cell?.cell_type!=='markdown'||!Number.isInteger(offset)||offset<0||offset>sourceText(cell).length)return;
   if(this.mountCell(index))this.refresh();this.selectCell(index);
   const node=this.cellNodes[index];if(!node)return;
@@ -385,7 +385,7 @@ export class NotebookEditor {
   if(this.destroyed||generation!==this.revealGeneration||this.cellNodes[index]!==node||this.session.notebook.cells[index]!==cell)return;
   const preview=node.querySelector<HTMLElement>('.ipynb-markdown-preview');
   const headingNodes=heading&&preview?[...preview.querySelectorAll<HTMLElement>('h1,h2,h3,h4,h5,h6')].filter(element=>element.dataset.heading===heading||element.textContent===heading):[];
-  const headingNode=headingNodes.length===1?headingNodes[0]:undefined;
+  const headingNode=headingOccurrence!==undefined?(Number.isInteger(headingOccurrence)&&headingOccurrence>=0&&(headingCount===undefined||headingNodes.length===headingCount)?headingNodes[headingOccurrence]:undefined):headingNodes.length===1?headingNodes[0]:undefined;
   const blockNode=block&&preview?[...preview.querySelectorAll<HTMLElement>('[data-block-id]')].find(element=>element.dataset.blockId===block):undefined;
   const rendered=headingNode||blockNode;
   if(rendered){rendered.scrollIntoView({block:'center'});return}

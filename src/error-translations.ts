@@ -36,6 +36,7 @@ export const errorTranslations:Record<string,string>={
  '下载的 Python 不属于此设备仓库。':'The downloaded Python does not belong to this device and vault.',
  'Python 版本验证失败。':'Python version verification failed.',
  '运行时目录路径发生变化；不会删除。':'The runtime directory path changed. It will not be deleted.',
+ 'Notebook YAML 格式无法安全保留，请直接在 Markdown 中编辑该属性。':'Notebook YAML formatting cannot be preserved safely. Edit this property in the Markdown cell.',
  'Notebook YAML 属性必须是键值对象。':'Notebook YAML properties must be a key-value object.',
  'Notebook YAML 属性不能包含循环引用。':'Notebook YAML properties cannot contain circular references.',
  'Notebook YAML 属性包含不支持的对象。':'Notebook YAML properties contain an unsupported object.',

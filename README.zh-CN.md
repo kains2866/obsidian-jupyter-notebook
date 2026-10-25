@@ -180,7 +180,7 @@ status: 学习中
 ---
 ```
 
-0.7.0 在 Notebook 顶部提供原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑会重新序列化 YAML，注释和引号格式可能变化；复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心“文件属性”侧栏或 Bases 索引。
+0.7.0 在 Notebook 顶部提供原生 Properties 编辑器，复用 Obsidian 的属性类型和控件，修改通过正常的保存与撤销流程写回 Markdown YAML；没有 Markdown 单元格时自动创建。内部组件不可用时回退只读展示。无效 YAML 需要先在 Markdown 源码中修复。属性编辑保留注释与原有引号，未修改区域保持原格式；涉及 YAML 合并键或无法安全保留的结构时，会提示在 Markdown 中手动编辑，不覆盖原文。复杂嵌套值可继续在 YAML 源码中编辑。这不等于接入核心“文件属性”侧栏或 Bases 索引。
 
 保存后，属性可由已启用的 Dataview 查询。例如，在 Markdown 单元格或普通笔记中添加：
 

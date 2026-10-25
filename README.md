@@ -180,7 +180,7 @@ status: Learning
 ---
 ```
 
-Version 0.7.0 includes a native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Editing properties reserializes YAML, so comments and quoting may change; nested values remain available in YAML source. This does not add core File properties sidebar or Bases indexing.
+Version 0.7.0 includes a native Properties editor at the top of the Notebook. It reuses Obsidian's property types and controls, writes edits to the Markdown YAML through the normal save/undo flow, and creates a Markdown cell if none exists. If the internal component is unavailable, it falls back to a read-only preview. Invalid YAML must be fixed in the Markdown source first. Property edits preserve comments and existing quote styles; unchanged source ranges retain their formatting. Edits involving YAML merge keys or structures that cannot be preserved safely are rejected without changing the source; edit those in the Markdown cell. Nested values remain available in YAML source. This does not add core File properties sidebar or Bases indexing.
 
 After saving, the properties can be queried by an enabled Dataview plugin. For example, add this to a Markdown cell or a regular note:
 

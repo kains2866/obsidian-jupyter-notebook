@@ -24,10 +24,17 @@ it('does not emit unsafe resource data returned by an image resolver',async()=>{
 it('converts bytes to self-contained raster data without accepting active MIME types',()=>{
  expect(exportRasterDataUri('image/png',new Uint8Array([0,1,2]))).toBe('data:image/png;base64,AAEC');expect(()=>exportRasterDataUri('text/html',new Uint8Array())).toThrow();
 });
-it('preserves exact math source without Markdown interpreting delimiters or underscores',async()=>{
- const source='Formula: \\(a_1 * b_2\\) and $x_1 * y_2$\n\n\\[\\alpha + \\beta\\]';
- const html=await exportNotebookHtml(notebook([{cell_type:'markdown',metadata:{},source}]),options);
- expect(html).toContain('\\(a_1 * b_2\\)');expect(html).toContain('$x_1 * y_2$');expect(html).toContain('\\[\\alpha + \\beta\\]');
+it('exports Markdown and MIME formulas as static SVG while keeping fenced code literal',async()=>{
+ const source=String.raw`Inline \(a_1*b_2\) and $2+2=4$.
+
+$$\sum_{n=1}^{\infty}n^{-2}=\pi^2/6$$
+
+\[\alpha+\beta\]
+
+`+'`$literal$`';
+ const html=await exportNotebookHtml(notebook([{cell_type:'markdown',metadata:{},source},{cell_type:'code',metadata:{},source:'',outputs:[{output_type:'display_data',data:{'text/latex':String.raw`$$\left[\begin{matrix}1&2\\3&4\end{matrix}\right]$$`}}]}]),options);
+ expect(html.match(/<svg/g)).toHaveLength(5);expect(html).toContain('<code>$literal$</code>');
+ expect(html).not.toMatch(/<script|<link|<image|@font-face|@import/);expect(html).toContain("font-src 'none'");
 });
 it('exports stored Markdown and image MIME bundles, and escaped plain text',async()=>{
  const html=await exportNotebookHtml(notebook([{cell_type:'code',metadata:{},source:'',outputs:[{output_type:'display_data',data:{'text/markdown':'**result**'}},{output_type:'display_data',data:{'image/png':['AA','==']}},{output_type:'display_data',data:{'image/jpeg':'AA=='}},{output_type:'display_data',data:{'text/plain':['one','<two>']}}]}]),options);

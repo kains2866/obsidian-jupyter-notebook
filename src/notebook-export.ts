@@ -1,4 +1,6 @@
 import MarkdownIt from 'markdown-it';
+import {enableStaticMath} from './markdown-math';
+import {renderExportMath} from './export-math';
 type Token=ReturnType<InstanceType<typeof MarkdownIt>['parse']>[number];
 import {sourceText,type Cell,type Notebook,type Output} from './notebook';
 import {hardenOutputDom} from './output-security';
@@ -52,18 +54,8 @@ export function createExportHtmlSanitizer(doc:Document,sanitize:(html:string)=>D
  };
 }
 async function markdown(source:string,cell:Cell,options:NotebookExportOptions):Promise<string>{
- const md=new MarkdownIt({html:true,linkify:false,typographer:false});
- // Preserve formulas as literal code, including delimiters, before Markdown escape/emphasis rules.
- md.inline.ruler.before('escape','offline_math',(state,silent)=>{
-  const rest=state.src.slice(state.pos);const delimiters=[['$$','$$'],['\\(','\\)'],['\\[','\\]'],['$','$']];
-  for(const [open,close] of delimiters){
-   if(!rest.startsWith(open))continue;
-   const end=rest.indexOf(close,open.length);if(end<0)return false;
-   if(!silent){const token=state.push('code_inline','code',0);token.content=rest.slice(0,end+close.length);token.attrSet('class','latex')}
-   state.pos+=end+close.length;return true;
-  }
-  return false;
- });
+ const md=enableStaticMath(new MarkdownIt({html:true,linkify:false,typographer:false}));
+ md.renderer.rules.ipynb_math=(tokens,index)=>renderExportMath(tokens[index].content,!!tokens[index].meta?.display);
  // attachment: is not a browser resource protocol, but its bytes are explicitly resolved below.
  const validate=md.validateLink.bind(md);md.validateLink=uri=>/^attachment:/i.test(uri)||validate(uri);
  const tokens=md.parse(source,{});const images=new Map<Token,ExportImage|undefined>();
@@ -81,7 +73,11 @@ async function outputHtml(output:Output,cell:Cell,options:NotebookExportOptions)
   const uri=`data:${mime};base64,${text(data[mime]).replace(/\s/g,'')}`;if(rasterData.test(uri))return `<img src="${uri}" alt="Notebook output">`;
  }
  if(Object.hasOwn(data,'text/markdown'))return markdown(text(data['text/markdown']),cell,options);
- if(Object.hasOwn(data,'text/latex'))return pre(data['text/latex'],'latex');
+ if(Object.hasOwn(data,'text/latex')){
+  let formula=text(data['text/latex']).trim();
+  for(const [open,close] of [['$$','$$'],['\\[','\\]'],['\\(','\\)'],['$','$']])if(formula.length>=open.length+close.length&&formula.startsWith(open)&&formula.endsWith(close)){formula=formula.slice(open.length,-close.length).trim();break}
+  return options.sanitizeHtml(renderExportMath(formula,true),cell);
+ }
  if(Object.hasOwn(data,'text/plain'))return pre(data['text/plain']);
  return pre(data);
 }
@@ -95,5 +91,5 @@ export async function exportNotebookHtml(notebook:Notebook,options:NotebookExpor
   else{const outputs:string[]=[];for(const output of cell.outputs??[])outputs.push(await outputHtml(output,cell,options));content=`<pre class="code"><code>${escape(source)}</code></pre>${outputs.map(output=>`<div class="output">${output}</div>`).join('')}`}
   cells.push(`<section class="cell ${cell.cell_type}">${content}</section>`);
  }
- return `<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src 'none'; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>${escape(options.title)}</title><style>body{max-width:960px;margin:2rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#202124;background:#fff;line-height:1.6}.cell{margin:1.5rem 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background:#f4f5f6;border-radius:6px}code{font-family:ui-monospace,monospace}img,svg{max-width:100%;height:auto}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #ccc;padding:.35rem .65rem}.error{color:#a11}.export-note,.missing-image{color:#666;font-size:.9rem}blockquote{border-left:3px solid #ccc;padding-left:1rem}</style></head><body><h1>${escape(options.title)}</h1><p class="export-note">${escape(t('静态离线导出：仅包含已有输出，不执行代码。公式保留 LaTeX 源码；远程或缺失图片显示替代文字。'))}</p>${cells.join('\n')}</body></html>`;
+ return `<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src 'none'; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>${escape(options.title)}</title><style>body{max-width:960px;margin:2rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#202124;background:#fff;line-height:1.6}.cell{margin:1.5rem 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background:#f4f5f6;border-radius:6px}code{font-family:ui-monospace,monospace}img,svg{max-width:100%;height:auto}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #ccc;padding:.35rem .65rem}.export-math.is-display{display:block;text-align:center;margin:1em 0}.export-math svg{vertical-align:middle}.error{color:#a11}.export-note,.missing-image{color:#666;font-size:.9rem}blockquote{border-left:3px solid #ccc;padding-left:1rem}</style></head><body><h1>${escape(options.title)}</h1><p class="export-note">${escape(t('静态离线导出：仅包含已有输出，不执行代码。公式已内嵌；无法渲染时保留 LaTeX 源码，远程或缺失图片显示替代文字。'))}</p>${cells.join('\n')}</body></html>`;
 }

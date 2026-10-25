@@ -158,3 +158,13 @@ it('ignores delayed math failures after the output has been replaced',async()=>{
  const renderer=new OutputRenderer(host as any,()=>new Element() as any);renderer.update([{output_type:'display_data',data:{'text/latex':'x'}}]);renderer.update([{output_type:'stream',text:'new output'}]);fail(new Error('old flush'));
  await Promise.resolve();await Promise.resolve();expect(host.querySelectorAll('pre').map(e=>e.textContent)).toEqual(['new output']);renderer.destroy();
 });
+
+it('finalizes native math only after static sanitization and skips disposed output',async()=>{
+ const host=new Element(),finalize=vi.fn(async()=>{});let ready!:()=>void;
+ const markdown=(_source:string,parent:Element)=>{parent.createEl('script').textContent='unsafe';return {ready:new Promise<void>(resolve=>{ready=resolve}),finalize,dispose:vi.fn()}};
+ const renderer=new OutputRenderer(host as any,()=>new Element() as any,DEFAULT_OUTPUT_OPTIONS,undefined,markdown as any);
+ renderer.update([{output_type:'display_data',data:{'text/markdown':'$x$'}}]);
+ finalize.mockImplementation(async()=>{expect(host.querySelectorAll('script')).toHaveLength(0)});
+ ready();await Promise.resolve();await Promise.resolve();expect(finalize).toHaveBeenCalledTimes(1);
+ renderer.update([{output_type:'display_data',data:{'text/markdown':'$y$'}}]);renderer.destroy();ready();await Promise.resolve();expect(finalize).toHaveBeenCalledTimes(1);
+});

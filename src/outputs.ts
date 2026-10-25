@@ -6,7 +6,7 @@ import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {createTranslator,type Translator} from './i18n';
 export const outputText=(value:unknown):string=>{if(value==null)return '';if(Array.isArray(value))return value.map((item:unknown)=>outputText(item)).join('');if(typeof value==='object')return JSON.stringify(value)??'';if(typeof value==='string'||typeof value==='number'||typeof value==='boolean'||typeof value==='bigint')return String(value);return ''};
 export interface OutputSnapshot {expanded:boolean|undefined}
-export interface MarkdownOutput {ready:Promise<void>;filtered?:OutputFilterReport;dispose():void}
+export interface MarkdownOutput {ready:Promise<void>;finalize?():Promise<void>;filtered?:OutputFilterReport;dispose():void}
 export type RenderOutputMarkdown=(source:string,parent:HTMLElement)=>MarkdownOutput;
 export class OutputRenderer {
  private markdownDisposers=new Map<HTMLElement,()=>void>();
@@ -55,7 +55,7 @@ export class OutputRenderer {
    const source=outputText(data['text/markdown']);const host=block.createDiv();host.className='ipynb-output-markdown markdown-rendered';
    if(this.markdown){
     const failure=(error:unknown)=>{host.replaceChildren();host.createEl('pre').textContent=this.t('Markdown 输出渲染失败：{error}',{error:String(error)})+'\n\n'+source;this.updateCollapse()};
-    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(()=>{if(this.markdownDisposers.has(block)){const filtered=mergeOutputFilterReports(rendering.filtered,hardenOutputDom(host));wrapOutputTables(host,this.t);this.filterHint(block,filtered);this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
+    try{const rendering=this.markdown(source,host);this.markdownDisposers.set(block,()=>rendering.dispose());void rendering.ready.then(async()=>{if(this.markdownDisposers.has(block)){const filtered=mergeOutputFilterReports(rendering.filtered,hardenOutputDom(host));wrapOutputTables(host,this.t);this.filterHint(block,filtered);await rendering.finalize?.();if(this.markdownDisposers.has(block))this.updateCollapse()}}).catch(error=>{if(this.markdownDisposers.has(block))failure(error)})}catch(error){failure(error)}
    }else host.createEl('pre').textContent=source;this.textActions(block,()=>outputCopyText(host,source));
   }
   else{const pre=block.createEl('pre');pre.textContent=outputText(data['text/plain']??JSON.stringify(data,null,2));block.append(pre);this.textActions(block,()=>pre.textContent??'')}return block;

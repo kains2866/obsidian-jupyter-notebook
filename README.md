@@ -215,7 +215,7 @@ The index uses an in-memory Markdown projection without companion files. Native 
 
 Choose **More actions → Export as HTML** to download one self-contained HTML file from the current notebook, including unsaved edits, Markdown, code, raw cells and stored static outputs. This does not run code, start Python, or save the original notebook. The browser may ask where to save the file; canceling that dialog leaves no exported file.
 
-Cell attachments and resolvable vault images are embedded. Remote images are never downloaded; missing or unsupported images retain alternative text. HTML and SVG are sanitized, with no automatically loaded external scripts, stylesheets, or fonts. Formulas retain readable LaTeX source, and interactive widgets are exported as available static/text content. Obsidian-specific plugin processors are not run during export.
+Cell attachments and resolvable vault images are embedded. Remote images are never downloaded; missing or unsupported images retain alternative text. HTML and SVG are sanitized, with no automatically loaded external scripts, stylesheets, or fonts. Formulas are embedded as offline SVG paths without scripts or external fonts; unsupported formulas retain readable LaTeX source. Interactive widgets are exported as available static/text content. Obsidian-specific plugin processors are not run during export.
 
 Supported outputs include text, PNG/JPEG images, static Markdown, sanitized HTML tables, and errors. Settings provide output collapsing, clearing, size warnings, and optional limits.
 

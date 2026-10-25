@@ -1,5 +1,5 @@
 import {expect,it,vi} from 'vitest';
-import {renderStaticOutputMarkdown} from '../src/output-markdown';
+import {renderStaticOutputMarkdown,renderStaticOutputMath} from '../src/output-markdown';
 const render=(source:string)=>{let html='';const fragment={children:[]};const parent={append:vi.fn()};renderStaticOutputMarkdown(source,parent as unknown as HTMLElement,text=>{html=text;return fragment as unknown as DocumentFragment});return {html,parent,fragment}};
 it('renders tables, fenced code, formatting and explicit links without host Markdown plugins',()=>{
  const {html,parent,fragment}=render('| A | B |\n| --- | --- |\n| 1 | 2 |\n\n```python\nprint(1)\n```\n\n**bold** [source](https://example.org)');expect(html).toContain('<table>');expect(html).toContain('language-python');expect(html).toContain('<strong>bold</strong>');expect(html).toContain('href="https://example.org"');expect(parent.append).toHaveBeenCalledWith(fragment);
@@ -15,4 +15,12 @@ it('reports suppressed Markdown features without flagging fenced or inline code'
  const sanitize=()=>({children:[]} as unknown as DocumentFragment);
  expect(renderStaticOutputMarkdown('![plot](https://track)\n\n<script>run()</script>',parent,sanitize)).toMatchObject({markdownImages:1,rawHtml:1});
  expect(renderStaticOutputMarkdown('```html\n<script>run()</script>\n![plot](https://track)\n```\n\n`<iframe>`',parent,sanitize)).toEqual({});
+});
+
+it('renders native math only in sanitized placeholders with source fallback',()=>{
+ const host={textContent:'x^2',classList:{contains:()=>true},replaceChildren:vi.fn()};
+ const parent={querySelectorAll:()=>[host]} as unknown as HTMLElement;
+ const native=vi.fn(()=>({}) as HTMLElement);renderStaticOutputMath(parent,native);
+ expect(native).toHaveBeenCalledWith('x^2',true);expect(host.replaceChildren).toHaveBeenCalledWith(native.mock.results[0].value);
+ host.textContent='bad';renderStaticOutputMath(parent,()=>{throw new Error('unavailable')});expect(host.textContent).toBe('bad');
 });

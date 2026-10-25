@@ -1,3 +1,4 @@
+import {renderMath,finishRenderMath} from 'obsidian';
 import {createExportHtmlSanitizer,exportNotebookHtml,exportRasterDataUri,isExportLocalImage,type ExportImage} from './notebook-export';
 import {decodeNotebookAttachment} from './notebook-attachments';
 import {saveOutput as downloadOutput} from './output-actions';
@@ -7,7 +8,7 @@ import {projectNotebookMarkdown} from './notebook-markdown';
 import {IncrementalImportChecker} from './import-check';
 import {RecoveryDrafts,recoveryHash,type RecoveryDraft} from './recovery-drafts';
 import {recoveryCacheDirectory} from './recovery-cache';
-import {renderStaticOutputMarkdown} from './output-markdown';
+import {renderStaticOutputMarkdown,renderStaticOutputMath} from './output-markdown';
 import {createTranslator,type Translator} from './i18n';
 import {parseNotebookProperties} from './notebook-properties';
 import {NotebookPropertiesEditor} from './native-properties';
@@ -204,7 +205,7 @@ export class NotebookView extends FileView{
   finally{if(this.importController===controller)this.importController=undefined}
  }
  private renderOutputMarkdown(text:string,parent:HTMLElement):import('./outputs').MarkdownOutput{
-  const filtered=renderStaticOutputMarkdown(text,parent,sanitizeHTMLToDom);return {ready:Promise.resolve(),dispose(){},filtered};
+  const filtered=renderStaticOutputMarkdown(text,parent,sanitizeHTMLToDom);return {ready:Promise.resolve(),finalize:()=>{renderStaticOutputMath(parent,renderMath);return finishRenderMath()},dispose(){},filtered};
  }
  private async renderNotebookMarkdown(session:NotebookSession,text:string,parent:HTMLElement,cell?:import('./notebook').Cell):Promise<void>{
   this.disposeMarkdown(parent);

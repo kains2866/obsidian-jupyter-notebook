@@ -83,7 +83,8 @@ export class NotebookEditor {
  private anchorObserver?:ResizeObserver;
  private toolbarObserver?:ResizeObserver;
  private expectedScroll=0;
- private dragging?:{from:number;to:number;y:number;ghost:HTMLElement;line:HTMLElement;frame:number};
+ private pendingDrag?:{from:number;x:number;y:number;offsetX:number;offsetY:number;pointerId:number};
+ private dragging?:{from:number;to:number;y:number;offsetX:number;offsetY:number;pointerId:number;ghost:HTMLElement;line:HTMLElement;frame:number};
  private outputRenderers=new Map<HTMLElement,OutputRenderer>();
  private outputSnapshots=new Map<string,OutputSnapshot>();
  private t:Translator;
@@ -255,6 +256,18 @@ export class NotebookEditor {
  private pruneCellState():void{const ids=new Set(this.session.notebook.cells.map(cell=>this.cellIdentity(cell)));for(const id of this.savedSelections.keys())if(!ids.has(id))this.savedSelections.delete(id);for(const id of this.outputSnapshots.keys())if(!ids.has(id))this.outputSnapshots.delete(id)}
  private cellIdentity(cell:object):string{let id=this.identities.get(cell);if(!id){id=`cell-${++this.identitySequence}`;this.identities.set(cell,id)}return id}
  applyProperties(next:Notebook):void{this.historyChange(()=>this.session.structure(next))}
+ applyLinkRename(accept:()=>void):void{
+  const before=this.session.notebook.cells;
+  this.historyChange(()=>{accept();this.session.notebook.cells.forEach((cell,index)=>{
+   const old=before[index];if(!old||old===cell||old.cell_type!=='markdown'||cell.cell_type!=='markdown'||old.id!==cell.id)return;
+   this.identities.set(cell,this.cellIdentity(old));const editor=this.editors[index];if(!editor)return;
+   const current=editor.state.doc.toString(),next=sourceText(cell);if(current===next)return;
+   // A local splice maps selections and existing CodeMirror undo through the renamed link.
+   let from=0,suffix=0;while(from<current.length&&from<next.length&&current[from]===next[from])from++;
+   while(suffix<current.length-from&&suffix<next.length-from&&current[current.length-1-suffix]===next[next.length-1-suffix])suffix++;
+   this.syncingSource=true;try{editor.dispatch({changes:{from,to:current.length-suffix,insert:next.slice(from,next.length-suffix)},annotations:Transaction.addToHistory.of(false)})}finally{this.syncingSource=false}
+  })});
+ }
  propertyHistory(redo=false):void{this.historyChange(()=>redo?this.session.redo():this.session.undo())}
  private historyChange(action:()=>void):void{this.captureAnchor();this.structureChanging=true;try{action()}finally{this.structureChanging=false}this.renderCells(true)}
  private insertAt(index:number,type:CellType):void{this.structure(()=>insertCell(this.session.notebook,index,newCell(type)));this.anchor=undefined;this.focusCell(index);this.cellNodes[index]?.scrollIntoView({block:'nearest'})}
@@ -277,23 +290,34 @@ export class NotebookEditor {
   },true);
  }
  private startDrag(event:PointerEvent,from:number):void{
-  if(event.button!==0||this.actions.readOnly||this.session.running||this.session.busy||(event.target as Element)?.closest('button'))return;event.preventDefault();this.cancelDrag();
-  const ghost=this.el('div','ipynb-drag-ghost',this.root);const clone=this.cellNodes[from].cloneNode(true) as HTMLElement;clone.classList.add('ipynb-drag-cell');clone.removeAttribute('data-index');clone.removeAttribute('data-cell-id');clone.querySelectorAll('[data-cell-id]').forEach(el=>el.removeAttribute('data-cell-id'));clone.querySelectorAll('[tabindex], [contenteditable]').forEach(el=>{el.removeAttribute('tabindex');el.setAttribute('contenteditable','false')});clone.querySelectorAll('button,select,input').forEach(el=>(el as HTMLButtonElement).disabled=true);ghost.style.width=`${this.cellNodes[from].getBoundingClientRect().width}px`;ghost.append(clone);
-  const line=this.el('div','ipynb-drop-line',this.list);this.dragging={from,to:from,y:event.clientY,ghost,line,frame:0};
+  if(event.button!==0||this.actions.readOnly||this.session.running||this.session.busy||(event.target as Element)?.closest('button')||this.pendingDrag||this.dragging)return;
+  event.preventDefault();this.cancelDrag();const bounds=this.cellNodes[from].getBoundingClientRect();
+  this.pendingDrag={from,x:event.clientX,y:event.clientY,offsetX:event.clientX-bounds.left,offsetY:event.clientY-bounds.top,pointerId:event.pointerId};
   this.root.ownerDocument.addEventListener('pointermove',this.dragMove);this.root.ownerDocument.addEventListener('pointerup',this.dragEnd);this.root.ownerDocument.addEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.addEventListener('keydown',this.dragKey);
-  this.dragMove(event);this.dragging.frame=this.root.win.requestAnimationFrame(this.dragTick);
+ }
+ private activateDrag(event:PointerEvent,pending:NonNullable<NotebookEditor['pendingDrag']>):void{
+  const {from,offsetX,offsetY,pointerId}=pending;
+  const ghost=this.el('div','ipynb-drag-ghost',this.root);const clone=this.cellNodes[from].cloneNode(true) as HTMLElement;clone.classList.add('ipynb-drag-cell');clone.removeAttribute('data-index');clone.removeAttribute('data-cell-id');clone.querySelectorAll('[data-cell-id]').forEach(el=>el.removeAttribute('data-cell-id'));clone.querySelectorAll('[tabindex], [contenteditable]').forEach(el=>{el.removeAttribute('tabindex');el.setAttribute('contenteditable','false')});clone.querySelectorAll('button,select,input').forEach(el=>(el as HTMLButtonElement).disabled=true);ghost.style.width=`${this.cellNodes[from].getBoundingClientRect().width}px`;ghost.append(clone);
+  const line=this.el('div','ipynb-drop-line',this.list);this.dragging={from,to:from,y:event.clientY,offsetX,offsetY,pointerId,ghost,line,frame:0};this.pendingDrag=undefined;
+  this.positionDrag(event);this.dragging.frame=this.root.win.requestAnimationFrame(this.dragTick);
  }
  private dragKey=(event:KeyboardEvent)=>{if(event.key==='Escape')this.cancelDrag()};
- private dragCancel=()=>this.cancelDrag();
- private dragMove=(event:PointerEvent)=>{if(!this.dragging)return;this.dragging.y=event.clientY;this.dragging.ghost.style.left=`${event.clientX+14}px`;this.dragging.ghost.style.top=`${event.clientY+12}px`;this.updateDrop()};
+ private dragCancel=(event:PointerEvent)=>{if(event.pointerId===(this.dragging??this.pendingDrag)?.pointerId)this.cancelDrag()};
+ private dragMove=(event:PointerEvent)=>this.moveDrag(event);
+ private moveDrag(event:PointerEvent):void{
+  const pointer=this.dragging??this.pendingDrag;if(!pointer||pointer.pointerId!==event.pointerId)return;
+  if(this.pendingDrag){if(Math.hypot(event.clientX-this.pendingDrag.x,event.clientY-this.pendingDrag.y)<5)return;this.activateDrag(event,this.pendingDrag)}
+  else this.positionDrag(event);
+ }
+ private positionDrag(event:PointerEvent):void{const drag=this.dragging;if(!drag)return;drag.y=event.clientY;drag.ghost.style.left=`${event.clientX-drag.offsetX}px`;drag.ghost.style.top=`${event.clientY-drag.offsetY}px`;this.updateDrop()}
  private updateDrop():void{
   const drag=this.dragging;if(!drag)return;let slot=this.cellNodes.findIndex(node=>drag.y<node.getBoundingClientRect().top+node.getBoundingClientRect().height/2);if(slot<0)slot=this.cellNodes.length;
   drag.to=Math.max(0,slot>drag.from?slot-1:slot);
   const target=this.cellNodes[slot];const bounds=this.list.getBoundingClientRect();drag.line.style.top=`${(target?target.getBoundingClientRect().top:this.cellNodes.at(-1)!.getBoundingClientRect().bottom)-bounds.top}px`;
  }
  private dragTick=()=>{const drag=this.dragging;if(!drag)return;const bounds=this.root.getBoundingClientRect();const margin=60;const delta=drag.y<bounds.top+margin?-Math.min(18,(bounds.top+margin-drag.y)/3):drag.y>bounds.bottom-margin?Math.min(18,(drag.y-bounds.bottom+margin)/3):0;if(delta){this.root.scrollTop+=delta;this.updateDrop()}drag.frame=this.root.win.requestAnimationFrame(this.dragTick)};
- private dragEnd=()=>{const drag=this.dragging;if(!drag)return;const {from,to}=drag;this.cancelDrag();if(from!==to)void this.perform(()=>this.structure(()=>moveCell(this.session.notebook,from,to)))};
- private cancelDrag():void{if(this.dragging){this.root.win.cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}this.root.ownerDocument.removeEventListener('pointermove',this.dragMove);this.root.ownerDocument.removeEventListener('pointerup',this.dragEnd);this.root.ownerDocument.removeEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.removeEventListener('keydown',this.dragKey)}
+ private dragEnd=(event:PointerEvent)=>{if(event.pointerId!==(this.dragging??this.pendingDrag)?.pointerId)return;const drag=this.dragging;if(!drag){this.cancelDrag();return;}const {from,to}=drag;this.cancelDrag();if(from!==to)void this.perform(()=>this.structure(()=>moveCell(this.session.notebook,from,to)))};
+ private cancelDrag():void{this.pendingDrag=undefined;if(this.dragging){this.root.win.cancelAnimationFrame(this.dragging.frame);this.dragging.ghost.remove();this.dragging.line.remove();this.dragging=undefined}this.root.ownerDocument.removeEventListener('pointermove',this.dragMove);this.root.ownerDocument.removeEventListener('pointerup',this.dragEnd);this.root.ownerDocument.removeEventListener('pointercancel',this.dragCancel);this.root.ownerDocument.removeEventListener('keydown',this.dragKey)}
  private estimateCellHeight(cell:Cell):number{
   const source=sourceText(cell);const sourceHeight=Math.max(54,(source.split('\n').length+Math.ceil(source.length/100))*20);
   let outputHeight=0;let hasImage=false;for(const output of cell.outputs??[]){const data=output.data as Record<string,unknown>|undefined;const text=typeof output.text==='string'?output.text:Array.isArray(output.text)?output.text.join(''):'';const mime=data?.['image/png']?'image/png':data?.['image/jpeg']?'image/jpeg':undefined;if(mime){hasImage=true;const size=outputImageDimensions(output,mime);const width=Math.max(120,this.root.clientWidth-110);outputHeight+=size?size.height*Math.min(1,width/size.width):180}else if(text)outputHeight+=text.split('\n').length*18;else if(typeof data?.['text/html']==='string')outputHeight+=((data['text/html'].match(/<tr[ >]/gi)?.length??4)+1)*28;else outputHeight+=180}
@@ -305,7 +329,7 @@ export class NotebookEditor {
  private unmountCell(index:number):boolean{
   const node=this.cellNodes[index];const mount=this.cellMounts.get(index);if(!node||!mount||!this.mountedCells.has(index))return false;
   const document=this.root.ownerDocument;if(document.querySelector?.('.ipynb-image-dialog[open]'))return false;const selection=document.getSelection();
-  if(this.editors[index]?.hasFocus||node.contains(document.activeElement)||(this.session.running&&this.session.runningIndex===index)||this.dragging?.from===index||(!selection?.isCollapsed&&(node.contains(selection?.anchorNode??null)||node.contains(selection?.focusNode??null)||selection?.containsNode?.(node,true))))return false;
+  if(this.editors[index]?.hasFocus||node.contains(document.activeElement)||(this.session.running&&this.session.runningIndex===index)||(this.dragging??this.pendingDrag)?.from===index||(!selection?.isCollapsed&&(node.contains(selection?.anchorNode??null)||node.contains(selection?.focusNode??null)||selection?.containsNode?.(node,true))))return false;
   const height=node.getBoundingClientRect().height;
   const editor=this.editors[index];if(editor){this.cachedEditorStates.set(index,editor.state);this.savedSelections.set(node.dataset.cellId!,{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex});editor.destroy();this.editors[index]=undefined}
   const output=node.querySelector<HTMLElement>('.ipynb-output');if(output){const renderer=this.outputRenderers.get(output);if(renderer){this.outputSnapshots.set(node.dataset.cellId!,renderer.captureState());renderer.destroy()}this.outputRenderers.delete(output)}

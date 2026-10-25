@@ -6,6 +6,21 @@ import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
+ 'Notebook 链接已写入，但部分视图刷新失败；已更新保存基线，请重新打开视图。':'Notebook links were saved, but some views could not refresh. Save baselines were updated; reopen those views.',
+ 'Obsidian 链接更新格式不兼容，Notebook 原文件未修改。':'The Obsidian link update format is incompatible. The Notebook was not changed.',
+ 'Notebook 链接索引已失效，请重新索引后重试重命名。':'The Notebook link index is stale. Reindex it before retrying the rename.',
+ 'Notebook 链接更新来自不同版本，原文件未修改。':'Notebook link updates came from different versions. The file was not changed.',
+ 'Notebook 链接位置无效。':'The Notebook link position is invalid.',
+ 'Notebook 链接位置与原文不一致，原文件未修改。':'The Notebook link position does not match its source. The file was not changed.',
+ 'Notebook 链接更新为空。':'The Notebook link update is empty.',
+ 'Notebook 链接更新位置重叠。':'Notebook link update ranges overlap.',
+ 'Notebook 链接所在单元格有未保存修改，已保留当前编辑；请手动更新链接。':'A linked Notebook cell has unsaved changes. Your edits were kept; update the link manually.',
+ 'Notebook 正在修改或保存，链接更新已跳过；当前编辑已保留。':'The Notebook is being edited or saved. Link updates were skipped and your edits were kept.',
+ 'Notebook 正在加载，链接更新已跳过。':'The Notebook is loading. Link updates were skipped.',
+ 'Notebook 插件已卸载，链接更新已取消。':'The Notebook plugin was unloaded. Link updates were cancelled.',
+ 'Notebook 视图已切换，链接更新已跳过。':'The Notebook view changed. Link updates were skipped.',
+ 'Notebook 链接自动更新失败，当前编辑和原有数据已保留；请检查并手动更新相关链接。':'Automatic Notebook link updates failed. Existing edits and data were kept; check and update the affected links manually.',
+
  '图谱中的 Notebook':'Notebooks in Graph view',
  '在 Obsidian 的图谱中开启“附件”显示，才能看到 Notebook 节点及连接关系。仅索引 Markdown 单元格和 YAML 属性，不索引代码或输出。':'Enable “Attachments” in Obsidian’s Graph view to see Notebook nodes and their connections. Only Markdown cells and YAML properties are indexed, not code or outputs.',
  '原生属性编辑器不可用。':'The native Properties editor is unavailable.',

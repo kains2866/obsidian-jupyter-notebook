@@ -90,6 +90,7 @@ export default class NotebookPlugin extends Plugin{
   this.commandIds=['create-notebook','save-notebook'];this.commandLabels=labels;
   if(this.ribbon){this.ribbon.setAttribute('aria-label',create);setTooltip(this.ribbon,create)}
  }
+ getNotebookRenameSessions(path:string):import('./session').NotebookSession[]{return this.notebookViews().filter(view=>view.file?.path===path).flatMap(view=>{const session=view.getLinkRenameSession();return session?[session]:[]})}
  private notebookViews():NotebookView[]{return this.app.workspace.getLeavesOfType(NOTEBOOK_VIEW).map(leaf=>leaf.view as NotebookView)}
  async selectDefaultEnvironment(environment:Environment,managed=false):Promise<void|boolean>{
   if(this.environmentRemovalActive)throw new Error(this.getTranslator()('仓库环境正在卸载，请稍后重试。'));

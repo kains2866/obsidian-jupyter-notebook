@@ -1,14 +1,22 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-22
-version: "0.7.0"
+updated: 2026-10-25
+version: "0.7.1"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.7.1] - 2026-10-25
+
+移动达到 **5px** 才开始拖动，减少误触。
+
+1. 拖动预览保持原抓取点，不再向右跳。
+2. 重命名时沿用 Obsidian 的链接更新设置，更新 Notebook 的 Markdown／YAML 链接，保留别名与定位后缀。
+
 
 ## [0.7.0] - 2026-10-22
 

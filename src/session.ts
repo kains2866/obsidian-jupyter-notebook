@@ -12,6 +12,7 @@ export class NotebookSession {
  private executionStartedAt?:number;
  private scheduleChange():void{if(!this.renderTimer)this.renderTimer=window.setTimeout(()=>{this.renderTimer=undefined;this.onChange()},75)}
  private saving?:Promise<void>;
+ private linkRenaming?:Promise<void>;
  running=false;
  runningIndex:number|null=null;
  private transitions=0;
@@ -21,16 +22,31 @@ export class NotebookSession {
   return ()=>{if(released)return;released=true;this.transitions--;this.onChange()};
  }
  onChange:()=>void=()=>{};
+ onLinkRename:(accept:()=>void)=>void=accept=>accept();
  constructor(text:string,options:Partial<OutputOptions>={},private hooks:{onWarning?:(message:string)=>void;onLimit?:()=>void|Promise<void>}={}){this.history=new NotebookHistory(parseNotebook(text));this.baseline=text;this.savedNotebook=this.notebook;this.outputOptions={...DEFAULT_OUTPUT_OPTIONS,...options}}
  configureOutputOptions(options:Partial<OutputOptions>):void{this.outputOptions={...DEFAULT_OUTPUT_OPTIONS,...options};this.onChange()}
  get savedText():string{return this.baseline}
  get notebook():Notebook{return this.history.current}
+ assertLinkRename(expected:string,current:Notebook):void{assertUnchanged(expected,this.baseline);if(this.saving||this.running||this.busy||this.notebook!==current)throw new Error('Notebook 正在修改或保存，链接更新已跳过；当前编辑已保留。')}
+ beginLinkRename(expected:string,current:Notebook):()=>void{
+  this.assertLinkRename(expected,current);if(this.linkRenaming)throw new Error('Notebook 正在修改或保存，链接更新已跳过；当前编辑已保留。');
+  let release!:()=>void;const operation=new Promise<void>(resolve=>release=resolve);this.linkRenaming=operation;
+  return ()=>{if(this.linkRenaming===operation)this.linkRenaming=undefined;release()};
+ }
+ commitLinkRename(expected:string,saved:string,apply:(notebook:Notebook)=>Notebook):boolean{
+  assertUnchanged(expected,this.baseline);const current=this.notebook,savedNotebook=parseNotebook(saved),clean=!this.dirty;
+  let next=current,conflict=false;try{next=apply(current)}catch{conflict=true}
+  let accepted=false;const accept=()=>{accepted=true;this.history.update(next);this.baseline=saved;this.savedNotebook=clean&&!conflict?next:savedNotebook;this.onChange()};
+  try{this.onLinkRename(accept)}catch(error){if(!accepted)accept();throw error}
+  return conflict;
+ }
  get dirty():boolean{return this.notebook!==this.savedNotebook}
  change(n:Notebook):void{this.history.update(n);this.onChange()}
  structure(n:Notebook):void{if(this.running||this.busy)throw new Error('运行时不能调整单元格结构。');this.change(n)}
  undo():void{if(this.running||this.busy)throw new Error('运行时不能撤销。');this.history.undo();this.onChange()}
  redo():void{if(this.running||this.busy)throw new Error('运行时不能重做。');this.history.redo();this.onChange()}
  save(storage:Storage):Promise<void>{
+  if(this.linkRenaming)return this.linkRenaming.then(()=>this.save(storage));
   if(this.saving)return this.saving.then(()=>this.save(storage));
   const operation=(async()=>{
    if(!this.dirty)return;

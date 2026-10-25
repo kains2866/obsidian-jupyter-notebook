@@ -1,5 +1,7 @@
 import {TFile,type CachedMetadata,type Plugin,type Reference} from 'obsidian';
-import {parseNotebook,type Notebook} from './notebook';
+import {parseNotebook,assertUnchanged,type Notebook} from './notebook';
+import {NotebookLinkUpdates} from './notebook-rename';
+import type {NotebookSession} from './session';
 import {NotebookSearchBridge} from './notebook-search';
 import {projectNotebookMarkdown,mergeNotebookMetadata,type NotebookMarkdownDocument} from './notebook-markdown';
 type Ref=Reference&{position?:{start:{offset:number};end:{offset:number}}};
@@ -26,6 +28,7 @@ interface NativeCache {
 interface NativeVault {generateFiles(files:Files,cached?:boolean):AsyncGenerator<GeneratedFile>}
 export interface NotebookMetadataEntry {document:NotebookMarkdownDocument;cache:CachedMetadata}
 interface Entry extends NotebookMetadataEntry {
+ savedText:string;
  parsed:Map<string,CachedMetadata>;
  resolved:Record<string,number>;unresolved:Record<string,number>;
  previousResolved?:Record<string,number>;previousUnresolved?:Record<string,number>;
@@ -37,7 +40,8 @@ function references(cache:CachedMetadata):Ref[]{return [...(cache.frontmatterLin
 export class NotebookMetadataBridge {
  private entries=new Map<string,Entry>();private versions=new Map<string,number>();
  private cache?:NativeCache;private disposed=false;private installed=false;private restore:(()=>void)[]=[];
- private warned=false;private renameWarningAt=0;private search?:NotebookSearchBridge;
+ private linkUpdates=new NotebookLinkUpdates();
+ private warned=false;private search?:NotebookSearchBridge;
  constructor(private owner:Plugin,private warn:(message:string)=>void){}
  get(path:string):NotebookMetadataEntry|undefined{return this.entries.get(path)}
  start():boolean{
@@ -57,10 +61,10 @@ export class NotebookMetadataBridge {
    const entries=this.entries;
    this.replace(nativeVault,'generateFiles',async function*(files,cached){for await(const row of generate.call(nativeVault,files,cached)){const entry=entries.get(row.file.path);yield entry?{...row,content:entry.document.text}:row}});
    const updater:LinkUpdater={
-    iterateReferences:(callback)=>{for(const [path,entry]of this.entries)for(const ref of references(entry.cache))callback(path,ref)},
-    iterateReferencesForFile:(path,callback)=>{const entry=this.entries.get(path);if(entry)for(const ref of references(entry.cache))callback(ref)},
-    // Native text offsets refer to the projection, not JSON. Explicitly block native Markdown rewrites.
-    applyUpdates:async(_file,updates)=>{if(updates.length)this.warnRename()},renameSubpath:async()=>{this.warnRename()},
+    iterateReferences:(callback)=>{for(const [path,entry]of this.entries)for(const ref of references(entry.cache)){this.linkUpdates.remember(ref,entry.savedText,entry.document);callback(path,ref)}},
+    iterateReferencesForFile:(path,callback)=>{const entry=this.entries.get(path);if(entry)for(const ref of references(entry.cache)){this.linkUpdates.remember(ref,entry.savedText,entry.document);callback(ref)}},
+    // Native resolution and user confirmation happen before this callback. Never apply projection offsets to JSON.
+    applyUpdates:(file,updates)=>this.applyLinkUpdates(file,updates),renameSubpath:async()=>{},
    };
    cache.linkUpdaters.ipynb=updater;this.restore.push(()=>{if(cache.linkUpdaters.ipynb===updater)delete cache.linkUpdaters.ipynb});
    this.installed=true;this.owner.register(()=>this.dispose());
@@ -76,7 +80,32 @@ export class NotebookMetadataBridge {
  }
  private replace<T,K extends keyof T>(host:T,key:K,value:T[K]):void{const original=host[key];host[key]=value;this.restore.push(()=>{if(host[key]===value)host[key]=original})}
  private incompatible():void{if(!this.warned){this.warned=true;this.warn('当前 Obsidian 版本无法接入 Notebook 原生索引；编辑和运行仍可使用。')}}
- private warnRename():void{if(Date.now()-this.renameWarningAt<10000)return;this.renameWarningAt=Date.now();this.warn('Notebook 内的链接暂不自动改写，请在重命名目标后手动更新相关 Markdown 链接。')}
+ private async applyLinkUpdates(file:TFile,updates:unknown[]):Promise<void>{
+  if(!updates.length||this.disposed)return;
+  const releases:(()=>void)[]=[];
+  try{
+   const plan=this.linkUpdates.plan(updates);
+   const owner=this.owner as Plugin&{getNotebookRenameSessions?:(path:string)=>NotebookSession[]};
+   const sessions=owner.getNotebookRenameSessions?.(file.path)??[];
+   const snapshots=sessions.map(session=>({session,current:session.notebook,next:plan.apply(session.notebook)}));
+   for(const row of snapshots)releases.push(row.session.beginLinkRename(plan.expected,row.current));
+   let saved='';
+   await this.owner.app.vault.process(file,current=>{
+    if(this.disposed)throw new Error('Notebook 插件已卸载，链接更新已取消。');
+    assertUnchanged(plan.expected,current);
+    const active=owner.getNotebookRenameSessions?.(file.path)??[];
+    if(active.length!==sessions.length||active.some(session=>!sessions.includes(session)))throw new Error('Notebook 视图已切换，链接更新已跳过。');
+    for(const row of snapshots)row.session.assertLinkRename(plan.expected,row.current);
+    // Unlike execution saves, link rewrites preserve all output/attachment and unknown JSON fields.
+    saved=JSON.stringify(plan.apply(parseNotebook(current)),null,2)+'\n';return saved;
+   });
+   let conflict=false;const errors:unknown[]=[];
+   for(const row of snapshots){try{if(row.session.commitLinkRename(plan.expected,saved,notebook=>plan.apply(notebook)))conflict=true}catch(error){errors.push(error)}}
+   if(conflict)this.warn('Notebook 链接所在单元格有未保存修改，已保留当前编辑；请手动更新链接。');
+   await this.refresh(file);
+   if(errors.length)throw new AggregateError(errors,'Notebook 链接已写入，但部分视图刷新失败；已更新保存基线，请重新打开视图。');
+  }catch(error){console.error('[Jupyter Notebook] Link update skipped',file.path,error);this.warn(error instanceof AggregateError?error.message:'Notebook 链接自动更新失败，当前编辑和原有数据已保留；请检查并手动更新相关链接。')}finally{for(const release of releases)release()}
+ }
  async scan():Promise<void>{if(this.disposed||!this.installed)return;for(const file of this.owner.app.vault.getFiles())if(isNotebook(file))await this.refresh(file)}
  async metadataForNotebook(notebook:Notebook,previous?:Entry):Promise<NotebookMetadataEntry&{parsed:Map<string,CachedMetadata>}|undefined>{
   if(!this.cache||this.disposed)return;
@@ -92,10 +121,10 @@ export class NotebookMetadataBridge {
   if(this.disposed||!this.installed||!isNotebook(file))return;
   const path=file.path,version=(this.versions.get(path)??0)+1;this.versions.set(path,version);
   try{
-   const notebook=parseNotebook(await this.owner.app.vault.cachedRead(file));const result=await this.metadataForNotebook(notebook,this.entries.get(path));
+   const savedText=await this.owner.app.vault.cachedRead(file);const notebook=parseNotebook(savedText);const result=await this.metadataForNotebook(notebook,this.entries.get(path));
    if(!result||this.disposed||file.path!==path||this.versions.get(path)!==version)return;
    const old=this.entries.get(path),native=this.cache!;
-   const entry:Entry={...result,resolved:{},unresolved:{},previousResolved:old?old.previousResolved:native.resolvedLinks[path],previousUnresolved:old?old.previousUnresolved:native.unresolvedLinks[path]};
+   const entry:Entry={...result,savedText,resolved:{},unresolved:{},previousResolved:old?old.previousResolved:native.resolvedLinks[path],previousUnresolved:old?old.previousUnresolved:native.unresolvedLinks[path]};
    this.entries.set(path,entry);this.resolve(path,entry);
    native.trigger('changed',file,result.document.text,result.cache);native.trigger('resolve',file);native.trigger('resolved');this.search?.refresh();
   }catch(error){if(this.disposed||this.versions.get(path)!==version)return;this.remove(path);console.error('[Jupyter Notebook] Markdown index failed',path,error);this.warn('Notebook Markdown 索引失败，已跳过此文件；原文件未修改。')}

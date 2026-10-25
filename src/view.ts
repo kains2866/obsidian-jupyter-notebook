@@ -38,6 +38,7 @@ export class NotebookView extends FileView{
  private removalUnlock?:()=>void;
  private t:Translator=(text,values)=>this.plugin.getTranslator?.()(text,values)??createTranslator('zh')(text,values);
  constructor(leaf:WorkspaceLeaf,private plugin:NotebookPlugin){super(leaf);this.kernelPython=plugin.settings.kernelPython}
+ getLinkRenameSession():NotebookSession|undefined{if(this.disposed)return undefined;if(this.loadingNotebook)throw new Error(this.t('Notebook 正在加载，链接更新已跳过。'));return this.session}
  getViewType():string{return NOTEBOOK_VIEW}
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
@@ -90,6 +91,7 @@ export class NotebookView extends FileView{
    outputMarkdown:(text,parent)=>this.renderOutputMarkdown(text,parent),
    outputActions:{imageName:()=>this.file?.basename??'Notebook',save:(content,mime,filename)=>this.saveOutput(content,mime,filename)},
   },state);
+  session.onLinkRename=accept=>{if(this.disposed||this.session!==session||!this.editor)throw new Error(this.t('Notebook 已关闭或切换。'));this.editor.applyLinkRename(accept)};
   const changed=session.onChange;session.onChange=()=>{changed();this.scheduleRecovery()};
   this.scheduleImportCheck(true);
  }

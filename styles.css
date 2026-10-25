@@ -69,7 +69,7 @@
 .ipynb-drop-line{position:absolute;height:2px;background:var(--interactive-accent);left:42px;right:0;z-index:10;pointer-events:none}
 @media(hover:none){.ipynb-insert-gap button{opacity:1;pointer-events:auto}}
 .ipynb-editor{overflow-anchor:none}
-.ipynb-drag-ghost{max-width:none;max-height:65vh;white-space:normal;padding:8px;overflow:hidden}
+.ipynb-drag-ghost{box-sizing:border-box;max-width:none;max-height:65vh;white-space:normal;padding:0;border:0;overflow:hidden}
 .ipynb-drag-cell{margin:0;pointer-events:none}
 .ipynb-drag-cell .ipynb-cell-toolbar{display:none}
 

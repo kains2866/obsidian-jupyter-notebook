@@ -3,6 +3,7 @@ import {mkdtemp,mkdir,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {EnvironmentManager,managedEnvironmentDirectory} from '../src/environment-manager';
+function signal(){let resolve!:()=>void;const promise=new Promise<void>(done=>{resolve=done});return {promise,resolve}}
 it('设备目录按平台定位并使用稳定仓库标识',()=>{
  expect(managedEnvironmentDirectory('vault-id','darwin','/home/a',{})).toBe('/home/a/Library/Application Support/obsidian-ipynb/environments/vault-id');
  expect(managedEnvironmentDirectory('vault-id','win32','C:\\Users\\a',{LOCALAPPDATA:'C:\\Local'})).toContain('vault-id');
@@ -16,11 +17,21 @@ it('创建需显式调用，不覆盖现有目录；安装使用参数列表',as
  }finally{await rm(root,{recursive:true,force:true})}
 });
 it('创建期间锁定目录，失败后可重试',async()=>{
- const root=await mkdtemp(join(tmpdir(),'env-lock-'));let release:()=>void=()=>{};
- const manager=new EnvironmentManager(async()=>{await new Promise<void>(resolve=>{release=resolve});throw new Error('venv failed')});
- try{const first=manager.create('/python',join(root,'new'));await new Promise(resolve=>setTimeout(resolve,20));await expect(manager.create('/python',join(root,'new'))).rejects.toThrow('正在');release();await expect(first).rejects.toThrow('venv failed');
- const second=manager.create('/python',join(root,'retry'));await new Promise(resolve=>setTimeout(resolve,20));release();await expect(second).rejects.toThrow('venv failed');
- }finally{await rm(root,{recursive:true,force:true})}
+ const root=await mkdtemp(join(tmpdir(),'env-lock-'));
+ const reserved=signal(),continueReservation=signal(),started=[signal(),signal()],release=[signal(),signal()];
+ const pending:Promise<string>[]=[];let attempt=0;
+ const manager=new EnvironmentManager(async()=>{const index=attempt++;started[index].resolve();await release[index].promise;throw new Error('venv failed')});
+ try{
+  const first=manager.create('/python',join(root,'new'),()=>{reserved.resolve();return continueReservation.promise});pending.push(first);
+  const firstFailure=expect(first).rejects.toThrow('venv failed');
+  // Hold reservation deliberately: contention must be rejected before the runner starts.
+  await reserved.promise;expect(attempt).toBe(0);
+  await expect(manager.create('/python',join(root,'new'))).rejects.toThrow('正在');
+  continueReservation.resolve();await started[0].promise;release[0].resolve();await firstFailure;
+  const second=manager.create('/python',join(root,'retry'));pending.push(second);
+  const secondFailure=expect(second).rejects.toThrow('venv failed');
+  await started[1].promise;release[1].resolve();await secondFailure;expect(attempt).toBe(2);
+ }finally{continueReservation.resolve();release.forEach(gate=>gate.resolve());await Promise.allSettled(pending);await rm(root,{recursive:true,force:true})}
 });
 it('创建依赖清单保留现有用户内容',async()=>{
  const {ensureRequirementsManifest}=await import('../src/environment-manager');const {readFile,writeFile}=await import('node:fs/promises');const root=await mkdtemp(join(tmpdir(),'manifest-'));
@@ -35,11 +46,13 @@ it('禁止向系统 Python 安装依赖',async()=>{
  const manager=new EnvironmentManager(async()=>({stdout:'{"executable":"/python","version":"3.12","missing":[],"isolated":false}',stderr:''}));await expect(manager.install('/python')).rejects.toThrow('系统 Python');
 });
 it('不同管理器不能同时创建同一环境且预留目录不被覆盖',async()=>{
- const root=await mkdtemp(join(tmpdir(),'env-shared-'));let release:()=>void=()=>{};const directory=join(root,'env');
- const firstManager=new EnvironmentManager(async()=>{await new Promise<void>(resolve=>{release=resolve});return {stdout:'',stderr:''}});
- try{const first=firstManager.create('/python',directory);await new Promise(resolve=>setTimeout(resolve,20));await expect(new EnvironmentManager().create('/python',directory)).rejects.toThrow('正在');release();await first;
- await expect(new EnvironmentManager().create('/python',directory)).rejects.toThrow('已存在');
- }finally{await rm(root,{recursive:true,force:true})}
+ const root=await mkdtemp(join(tmpdir(),'env-shared-'));const started=signal(),release=signal(),directory=join(root,'env');
+ const firstManager=new EnvironmentManager(async()=>{started.resolve();await release.promise;return {stdout:'',stderr:''}});
+ let first:Promise<string>|undefined;
+ try{first=firstManager.create('/python',directory);await started.promise;
+  await expect(new EnvironmentManager().create('/python',directory)).rejects.toThrow('正在');release.resolve();await first;
+  await expect(new EnvironmentManager().create('/python',directory)).rejects.toThrow('已存在');
+ }finally{release.resolve();if(first)await first.catch(()=>{});await rm(root,{recursive:true,force:true})}
 });
 it('本机配置只返回定义字段且拒绝错误类型',async()=>{
  const {parseLocalEnvironmentSettings}=await import('../src/environment-manager');expect(parseLocalEnvironmentSettings('{}')).toEqual({});expect(parseLocalEnvironmentSettings('{"kernelPython":"/python"}')).toEqual({kernelPython:'/python'});expect(()=>parseLocalEnvironmentSettings('{"bridgePython":false}')).toThrow('无效');

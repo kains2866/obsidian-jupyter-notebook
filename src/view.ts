@@ -1,7 +1,8 @@
+import {NotebookJsonSource} from './notebook-json';
 import {renderMath,finishRenderMath} from 'obsidian';
+import {exportNotebookIpynb,exportNotebookPython,exportNotebookMarkdown,packageMarkdownExport,downloadNotebookExport,type NotebookExportFormat} from './notebook-export-formats';
 import {createExportHtmlSanitizer,exportNotebookHtml,exportRasterDataUri,isExportLocalImage,type ExportImage} from './notebook-export';
 import {decodeNotebookAttachment} from './notebook-attachments';
-import {saveOutput as downloadOutput} from './output-actions';
 import {bindNotebookAttachments,sanitizeNotebookSvg,type AttachmentError} from './notebook-attachments';
 import {resolveNotebookNavigation} from './notebook-navigation';
 import {projectNotebookMarkdown} from './notebook-markdown';
@@ -24,6 +25,7 @@ import {EnvironmentPicker,confirm} from './settings';
 import {environmentName,belongsToEnvironmentDirectory} from './environments';
 export const NOTEBOOK_VIEW='native-ipynb';
 export class NotebookView extends FileView{
+ private jsonSource?:NotebookJsonSource;private recoveryJsonSource?:string;
  private recoveredDraft?:RecoveryDraft;private recovery?:RecoveryDrafts;private recoveryTimer?:number;private recoveryBaseline='';private recoveryNotebook?:Notebook;
  private importTimer?:number;private importController?:AbortController;private importGeneration=0;
  private importChecker=new IncrementalImportChecker();private importSources:string[]=[];private importPython?:string;private importPath?:string;private importSourceText=new WeakMap<string[],string>();
@@ -34,7 +36,7 @@ export class NotebookView extends FileView{
  private kernelPython:string;
  private kernelBridgePython?:string;
  private confirmingRestart=false;
- private disposed=false;private runAllActive=false;private stopAll=false;
+ private closing=false;private disposed=false;private runAllActive=false;private stopAll=false;
  private propertiesEditor?:NotebookPropertiesEditor;private propertiesSource?:string;
  private markdownChildren:Component[]=[];
  private markdownHosts=new Map<HTMLElement,Component>();
@@ -42,17 +44,18 @@ export class NotebookView extends FileView{
  private removalUnlock?:()=>void;
  private t:Translator=(text,values)=>this.plugin.getTranslator?.()(text,values)??createTranslator('zh')(text,values);
  constructor(leaf:WorkspaceLeaf,private plugin:NotebookPlugin){super(leaf);this.kernelPython=plugin.settings.kernelPython}
- getLinkRenameSession():NotebookSession|undefined{if(this.disposed)return undefined;if(this.loadingNotebook)throw new Error(this.t('Notebook 正在加载，链接更新已跳过。'));return this.session}
+ getLinkRenameSession():NotebookSession|undefined{if(this.disposed)return undefined;if(this.jsonSource?.active)throw new Error(this.t('JSON 视图中不能更新链接，请先返回 Notebook 视图。'));if(this.loadingNotebook)throw new Error(this.t('Notebook 正在加载，链接更新已跳过。'));return this.session}
  getViewType():string{return NOTEBOOK_VIEW}
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
  getOutlineNotebook():Notebook|undefined{return !this.disposed&&!this.loadingNotebook?this.session?.notebook:undefined}
  async onLoadFile(file:TFile):Promise<void>{
+  if(this.jsonSource?.dirty){const wasLoading=this.loadingNotebook;this.loadingNotebook=true;try{await this.flushRecovery(true)}catch(error){this.loadingNotebook=wasLoading;throw error}}
   this.disposed=false;this.loadingNotebook=true;this.navigationGeneration++;this.importSources=[];this.importChecker.clear();
   const loadGeneration=++this.fileLoadGeneration;
   const text=await this.app.vault.read(file);
   if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;
-  try{this.loadNotebook(text);await this.openRecovery(file,text);if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;this.loadingNotebook=false;this.app.workspace.trigger?.('native-ipynb-outline-change',this);void this.navigatePending()}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
+  try{this.loadNotebook(text);await this.openRecovery(file,text);if(this.disposed||loadGeneration!==this.fileLoadGeneration)return;this.loadingNotebook=false;this.editor?.refresh?.();this.app.workspace.trigger?.('native-ipynb-outline-change',this);void this.navigatePending()}catch(error){this.contentEl.empty();this.contentEl.createEl('p',{text:this.t(String(error))});throw error}
  }
  setEphemeralState(state:unknown):void{
   super.setEphemeralState(state);this.pendingNavigation=state;this.navigationGeneration++;void this.navigatePending();
@@ -72,15 +75,17 @@ export class NotebookView extends FileView{
  }
  private loadNotebook(text:string):void{
   const session=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});
+  this.jsonSource=new NotebookJsonSource(session,()=>this.jsonBlocked());
   this.session=session;this.loadedNotebook=session.notebook;this.trustedSession=false;this.lastExecution=undefined;this.createEditor(session);
  }
  private createEditor(session:NotebookSession,state?:import('./editor').EditorSnapshot):void{
   this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.propertiesSource=undefined;
   this.editor?.destroy();this.clearMarkdown();
   this.editor=new NotebookEditor(this.contentEl,session,{
+   jsonSource:this.jsonSource,jsonBlocked:()=>this.jsonBlocked(),jsonChanged:()=>{this.scheduleRecovery();this.syncProperties(session)},
    translate:this.t,confirm:(title,message)=>confirm(this.app,title,message,this.t),
    notebookChanged:()=>{this.scheduleImportCheck();this.syncProperties(session);this.app.workspace.trigger?.('native-ipynb-outline-change',this)},retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
-   readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),exportHtml:()=>this.exportHtml(),reload:()=>this.reload(),
+   readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),exportNotebook:format=>this.exportNotebook(format),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
    kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
@@ -100,20 +105,23 @@ export class NotebookView extends FileView{
   const changed=session.onChange;session.onChange=()=>{changed();this.scheduleRecovery()};
   this.scheduleImportCheck(true);
  }
+ private jsonBlocked():boolean{return this.closing||this.loadingNotebook||Platform.isMobile||!!this.starting||this.runAllActive||!!this.session?.running||!!this.session?.busy||!!this.session?.linkRenameActive}
+ private guardJson():void{if(this.jsonSource?.active)throw new Error(this.t('JSON 视图中不能运行或修改单元格，请先返回 Notebook 视图。'))}
+ private applyJsonSource():void{if(this.jsonSource?.active){if(this.editor?.applyJsonSource)this.editor.applyJsonSource();else this.jsonSource.apply()}}
  private guardPropertyChange(session:NotebookSession):void{
-  this.requireDesktop();if(this.disposed||this.session!==session)throw new Error(this.t('Notebook 已关闭或切换。'));
+  this.requireDesktop();this.guardJson();if(this.disposed||this.session!==session)throw new Error(this.t('Notebook 已关闭或切换。'));
   if(session.running||session.busy||this.runAllActive||this.starting)throw new Error(this.t('请等待当前运行结束后再修改 Notebook 属性。'));
  }
  private syncProperties(session:NotebookSession):void{
   if(!this.propertiesEditor||this.disposed||this.session!==session)return;
-  this.propertiesEditor.setDisabled(Platform.isMobile||session.running||session.busy||this.runAllActive||!!this.starting);
+  this.propertiesEditor.setDisabled(!!this.jsonSource?.active||Platform.isMobile||session.running||session.busy||this.runAllActive||!!this.starting);
   const first=session.notebook.cells.find(cell=>cell.cell_type==='markdown');const source=first?sourceText(first):'';
   if(source===this.propertiesSource)return;this.propertiesSource=source;
   const result=parseNotebookProperties(session.notebook);this.propertiesEditor.update(result.properties,result.error);
  }
  private recoveryError(error:unknown):void{new Notice(this.t('恢复草稿读写失败：{error}',{error:this.t(error instanceof Error?error.message:String(error))}),10000)}
  private async openRecovery(file:TFile,text:string):Promise<void>{
-  this.recovery?.release();this.recovery=undefined;this.recoveredDraft=undefined;this.recoveryNotebook=undefined;this.recoveryBaseline=recoveryHash(text);
+  this.recovery?.release();this.recovery=undefined;this.recoveredDraft=undefined;this.recoveryNotebook=undefined;this.recoveryJsonSource=undefined;this.recoveryBaseline=recoveryHash(text);
   const vaultRoot=this.plugin.vaultRoot?.();
   if(Platform.isMobile||!(this.app.vault.adapter instanceof FileSystemAdapter)||!vaultRoot||!this.plugin.manifest?.id||!this.plugin.deviceId)return;
   const opening=this.session;await this.plugin.cleanRecoveryCache?.(false);
@@ -123,11 +131,11 @@ export class NotebookView extends FileView{
   try{
    const drafts=await recovery.list(true);if(this.recovery!==recovery||this.session!==initialSession||this.file!==file||this.disposed)return;for(const error of recovery.errors)this.recoveryError(error);
    for(const draft of drafts){
-    if(draft.text===text)continue;
+    if(draft.text===text&&draft.jsonSource===undefined)continue;
     const message=this.t(draft.baselineHash===recoveryHash(text)?'找到本设备未保存草稿。是否恢复到编辑器？取消会保留草稿。':'找到本设备未保存草稿，但磁盘文件已改变。是否恢复到编辑器？保存仍检查当前磁盘版本；取消会保留草稿。');
     const session=this.session,notebook=session?.notebook;if(await confirm(this.app,this.t('恢复 Notebook 草稿'),message,this.t)){
      if(this.disposed||this.file!==file||this.session!==session||session?.notebook!==notebook)return;
-     this.recoveredDraft=draft;const restored=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});restored.change(new NotebookSession(draft.text).notebook);this.session=restored;this.loadedNotebook=new NotebookSession(text).notebook;this.trustedSession=false;this.createEditor(restored);this.scheduleRecovery();break;
+     this.recoveredDraft=draft;const restored=new NotebookSession(text,this.plugin.settings.outputOptions,{onWarning:message=>new Notice(this.t(message),10000),onLimit:()=>this.interrupt()});restored.change(new NotebookSession(draft.text).notebook);this.session=restored;this.loadedNotebook=new NotebookSession(text).notebook;this.trustedSession=false;this.jsonSource=new NotebookJsonSource(restored,()=>this.jsonBlocked());if(draft.jsonSource!==undefined){this.jsonSource.restore(draft.jsonSource);}this.createEditor(restored);this.scheduleRecovery();break;
     }
    }
   }catch(error){this.recoveryError(error)}
@@ -136,19 +144,21 @@ export class NotebookView extends FileView{
   if(this.recoveryTimer!==undefined||!this.recovery||this.disposed)return;
   this.recoveryTimer=window.setTimeout(()=>{this.recoveryTimer=undefined;void this.flushRecovery()},1000);
  }
- private async flushRecovery():Promise<void>{
+ private async flushRecovery(requireRaw=false):Promise<void>{
   window.clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined;const session=this.session,recovery=this.recovery;
-  if(!session||!recovery)return;
+  const jsonSource=this.jsonSource?.dirty?this.jsonSource.source:undefined;
+  if(!session||!recovery){if(requireRaw&&jsonSource!==undefined)throw new Error(this.t('JSON 草稿无法写入恢复缓存，请先复制或放弃草稿再关闭。'));return}
   const notebook=session.notebook;
-  if(!session.dirty){
-   const current=()=>this.session===session&&this.recovery===recovery&&session.notebook===notebook&&!session.dirty;
+  if(!session.dirty&&jsonSource===undefined){
+   const current=()=>this.session===session&&this.recovery===recovery&&session.notebook===notebook&&!session.dirty&&!this.jsonSource?.dirty;
    try{await recovery.clear(current);if(current())this.recoveryNotebook=undefined}catch(error){this.recoveryError(error)}
    return;
   }
-  if(notebook===this.recoveryNotebook)return;
-  try{await recovery.write(serializeNotebook(notebook),this.recoveryBaseline);if(this.recovery===recovery&&this.session===session)this.recoveryNotebook=notebook}catch(error){this.recoveryError(error)}
+  if(notebook===this.recoveryNotebook&&jsonSource===this.recoveryJsonSource)return;
+  try{if(jsonSource===undefined)await recovery.write(serializeNotebook(notebook),this.recoveryBaseline);else await recovery.write(serializeNotebook(notebook),this.recoveryBaseline,jsonSource);if(this.recovery===recovery&&this.session===session){this.recoveryNotebook=notebook;this.recoveryJsonSource=jsonSource}}catch(error){this.recoveryError(error);if(requireRaw)throw error}
  }
- private async exportHtml():Promise<void>{
+ private async exportNotebook(format:NotebookExportFormat):Promise<void>{
+  this.applyJsonSource();
   const session=this.session,file=this.file;if(this.disposed||!session||!file)return;
   // Session updates replace notebook objects. Capture once so asynchronous image reads cannot mix revisions.
   const snapshot=session.notebook,doc=this.contentEl.ownerDocument;
@@ -163,10 +173,16 @@ export class NotebookView extends FileView{
    const bytes=new Uint8Array(await this.app.vault.readBinary(image));
    return type==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder('utf-8',{fatal:true}).decode(bytes),sanitizeHTMLToDom)}:exportRasterDataUri(type,bytes);
   };
-  const html=await exportNotebookHtml(snapshot,{title:file.basename,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:text=>this.t(text)});
+  const options={title:file.basename,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:(text:string)=>this.t(text)};
+  let content:string|Uint8Array,mime:string,extension:string;
+  if(format==='ipynb'){content=exportNotebookIpynb(snapshot);mime='application/x-ipynb+json';extension='ipynb'}
+  else if(format==='python'){content=exportNotebookPython(snapshot);mime='text/x-python';extension='py'}
+  else if(format==='markdown')({content,mime,extension}=packageMarkdownExport(await exportNotebookMarkdown(snapshot,options),file.basename));
+  else{content=await exportNotebookHtml(snapshot,options);mime='text/html';extension='html'}
   if(this.disposed||this.session!==session||this.file!==file)return;
   // Browsers may prompt or cancel; initiating a download is not evidence of a saved filesystem path.
-  downloadOutput(html,'text/html',file.basename+'.html',doc);
+  downloadNotebookExport(content,mime,file.basename+'.'+extension,doc);
+  if(format==='python')new Notice(this.t('Python 导出保留 IPython 魔法命令，运行时可能需要 Jupyter。'));
  }
  private async saveOutput(content:string,mime:string,filename:string):Promise<void>{
   if(this.disposed||!this.file)throw new Error(this.t('Notebook 已关闭。'));
@@ -250,6 +266,9 @@ export class NotebookView extends FileView{
  private clearMarkdown():void{for(const dispose of this.markdownAttachments.values())dispose();this.markdownAttachments.clear();for(const c of this.markdownChildren)this.removeChild(c);this.markdownChildren=[];this.markdownHosts.clear()}
  private requireDesktop():void{if(Platform.isMobile)throw new Error(this.t('手机端只读，Python 与编辑功能仅在电脑端提供。'))}
  async save():Promise<void>{
+  this.requireDesktop();this.applyJsonSource();await this.saveCanonical();
+ }
+ private async saveCanonical():Promise<void>{
   this.requireDesktop();
   const file=this.file,session=this.session;if(!file||!session)return;
   const savedNotebook=session.notebook,recovery=this.recovery,recoveredDraft=this.recoveredDraft;
@@ -258,11 +277,14 @@ export class NotebookView extends FileView{
   if(!current())return;
   this.recoveryBaseline=recoveryHash(session.savedText);
   if(recovery){try{
-   if(recoveredDraft){await recovery.removeRecovered(recoveredDraft);if(!current())return;this.recoveredDraft=undefined}
-   if(!session.dirty){await recovery.clear(()=>current()&&!session.dirty&&session.notebook===savedNotebook);if(current())this.recoveryNotebook=undefined}else await this.flushRecovery();
+   if(recoveredDraft&&!this.jsonSource?.dirty){await recovery.removeRecovered(recoveredDraft);if(!current())return;this.recoveredDraft=undefined}
+   if(!session.dirty&&!this.jsonSource?.dirty){await recovery.clear(()=>current()&&!session.dirty&&!this.jsonSource?.dirty&&session.notebook===savedNotebook);if(current())this.recoveryNotebook=undefined}else await this.flushRecovery();
   }catch(error){this.recoveryError(error)}}
  }
  async saveCopy():Promise<void>{
+  this.requireDesktop();this.applyJsonSource();await this.saveCanonicalCopy();
+ }
+ private async saveCanonicalCopy():Promise<void>{
   this.requireDesktop();
   if(!this.file||!this.session)return;
   const path=this.file.path.replace(/\.ipynb$/i,` ${this.t('副本')} ${Date.now()}.ipynb`);
@@ -272,15 +294,15 @@ export class NotebookView extends FileView{
   this.requireDesktop();
   this.guardRemoval();
   const file=this.file,session=this.session;if(!file||!session||this.disposed)return;
-  if(session.running||session.busy||this.runAllActive)throw new Error(this.t('请先中断运行，再重新加载文件。'));
+  if(session.running||session.busy||this.runAllActive||this.starting)throw new Error(this.t('请先中断运行，再重新加载文件。'));
   const unlock=session.lock();
   try{
-   if(session.dirty&&!await confirm(this.app,this.t('重新加载 Notebook'),this.t('当前有未保存修改。确认后将读取磁盘文件并放弃当前编辑。'),this.t))return;
+   if((session.dirty||this.jsonSource?.dirty)&&!await confirm(this.app,this.t('重新加载 Notebook'),this.t('当前有未保存修改。确认后将读取磁盘文件并放弃当前编辑。'),this.t))return;
    const text=await this.app.vault.read(file);
    if(this.disposed||this.session!==session||this.file!==file)throw new Error(this.t('Notebook 已关闭或切换。'));
    if(this.recovery){try{await this.recovery.clear()}catch(error){this.recoveryError(error)}}
    if(this.disposed||this.session!==session||this.file!==file)throw new Error(this.t('Notebook 已关闭或切换。'));
-   this.recoveryBaseline=recoveryHash(text);this.recoveryNotebook=undefined;this.recoveredDraft=undefined;window.clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined;this.loadNotebook(text);
+   this.recoveryBaseline=recoveryHash(text);this.recoveryNotebook=undefined;this.recoveryJsonSource=undefined;this.recoveredDraft=undefined;window.clearTimeout(this.recoveryTimer);this.recoveryTimer=undefined;this.loadNotebook(text);
   }finally{unlock()}
  }
  private projectDir():string|undefined{
@@ -313,13 +335,14 @@ export class NotebookView extends FileView{
   this.editor?.refresh?.();return this.starting;
  }
  async run(index:number):Promise<void>{
-  this.requireDesktop();
+  this.requireDesktop();this.guardJson();
   this.guardRemoval();
   if(!this.session||this.disposed)return;
   if(this.runAllActive||this.session.running||this.session.busy)throw new Error(this.t('正在执行其他单元格。'));
   await this.runCell(index);
  }
  private async runCell(index:number):Promise<string>{
+  this.guardJson();
   const session=this.session;if(!session||session.notebook.cells[index]?.cell_type!=='code')return 'ok';
   const codeSnapshot=JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText));
   const unlock=session.lock();
@@ -360,7 +383,7 @@ export class NotebookView extends FileView{
   try{await showDependencies(this.app,{...this.plugin.getEnvironmentPickerOptions(),vaultRoot:root,configDir:this.app.vault.configDir,deviceId:this.plugin.deviceId,currentPython:this.kernelPython,translate:this.t,chooseManaged:()=>this.chooseEnvironment()},query)}finally{this.scheduleImportCheck(true)}
  }
  private async runAll():Promise<void>{
-  this.requireDesktop();
+  this.requireDesktop();this.guardJson();
   this.guardRemoval();
   if(!this.session||this.session.running||this.session.busy||this.runAllActive)throw new Error(this.t('内核正在运行。'));
   this.runAllActive=true;this.stopAll=false;
@@ -368,7 +391,7 @@ export class NotebookView extends FileView{
  }
  private async interrupt():Promise<void>{this.stopAll=true;if(this.kernel)await this.kernel.interrupt();else if(this.starting)throw new Error(this.t('内核仍在启动，请稍后重试。'))}
  private async restart(clearVariables=false):Promise<void>{
-  this.requireDesktop();
+  this.requireDesktop();this.guardJson();
   this.guardRemoval();
   const session=this.session,python=this.kernelPython;if(!session||this.disposed)return;
   if(clearVariables&&(session.running||this.runAllActive))throw new Error(this.t('请先中断运行，再清理变量。'));
@@ -420,20 +443,25 @@ export class NotebookView extends FileView{
  async onUnloadFile(_file:TFile):Promise<void>{await this.dispose()}
  async onClose():Promise<void>{await this.dispose()}
  private async dispose():Promise<void>{
-  if(this.disposed)return;this.disposed=true;this.stopAll=true;window.clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;this.importChecker.clear();
+  if(this.disposed)return;
+  // Validate before closing. Invalid source remains recoverable independently of canonical edits.
+  let raw=false;try{this.applyJsonSource()}catch{raw=!!this.jsonSource?.dirty}
+  this.closing=true;
+  try{if(raw)await this.flushRecovery(true)}catch(error){this.closing=false;this.editor?.refresh?.();throw error}
+  this.disposed=true;this.stopAll=true;window.clearTimeout(this.importTimer);this.importController?.abort();this.importGeneration++;this.importChecker.clear();
   await this.flushRecovery();
   const starting=this.starting;
   try{
    try{await this.kernel?.close();if(starting)await starting.catch(()=>{})}
    catch(error){new Notice(this.t('内核关闭异常：{error}，继续保存编辑。',{error:this.t(String(error))}),10000)}
    if(this.session?.dirty&&!Platform.isMobile){
-    try{await this.save()}
+    try{await this.saveCanonical()}
     catch(error){
-     try{await this.saveCopy();new Notice(this.t('原文件未覆盖，未保存编辑已写入副本。{error}',{error:this.t(String(error))}),10000)}
+     try{await this.saveCanonicalCopy();new Notice(this.t('原文件未覆盖，未保存编辑已写入副本。{error}',{error:this.t(String(error))}),10000)}
      catch(copyError){this.disposed=false;new Notice(this.t('保存及恢复副本均失败，请保持 Notebook 打开并手动复制内容。{error}',{error:this.t(String(copyError))}),0);throw copyError}
     }
    }
-  }catch(error){this.disposed=false;throw error}
-  this.fileLoadGeneration++;this.navigationGeneration++;this.pendingNavigation=undefined;window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.editor?.destroy();this.editor=undefined;this.session=undefined;this.clearMarkdown();
+  }catch(error){this.disposed=false;this.closing=false;this.editor?.refresh?.();throw error}
+  this.fileLoadGeneration++;this.navigationGeneration++;this.pendingNavigation=undefined;window.clearTimeout(this.recoveryTimer);this.recovery?.release();this.recovery=undefined;this.finishEnvironmentRemoval();this.kernel=undefined;this.propertiesEditor?.destroy();this.propertiesEditor=undefined;this.editor?.destroy();this.editor=undefined;this.closing=false;this.jsonSource=undefined;this.session=undefined;this.clearMarkdown();
  }
 }

@@ -177,3 +177,22 @@
 .ipynb-attachment-warning{display:block;margin:4px 0;color:var(--text-muted);font-size:var(--font-smallest)}
 
 .ipynb-output-math{overflow-x:auto;padding:8px 0;text-align:center}
+
+/* Source mode keeps the original cell DOM and CodeMirror states mounted. */
+.ipynb-view-modes{display:inline-flex;align-items:center;gap:1px;padding:1px;border:1px solid var(--background-modifier-border);border-radius:var(--radius-s)}
+.ipynb-editor .ipynb-view-modes button{box-shadow:none;padding:1px 6px;min-height:22px;height:22px;line-height:20px;font-size:var(--font-ui-small)}
+.ipynb-view-modes button[aria-pressed="true"]{background:var(--interactive-accent);color:var(--text-on-accent)}
+.ipynb-editor .ipynb-cell-list[hidden],.ipynb-editor .ipynb-notebook-properties[hidden]{display:none!important}
+.ipynb-json-panel{padding:12px 0;min-height:300px}
+.ipynb-json-tools{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.ipynb-json-source .cm-editor{border:1px solid var(--background-modifier-border);border-radius:var(--radius-s);min-height:300px}
+.ipynb-json-source .cm-scroller{overflow:auto;max-height:calc(100vh - 210px)}
+.ipynb-json-source .cm-content{padding:12px 0}
+
+.ipynb-menu-text-trigger{width:auto;padding:0 8px;justify-content:space-between;gap:12px}
+.ipynb-menu-text-trigger::after{content:"›"}
+.ipynb-menu-panel .ipynb-menu>.ipynb-menu-panel{position:static;min-width:0;padding:4px 0 4px 8px;border:0;box-shadow:none}
+.ipynb-menu[open]>.ipynb-menu-text-trigger::after{transform:rotate(90deg)}
+.ipynb-view-modes{flex-shrink:0;margin-left:4px}
+
+.ipynb-editor .ipynb-menu-trigger{font-family:var(--font-interface);font-size:var(--font-ui-small);font-weight:400;line-height:1.4}

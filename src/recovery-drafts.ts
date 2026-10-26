@@ -2,7 +2,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {mkdir,readFile,readdir,rename,unlink,writeFile,lstat,rmdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {parseNotebook} from './notebook';
-export interface RecoveryDraft {version:1;path:string;session:string;updated:number;baselineHash:string;text:string}
+export interface RecoveryDraft {version:1;path:string;session:string;updated:number;baselineHash:string;text:string;jsonSource?:string}
 export function recoveryHash(text:string):string{return createHash('sha256').update(text).digest('hex')}
 /** Every mutation is serialized in-process, including expiry and view release. */
 let mutationQueue:Promise<unknown>=Promise.resolve();
@@ -70,10 +70,10 @@ export class RecoveryDrafts {
  constructor(root:string,private path:string){this.directory=join(root,recoveryHash(path));activeSessions.add(this.session)}
  private file():string{return join(this.directory,`${this.session}.json`)}
  private enqueue(action:()=>Promise<void>):Promise<void>{const next=this.queue.catch(()=>{}).then(()=>mutate(action));this.queue=next;return next}
- write(text:string,baselineHash:string):Promise<void>{return this.enqueue(async()=>{
+ write(text:string,baselineHash:string,jsonSource?:string):Promise<void>{return this.enqueue(async()=>{
   await mkdir(this.directory,{recursive:true});
   await writeFile(join(this.directory,`${this.session}.lease.json`),JSON.stringify({pid:process.pid,session:this.session}),{encoding:'utf8',mode:0o600,flag:'wx'}).catch(error=>{if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error});const temporary=`${this.file()}.${randomUUID()}.tmp`;
-  const value:RecoveryDraft={version:1,path:this.path,session:this.session,updated:Date.now(),baselineHash,text};
+  const value:RecoveryDraft={version:1,path:this.path,session:this.session,updated:Date.now(),baselineHash,text,...(jsonSource===undefined?{}:{jsonSource})};
   try{await writeFile(temporary,JSON.stringify(value),{encoding:'utf8',mode:0o600,flag:'wx'});await rename(temporary,this.file())}finally{await unlink(temporary).catch(error=>{if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error})}
  })}
  clear(shouldClear:()=>boolean=()=>true):Promise<void>{return this.enqueue(async()=>{if(!shouldClear())return;await unlink(this.file()).catch(error=>{if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error})})}
@@ -87,7 +87,7 @@ export class RecoveryDrafts {
   this.errors=[];await this.queue.catch(()=>{});let names:string[];try{names=await readdir(this.directory)}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return [];throw error}
   const drafts:RecoveryDraft[]=[];
   for(const name of names.filter(name=>name.endsWith('.json')&&!name.endsWith('.lease.json'))){try{const value=JSON.parse(await readFile(join(this.directory,name),'utf8')) as RecoveryDraft;
-   if(value.version!==1||value.path!==this.path||typeof value.session!=='string'||name!==`${value.session}.json`||!Number.isFinite(value.updated)||typeof value.baselineHash!=='string'||!value.baselineHash.match(/^[a-f0-9]{64}$/)||typeof value.text!=='string')throw new Error('恢复草稿损坏，原始文件已保留。');
+   if(value.version!==1||value.path!==this.path||typeof value.session!=='string'||name!==`${value.session}.json`||!Number.isFinite(value.updated)||typeof value.baselineHash!=='string'||!value.baselineHash.match(/^[a-f0-9]{64}$/)||typeof value.text!=='string'||(value.jsonSource!==undefined&&typeof value.jsonSource!=='string'))throw new Error('恢复草稿损坏，原始文件已保留。');
    parseNotebook(value.text);if(!skipActive||!activeSessions.has(value.session))drafts.push(value);
   }catch(error){this.errors.push(error)}}
   return drafts.sort((a,b)=>b.updated-a.updated);

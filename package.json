@@ -1,6 +1,6 @@
 {
   "name": "obsidian-jupyter-notebook",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
   "scripts": {
     "test": "vitest run",
@@ -28,9 +28,11 @@
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-json": "6.0.2",
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/lang-python": "^6.2.1",
     "@codemirror/language": "^6.13.1",
+    "@codemirror/search": "6.6.0",
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.13",
     "@lezer/highlight": "^1.2.5",

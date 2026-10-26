@@ -1,14 +1,23 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-25
-version: "0.7.1"
+updated: 2026-10-26
+version: "0.7.2"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.7.2] - 2026-10-26
+
+- 实现图片嵌入Notebook
+- 完善并修复LaTeX公式渲染问题
+- 保留YAML注释与格式
+- 适配Markdown标题层级
+- 支持更多导出方式
+- 支持页面切换为JSON视图
 
 ## [0.7.1] - 2026-10-25
 

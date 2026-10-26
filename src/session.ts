@@ -16,6 +16,7 @@ export class NotebookSession {
  running=false;
  runningIndex:number|null=null;
  private transitions=0;
+ get linkRenameActive():boolean{return !!this.linkRenaming}
  get busy():boolean{return this.transitions>0}
  lock():()=>void{
   this.transitions++;this.onChange();let released=false;

@@ -210,11 +210,32 @@ Saved Markdown cells and YAML tags/links participate in native backlinks, tags, 
 
 The index uses an in-memory Markdown projection without companion files. Native bulk property/task writers are excluded. Renaming or moving a linked note, attachment, or folder through Obsidian updates indexed Markdown links and the first Markdown cell’s YAML links, using Obsidian’s own link resolution, link format, and automatic-update preference or confirmation dialog. Aliases, heading/block suffixes, code, output, attachments, and unknown Notebook fields are preserved. Open notebooks retain unsaved changes in other cells and Notebook undo history. Updates are skipped with a notice if a referenced cell has unsaved edits, the file changed externally, or the session is loading, running, or saving; update those links manually. Typing during a rename write is retained and later saves wait for the new disk baseline. If the linked cell changes during that write, its live edits remain intact and a notice asks you to check its links. External filesystem renames are outside this native rename workflow. Compatibility depends on internal Obsidian interfaces and is checked at runtime.
 
+## JSON source view
+
+Use the **Notebook / JSON** switch in the toolbar to inspect or edit the standard Notebook source. JSON mode provides syntax highlighting, search, selection and undo/redo using Obsidian theme colors. Merely switching views keeps the cell editors, their undo state and the Notebook scroll position.
+
+Returning to Notebook, saving, or exporting validates JSON and the nbformat 4 structure before applying it as one Notebook history change. Invalid source stays in JSON mode and cannot overwrite the original file. Copy or explicitly discard a pending JSON draft using the source panel controls. Execution, cell structure changes and automatic link updates are blocked in JSON mode; wait for execution or other busy operations to finish before entering it.
+
+Pending JSON source is included in this device's recovery cache, separately from the valid Notebook. Closing with invalid source preserves it for the existing recovery confirmation on reopen; closing is blocked if that source cannot be written to recovery storage. The normal cache retention setting applies. Reloading explicitly asks before discarding unsaved edits. No draft-only fields are added to exported or saved `.ipynb` files.
+
 ## Outputs and file saving
 
-### Offline HTML export
+### Export formats
 
-Choose **More actions → Export as HTML** to download one self-contained HTML file from the current notebook, including unsaved edits, Markdown, code, raw cells and stored static outputs. This does not run code, start Python, or save the original notebook. The browser may ask where to save the file; canceling that dialog leaves no exported file.
+Choose **More actions → Export as** to download the current Notebook snapshot, including unsaved edits. Export does not run code, start Python, or save the original file.
+
+| Format | Contents |
+| --- | --- |
+| Notebook (`.ipynb`) | Complete standard Notebook, including metadata, attachments and stored outputs. |
+| HTML (`.html`) | One offline file with embedded images and formulas. |
+| Markdown (`.md` / `.zip`) | Markdown, fenced code and existing static outputs. When images are present, a ZIP contains the Markdown and its relative image resources; extract it before opening. |
+| Python (`.py`) | Code with cell markers; Markdown and raw cells become comments. IPython magic and shell commands may still require Jupyter. |
+
+Downloads use the Notebook name. Remote images are not fetched. Markdown HTML/SVG content is sanitized; missing images fall back to alternative text. Canceling the browser save dialog leaves no exported file.
+
+#### Offline HTML
+
+Choose **More actions → Export as → Export as HTML** to download one self-contained HTML file from the current notebook, including unsaved edits, Markdown, code, raw cells and stored static outputs. This does not run code, start Python, or save the original notebook. The browser may ask where to save the file; canceling that dialog leaves no exported file.
 
 Cell attachments and resolvable vault images are embedded. Remote images are never downloaded; missing or unsupported images retain alternative text. HTML and SVG are sanitized, with no automatically loaded external scripts, stylesheets, or fonts. Formulas are embedded as offline SVG paths without scripts or external fonts; unsupported formulas retain readable LaTeX source. Interactive widgets are exported as available static/text content. Obsidian-specific plugin processors are not run during export.
 

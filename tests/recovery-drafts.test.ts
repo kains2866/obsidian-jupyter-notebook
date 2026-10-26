@@ -43,3 +43,7 @@ it('never rewrites an existing session lease during autosave',async()=>{
  try{const draft=new RecoveryDrafts(root,'a.ipynb');await draft.write(text,recoveryHash(text));const dir=join(root,recoveryHash('a.ipynb'));const lease=join(dir,(await readdir(dir)).find(name=>name.endsWith('.lease.json'))!);const content=await readFile(lease,'utf8');const old=new Date(Date.now()-100000);await utimes(lease,old,old);const before=await stat(lease);await draft.write(text+' ',recoveryHash(text));expect((await stat(lease)).mtimeMs).toBe(before.mtimeMs);expect(await readFile(lease,'utf8')).toBe(content);draft.release();await draft.list();
  }finally{await rm(root,{recursive:true,force:true})}
 });
+it('retains invalid raw JSON alongside a valid canonical snapshot and rejects malformed raw field',async()=>{
+ const root=await mkdtemp(join(tmpdir(),'draft-json-'));
+ try{const recovery=new RecoveryDrafts(root,'raw.ipynb');await recovery.write(text,recoveryHash(text),'{invalid');const [draft]=await recovery.list();expect(draft.text).toBe(text);expect(draft.jsonSource).toBe('{invalid');recovery.release();const reopened=new RecoveryDrafts(root,'raw.ipynb');expect((await reopened.list(true))[0].jsonSource).toBe('{invalid');const dir=join(root,recoveryHash('raw.ipynb'));await writeFile(join(dir,`${draft.session}.json`),JSON.stringify({...draft,jsonSource:5}));expect(await reopened.list()).toEqual([]);expect(reopened.errors).toHaveLength(1);reopened.release()}finally{await rm(root,{recursive:true,force:true})}
+});

@@ -1,3 +1,4 @@
+import {jsonTranslations} from './json-translations';
 import {imageTranslations} from './image-translations';
 import {exportTranslations} from './export-translations';
 import {workflowTranslations} from './workflow-translations';
@@ -92,7 +93,7 @@ const notebookIndexTranslations:Record<string,string>={
  'Notebook 内的链接暂不自动改写，请在重命名目标后手动更新相关 Markdown 链接。':'Links inside Notebooks are not rewritten automatically. Update the Markdown links manually after renaming their targets.',
  'Notebook Markdown 索引失败，已跳过此文件；原文件未修改。':'Notebook Markdown indexing failed. This file was skipped and its contents were preserved.',
 };
-const englishDictionary={...common,...imageTranslations,...exportTranslations,...workflowTranslations,...outputTranslations,...environmentTranslations,...importCheckTranslations,...notebookIndexTranslations,...errorTranslations};
+const englishDictionary={...common,...jsonTranslations,...imageTranslations,...exportTranslations,...workflowTranslations,...outputTranslations,...environmentTranslations,...importCheckTranslations,...notebookIndexTranslations,...errorTranslations};
 const errorTemplates=compileTemplates(errorTranslations);
 const reverseErrorTemplates=compileTemplates(englishErrorTranslations);
 type ErrorTemplate={pattern:RegExp;keys:string[];translated:string};

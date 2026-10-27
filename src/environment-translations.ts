@@ -1,4 +1,6 @@
 export const environmentTranslations:Record<string,string>={
+ '操作记录':'Activity','详细日志':'Detailed log','暂无日志。':'No log entries yet.','环境安装进度':'Environment installation progress','检查并修复环境':'Check and repair environment','环境检查完成，未发现缺失。':'Environment check complete; no missing dependencies found.',
+ '固有依赖（{count}）':'Built-in dependencies ({count})','自定义依赖（{count}）':'Custom dependencies ({count})','被这些依赖使用：':'Required by: ','未找到已安装的依赖：{name}':'Installed dependency not found: {name}',
  '重试安装':'Retry installation',
  'uv 可执行文件校验失败，将重新下载并验证。':'The uv executable failed verification; downloading and verifying a fresh copy.',
  '项目 {name}':'Project {name}','Python · 自定义':'Python · Custom',

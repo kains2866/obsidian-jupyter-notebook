@@ -1,5 +1,6 @@
 import {classifyEnvironmentFailure,diagnoseEnvironment,sanitizeDiagnosticText,type EnvironmentDiagnostic} from './environment-diagnostics';
 import {translateEnvironmentProgress} from './environment-translations';
+import {appendOperationLog,createOperationPanel} from './operation-panel';
 import {App,Modal,Notice,PluginSettingTab,Setting,Platform,type SettingDefinitionItem,type SettingGroupItem} from 'obsidian';
 import type NotebookPlugin from './main';
 import {belongsToEnvironmentDirectory,translateEnvironmentName,type Environment} from './environments';
@@ -105,6 +106,8 @@ export class EnvironmentManagerModal extends Modal {
  private list!:HTMLElement;
  private status!:HTMLElement;
  private logs!:HTMLElement;
+ private installProgress!:HTMLProgressElement;
+ private cancelContainer!:HTMLElement;
  private catalog:KernelCatalogRow[]=[];
  private managed:Environment|undefined;
  private manual:Environment|undefined;
@@ -126,14 +129,11 @@ export class EnvironmentManagerModal extends Modal {
   const toolbar=this.contentEl.createDiv({cls:'ipynb-environment-toolbar'});
   this.addButton(toolbar,'管理依赖',()=>this.dependencies());
   this.addButton(toolbar,'识别环境',()=>this.action(()=>this.initialize(true)));
-  this.addButton(toolbar,'检查环境',()=>this.action(()=>this.checkEnvironment()));
-  this.addButton(toolbar,'修复环境',()=>this.action(()=>this.repairEnvironment()));
-  this.addButton(toolbar,'复制诊断信息',()=>this.action(()=>this.copyDiagnostics()));
+  this.addButton(toolbar,'检查并修复环境',()=>this.action(()=>this.checkAndRepairEnvironment()));
   this.list=this.contentEl.createDiv({cls:'ipynb-kernel-list'});
-  this.status=this.contentEl.createEl('p',{text:this.t('正在检测本机 Python…'),cls:'ipynb-environment-status'});this.status.setAttribute('role','status');this.status.setAttribute('aria-live','polite');
-  this.diagnosticEl=this.contentEl.createEl('pre',{cls:'ipynb-environment-diagnostics'});this.diagnosticEl.setAttribute('aria-live','polite');
-  const details=this.contentEl.createEl('details',{cls:'ipynb-operation-log'});details.createEl('summary',{text:this.t('查看安装日志')});this.logs=details.createEl('pre');
-  new Setting(this.contentEl).addButton(b=>{this.cancel=b;b.setButtonText(this.t('取消')).setDisabled(true).onClick(()=>{this.abort?.abort();this.status.setText(this.t('正在取消，请等待当前步骤退出…'));b.setDisabled(true)})});
+  const panel=createOperationPanel(this.contentEl,this.t,'正在检测本机 Python…');this.status=panel.status;this.diagnosticEl=panel.diagnostic;this.logs=panel.logs;this.installProgress=panel.progress;this.installProgress.setAttribute('aria-label',this.t('环境安装进度'));this.cancelContainer=panel.footer;this.cancelContainer.hidden=true;
+  this.addButton(panel.actions,'复制诊断信息',()=>this.action(()=>this.copyDiagnostics()));
+  new Setting(this.cancelContainer).addButton(b=>{this.cancel=b;b.setButtonText(this.t('取消')).setDisabled(true).onClick(()=>{this.abort?.abort();this.status.setText(this.t('正在取消，请等待当前步骤退出…'));b.setDisabled(true)})});
   this.renderCatalog();void this.action(()=>this.initialize());
  }
  onClose():void{this.closed=true;this.abort?.abort()}
@@ -164,7 +164,7 @@ export class EnvironmentManagerModal extends Modal {
   }catch(error){this.managedMode='blocked';this.managedDescription=this.t(sanitizeDiagnosticText(String(error)))}
  }
  private renderCatalog():void{
-  if(this.closed)return;this.list.empty();this.controls=this.controls.slice(0,5);
+  if(this.closed)return;this.list.empty();this.controls=this.controls.slice(0,4);
   const owned=this.list.createDiv({cls:'ipynb-kernel-row ipynb-kernel-owned'});
   const info=owned.createDiv({cls:'ipynb-kernel-info'});info.createEl('strong',{text:this.t('仓库专用环境（本设备）')});
   info.createEl('small',{text:this.t('在此仓库为本设备安装独立 Python 和 Notebook 依赖；其他设备分别安装自己的环境。')});
@@ -198,14 +198,22 @@ export class EnvironmentManagerModal extends Modal {
   await this.activate(this.managed,this.options?.onManagedCreated||this.choose);
  }
  private progress(message:string):void{
-  if(this.closed)return;const translated=sanitizeDiagnosticText(translateEnvironmentProgress(message,this.t));this.status.setText(translated);this.logs.setText([this.logs.textContent,translated].filter(Boolean).join('\n').split('\n').slice(-150).join('\n'));
+  if(this.closed)return;const translated=sanitizeDiagnosticText(translateEnvironmentProgress(message,this.t));this.status.setText(translated);appendOperationLog(this.logs,translated);
  }
- private async checkEnvironment():Promise<void>{
+ private async checkEnvironment():Promise<EnvironmentDiagnostic|undefined>{
   if(!this.manager)return;
   const python=this.current||this.managed?.python;
   if(!python){this.status.setText(this.t('请先选择或安装环境。'));return}
   this.diagnostic=await diagnoseEnvironment(python,this.requiredModules(),(path,modules)=>this.manager!.validate(path,modules));
   this.renderDiagnostic();
+  return this.diagnostic;
+ }
+ private async checkAndRepairEnvironment():Promise<void>{
+  await this.inspectManaged();this.diagnostic=undefined;const report=await this.checkEnvironment();
+  if(this.closed||!report)return;
+  if(report.category==='ready'){this.status.setText(this.t('环境检查完成，未发现缺失。'));return}
+  if(this.current&&(!this.managed||!belongsToEnvironmentDirectory(this.current,this.managed.python))){this.status.setText(this.t('外部或系统环境仅检查，请手动修复。'));return}
+  await this.repairEnvironment();
  }
  private renderDiagnostic():void{
   if(this.closed||!this.diagnostic)return;
@@ -231,10 +239,10 @@ export class EnvironmentManagerModal extends Modal {
   if(this.managed&&!await confirm(this.app,this.t('修复环境'),this.t('将修复本设备的仓库专用 Python 和依赖，可能重新下载或安装。Notebook 文件保留。'),this.t))return;
   const {provisionStandaloneEnvironment}=await import('./managed-runtime');
   const hooks=this.options?.createOperationHooks?.('packages')||{before:()=>this.options?.onBeforePackages?.()||Promise.resolve(),after:()=>this.options?.onAfterPackages?.()};
-  this.installRetry=false;const controller=new AbortController();this.abort=controller;this.cancel.setDisabled(false);let python:string;
+  this.installRetry=false;const controller=new AbortController();this.abort=controller;this.cancelContainer.hidden=false;this.installProgress.hidden=false;this.cancel.setDisabled(false);let python:string;
   try{
    await hooks.before();python=await provisionStandaloneEnvironment(this.vaultOptions,message=>this.progress(message),controller.signal);
-  }catch(error){this.installRetry=true;this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();await this.inspectManaged();throw error}finally{hooks.after();this.cancel.setDisabled(true);this.abort=undefined}
+  }catch(error){this.installRetry=true;this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();await this.inspectManaged();throw error}finally{hooks.after();this.cancel.setDisabled(true);this.cancelContainer.hidden=true;this.installProgress.hidden=true;this.abort=undefined}
   if(this.closed)return;if(controller.signal.aborted){this.installRetry=true;await this.inspectManaged();return}
   await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed||this.managed.python!==python)throw new Error(this.t('仓库环境需要修复。'));
   await this.activate(this.managed,this.options?.onManagedCreated||this.choose);

@@ -2,14 +2,14 @@ import {setImmediate} from 'node:timers';
 import {beforeEach,expect,it,vi} from 'vitest';
 const state=vi.hoisted(()=>({modal:null as any,buttons:[] as any[],texts:[] as any[],validate:vi.fn(),provision:vi.fn(),choose:vi.fn(),inspect:vi.fn(),remove:vi.fn(),detect:vi.fn()}));
 class Element {
- text='';tag='';children:Element[]=[];checked=false;disabled=false;attrs:Record<string,string>={};events:Record<string,Function>={};classList={add:vi.fn()};
- createEl(tag:string,options?:any){const child=new Element();child.tag=tag;child.text=options?.text||'';this.children.push(child);return child}
+ text='';tag='';cls='';children:Element[]=[];checked=false;disabled=false;attrs:Record<string,string>={};events:Record<string,Function>={};classList={add:vi.fn()};
+ createEl(tag:string,options?:any){const child=new Element();child.tag=tag;child.cls=options?.cls||'';child.text=options?.text||'';this.children.push(child);return child}
  createSpan(options?:any){return this.createEl('span',options)}
  createDiv(options?:any){return this.createEl('div',options)}empty(){this.children=[]}get textContent(){return this.text}setText(text:string){this.text=text}setAttribute(k:string,v:string){this.attrs[k]=v}addEventListener(e:string,f:Function){this.events[e]=f}
 }
 vi.mock('obsidian',()=>({Modal:class{app:any;contentEl=new Element();modalEl=new Element();constructor(app:any){this.app=app;state.modal=this}open(){return (this as any).onOpen()}close(){(this as any).onClose?.()}},Notice:class{},PluginSettingTab:class{},Platform:{isMobile:false},Setting:class{
  constructor(public element:any){}setName(){return this}setDesc(){return this}addText(cb:any){const t={value:'',setValue(v:string){this.value=v;return this},setDisabled(){return this},setPlaceholder(){return this},onChange(f:any){this.change=f;return this},change:null as any};state.texts.push(t);cb(t);return this}
- addButton(cb:any){const b={text:'',disabled:false,click:null as any,setButtonText(t:string){this.text=t;return this},setCta(){return this},setDisabled(v:boolean){this.disabled=v;return this},onClick(f:any){this.click=f;return this}};state.buttons.push(b);cb(b);return this}
+ addButton(cb:any){const b={owner:this.element,text:'',disabled:false,click:null as any,setButtonText(t:string){this.text=t;return this},setCta(){return this},setDisabled(v:boolean){this.disabled=v;return this},onClick(f:any){this.click=f;return this}};state.buttons.push(b);cb(b);return this}
 }}));
 vi.mock('../src/environments',async()=>({translateEnvironmentName:(await vi.importActual<typeof import('../src/environments')>('../src/environments')).translateEnvironmentName,belongsToEnvironmentDirectory:(python:string,reference:string)=>python===reference||python.startsWith(reference.replace(/\/bin\/[^/]+$/,'')+'/'),discoverEnvironments:async()=>[{name:'系统',python:'/system/python'},{name:'项目',python:'/local/python'}],autoDetectEnvironments:state.detect,discoverJupyterEnvironments:async()=>[]}));
 vi.mock('../src/environment-manager',()=>({EnvironmentManager:class{validate=state.validate}}));
@@ -23,12 +23,20 @@ const settle=async()=>{await new Promise<void>(resolve=>setImmediate(resolve))};
 const button=(name:string)=>[...state.buttons].reverse().find(b=>b.text===name);
 const allText=(e:Element):string=>[e.text,...e.children.map(allText)].join('\n');
 const find=(e:Element,tag:string):Element[]=>[...(e.tag===tag?[e]:[]),...e.children.flatMap(c=>find(c,tag))];
+const descendants=(e:Element):Element[]=>[e,...e.children.flatMap(descendants)];
+it('keeps environment status, diagnostics and live log together in one visible panel',async()=>{
+ await EnvironmentPicker.show({} as any,'',undefined,state.choose,options);await settle();
+ const nodes=descendants(state.modal.contentEl),panel=nodes.find(e=>e.cls==='ipynb-operation-panel');
+ expect(panel).toBeDefined();const panelNodes=descendants(panel!);
+ expect(panelNodes).toContain(state.modal.status);expect(panelNodes).toContain(state.modal.diagnosticEl);expect(panelNodes).toContain(state.modal.logs);expect(panelNodes).toContain(button('复制诊断信息').owner);
+ expect(find(panel!,'details')).toHaveLength(0);expect(state.modal.status.text).toContain('环境识别完成');
+});
 beforeEach(()=>{state.buttons=[];state.texts=[];state.validate.mockReset().mockResolvedValue({version:'3.12',missing:[],isolated:true});state.provision.mockReset().mockImplementation(async()=>{state.inspect.mockResolvedValue({python:'/managed/python',complete:true,info:{version:'3.12',missing:[]}});return '/managed/python'});state.choose.mockReset();state.remove.mockReset().mockResolvedValue(undefined);state.inspect.mockReset().mockResolvedValue(null);state.detect.mockReset().mockResolvedValue([{name:'系统',python:'/system/python'}])});
 it('shows compact requested action order, owned row first and manual row last without automatic installation',async()=>{
  await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();
  expect(state.buttons.slice(0,2).map(b=>b.text)).toEqual(['管理依赖','识别环境']);const text=allText(state.modal.contentEl);
  expect(text.indexOf('仓库专用环境（本设备）')).toBeLessThan(text.indexOf('系统'));expect(text.lastIndexOf('未找到？手动选择目录')).toBeGreaterThan(text.indexOf('项目'));
- expect(button('安装')).toBeDefined();expect(state.provision).not.toHaveBeenCalled();
+ expect(button('安装')).toBeDefined();expect(button('检查并修复环境')).toBeDefined();expect(button('检查环境')).toBeUndefined();expect(button('修复环境')).toBeUndefined();expect(state.provision).not.toHaveBeenCalled();
 });
 it('installation needs no local base interpreter and is enabled only after successful choose callback',async()=>{
  state.choose.mockResolvedValue(false);await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();const picker=state.modal;
@@ -91,21 +99,27 @@ it('uses the vault configuration directory when environment options omit configD
 });
 
 it('checks selected Python without execution or provisioning and shows static evidence',async()=>{
- await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();state.validate.mockClear();await button('检查环境').click();await settle();
+ await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();state.validate.mockClear();await button('检查并修复环境').click();await settle();
  expect(state.validate).toHaveBeenCalledWith('/local/python',['jupyter_client','ipykernel']);expect(state.provision).not.toHaveBeenCalled();expect(state.choose).not.toHaveBeenCalled();expect(allText(state.modal.contentEl)).toContain('尚未验证 Notebook 执行');
 });
 it('repair refuses external Python and requires confirmation for the owned environment',async()=>{
- state.inspect.mockResolvedValue({python:'/managed/python',complete:false,info:{version:'3.12',missing:['ipykernel']}});
- await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();await button('修复环境').click();await settle();expect(state.provision).not.toHaveBeenCalled();expect(allText(state.modal.contentEl)).toContain('外部或系统环境仅检查');
- await EnvironmentPicker.show({} as any,'/managed/python',undefined,state.choose,options);await settle();const work=button('修复环境').click();await settle();expect(state.provision).not.toHaveBeenCalled();await button('取消').click();await work;expect(state.provision).not.toHaveBeenCalled();
+ state.inspect.mockResolvedValue({python:'/managed/python',complete:false,info:{version:'3.12',missing:['ipykernel']}});state.validate.mockResolvedValue({version:'3.12',missing:['ipykernel'],isolated:true});
+ await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();await button('检查并修复环境').click();await settle();expect(state.provision).not.toHaveBeenCalled();expect(allText(state.modal.contentEl)).toContain('外部或系统环境仅检查');
+ await EnvironmentPicker.show({} as any,'/managed/python',undefined,state.choose,options);await settle();const work=button('检查并修复环境').click();await settle();expect(state.provision).not.toHaveBeenCalled();await button('取消').click();await work;expect(state.provision).not.toHaveBeenCalled();
+});
+it('diagnoses a damaged owned environment before asking to repair it',async()=>{
+ state.inspect.mockResolvedValue({python:'/managed/python',complete:false,info:{version:'3.12',missing:['ipykernel']}});state.validate.mockResolvedValue({version:'3.12',missing:['ipykernel'],isolated:true});
+ await EnvironmentPicker.show({} as any,'/managed/python',undefined,state.choose,options);await settle();const picker=state.modal;
+ const work=button('检查并修复环境').click();await settle();expect(allText(picker.contentEl)).toContain('缺少依赖');expect(state.provision).not.toHaveBeenCalled();
+ state.validate.mockResolvedValue({version:'3.12',missing:[],isolated:true});await button('确认').click();await work;await settle();expect(state.provision).toHaveBeenCalledOnce();
 });
 it('copies diagnostics only on explicit click through the owning window clipboard',async()=>{
  const writeText=vi.fn().mockResolvedValue(undefined);await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();const picker=state.modal;picker.contentEl.ownerDocument={defaultView:{navigator:{clipboard:{writeText}}}};
- await button('检查环境').click();await settle();expect(writeText).not.toHaveBeenCalled();await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('诊断仅保存在本地'));expect(state.provision).not.toHaveBeenCalled();
+ await button('检查并修复环境').click();await settle();expect(writeText).not.toHaveBeenCalled();await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('诊断仅保存在本地'));expect(state.provision).not.toHaveBeenCalled();
 });
 it('failed downloads replace stale checks with copyable sanitized network diagnostics',async()=>{
  const writeText=vi.fn().mockResolvedValue(undefined);await EnvironmentPicker.show({} as any,'/local/python',undefined,state.choose,options);await settle();const picker=state.modal;picker.contentEl.ownerDocument={defaultView:{navigator:{clipboard:{writeText}}}};
- await button('检查环境').click();await settle();state.provision.mockRejectedValue(new Error('CERTIFICATE_VERIFY_FAILED https://user:secret@host/ token=abc'));await button('安装').click();await settle();expect(allText(picker.contentEl)).toContain('网络问题');expect(allText(picker.contentEl)).toContain('CERTIFICATE_VERIFY_FAILED');await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('CERTIFICATE_VERIFY_FAILED'));expect(writeText.mock.calls[0][0]).not.toContain('secret');expect(writeText.mock.calls[0][0]).not.toContain('token=abc');
+ await button('检查并修复环境').click();await settle();state.provision.mockRejectedValue(new Error('CERTIFICATE_VERIFY_FAILED https://user:secret@host/ token=abc'));await button('安装').click();await settle();expect(allText(picker.contentEl)).toContain('网络问题');expect(allText(picker.contentEl)).toContain('CERTIFICATE_VERIFY_FAILED');await button('复制诊断信息').click();await settle();expect(writeText).toHaveBeenCalledWith(expect.stringContaining('CERTIFICATE_VERIFY_FAILED'));expect(writeText.mock.calls[0][0]).not.toContain('secret');expect(writeText.mock.calls[0][0]).not.toContain('token=abc');
 });
 
 it('offers an explicit retry after an installation failure and releases the previous operation',async()=>{

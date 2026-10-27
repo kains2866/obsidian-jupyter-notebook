@@ -7,6 +7,7 @@
 .ipynb-kernel-info,.ipynb-package-info{display:flex;flex-direction:column;gap:4px;min-width:0}
 .ipynb-kernel-info strong,.ipynb-package-info strong{font-size:var(--font-ui-medium);font-weight:var(--font-semibold)}
 .ipynb-kernel-info small,.ipynb-package-info small,.ipynb-environment-description{color:var(--text-muted);font-size:var(--font-ui-small);overflow-wrap:anywhere;line-height:1.5}
+.ipynb-dependency-modal .ipynb-environment-description{font-size:var(--font-ui-smaller);line-height:1.4}
 .ipynb-kernel-version{font-size:var(--font-ui-small);color:var(--text-muted)}
 .ipynb-kernel-actions{display:flex;gap:8px}
 .ipynb-kernel-radio{grid-column:3;margin:0;cursor:pointer;accent-color:var(--interactive-accent)}
@@ -15,12 +16,43 @@
 .ipynb-kernel-badge{color:var(--text-accent);font-size:var(--font-ui-small)}
 .ipynb-environment-warning{color:var(--text-warning);font-size:var(--font-ui-small)}
 .ipynb-environment-status{font-size:var(--font-ui-small);overflow-wrap:anywhere;line-height:1.5;margin:12px 0}
-.ipynb-operation-log{font-size:var(--font-ui-small);color:var(--text-muted);margin-top:8px}
-.ipynb-operation-log pre{max-height:180px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--font-ui-smaller)}
+.ipynb-operation-panel{display:flex;flex-direction:column;height:160px;min-height:140px;margin-top:12px;border:1px solid var(--background-modifier-border);border-radius:var(--radius-m);background:var(--background-secondary);overflow:hidden}
+.ipynb-operation-header{display:flex;align-items:baseline;gap:12px;padding:10px 12px;border-bottom:1px solid var(--background-modifier-border);font-size:var(--font-ui-small)}
+.ipynb-operation-header strong{flex:none;color:var(--text-normal)}
+.ipynb-operation-status{flex:1;min-width:0;max-height:4.5em;overflow:auto;white-space:pre-wrap;color:var(--text-muted);overflow-wrap:anywhere}
+.ipynb-operation-actions{flex:none;margin-left:auto}
+.ipynb-operation-actions:empty{display:none}
+.modal-container .ipynb-operation-actions .setting-item{padding:0;border:0;min-height:0}
+.ipynb-operation-actions .setting-item-info{display:none}
+.ipynb-operation-actions button{font-size:var(--font-ui-smaller)}
+.ipynb-operation-extra{padding:0 12px;color:var(--text-muted);font-size:var(--font-ui-small)}
+.ipynb-operation-extra:empty{display:none}
+.ipynb-operation-extra .ipynb-environment-warning{margin:8px 0}
+.ipynb-operation-body{flex:1;min-height:0;overflow:auto;padding:8px 12px;overscroll-behavior:contain}
+.ipynb-operation-body pre{margin:0;padding:0;background:transparent;border:0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--text-muted);font-size:var(--font-ui-smaller);line-height:1.5;user-select:text}
+.ipynb-operation-diagnostic:not(:empty){padding-bottom:8px;margin-bottom:8px;border-bottom:1px solid var(--background-modifier-border);color:var(--text-normal)}
+.ipynb-operation-diagnostic:empty{display:none}
+.ipynb-operation-log-text:empty::before{content:attr(data-empty);color:var(--text-faint)}
+.ipynb-operation-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 12px;border-top:1px solid var(--background-modifier-border)}
+.ipynb-operation-footer[hidden]{display:none}
+.ipynb-operation-footer .setting-item,.ipynb-operation-extra .setting-item{padding:0;border:0;min-height:0}
+.ipynb-operation-footer .setting-item-info,.ipynb-operation-extra .setting-item-info{display:none}
+.ipynb-operation-panel .ipynb-dependency-progress{width:calc(100% - 24px);margin:8px 12px 0;flex:none}
 .ipynb-dependency-tabs{justify-content:flex-start}
 .ipynb-dependency-tabs button[aria-selected=true]{background:var(--interactive-accent);color:var(--text-on-accent)}
 .ipynb-dependency-search input{width:100%}
 .ipynb-package-list:empty{border:0}
+.ipynb-package-empty{margin:0;padding:10px 14px;color:var(--text-muted);font-size:var(--font-ui-small);line-height:1.4}
+.ipynb-package-group+ .ipynb-package-group{border-top:1px solid var(--background-modifier-border)}
+.ipynb-package-group summary,.ipynb-package-group h3{margin:0;padding:10px 14px;background:var(--background-secondary);color:var(--text-normal);font-size:var(--font-ui-small);font-weight:var(--font-semibold)}
+.ipynb-package-group summary{cursor:pointer}
+.ipynb-package-group .ipynb-package-row{border-top:1px solid var(--background-modifier-border);border-bottom:0}
+.ipynb-package-row:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:-2px}
+.ipynb-package-row.is-reference-target{background:var(--background-modifier-hover);box-shadow:inset 3px 0 var(--interactive-accent)}
+.ipynb-package-dependents{display:block}
+.modal-container .ipynb-dependency-modal .ipynb-package-info button.ipynb-package-reference{all:unset;display:inline;color:var(--text-accent);font:inherit;line-height:inherit;cursor:pointer}
+.modal-container .ipynb-dependency-modal .ipynb-package-info button.ipynb-package-reference:hover{color:var(--text-accent-hover);text-decoration:underline}
+.modal-container .ipynb-dependency-modal .ipynb-package-info button.ipynb-package-reference:focus-visible{outline:2px solid var(--interactive-accent);outline-offset:2px;border-radius:2px}
 .ipynb-package-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--background-modifier-border)}
 .ipynb-package-info a{font-size:var(--font-ui-small)}
 /* Remove settings-row spacing inside compact native controls, including theme overrides. */

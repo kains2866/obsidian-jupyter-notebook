@@ -5,7 +5,7 @@ export class FileView{
  addChild(c:any){return c}removeChild(){}
 }
 export class Notice{constructor(..._args:any[]){}hide(){}}
-export class Modal{app:any;contentEl:any={empty(){},createEl(){return {createEl(){return {addEventListener(){}}},addEventListener(){}}}};constructor(app:any){this.app=app}setTitle(){}open(){}close(){this.onClose()}onClose():void{}}
+export class Modal{static instances:Modal[]=[];app:any;contentEl:any={empty(){},createEl(){return {createEl(){return {addEventListener(){}}},addEventListener(){}}}};opened=false;constructor(app:any){this.app=app;Modal.instances.push(this)}setTitle(){}open(){this.opened=true}close(){if(!this.opened)return;this.opened=false;this.onClose()}onClose():void{}}
 export class Component{}
 export const MarkdownRenderer={render:async()=>{}};
 export function sanitizeHTMLToDom():any{return {}}

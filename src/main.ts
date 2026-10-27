@@ -22,6 +22,8 @@ export default class NotebookPlugin extends Plugin{
  private persistedRetentionDays=7;
  private lastSeenVersion?:string;
  private pendingUpdateVersion?:string;
+ private updateNoticeModal?:UpdateNoticeModal;
+ private isUnloading=false;
  private persistedLocal={bridgePython:'',kernelPython:''};
  deviceId="";
  async onload():Promise<void>{
@@ -54,7 +56,7 @@ export default class NotebookPlugin extends Plugin{
   else if(currentVersion&&this.lastSeenVersion&&compareVersions(currentVersion,this.lastSeenVersion)>0)this.pendingUpdateVersion=currentVersion;
   this.registerView(NOTEBOOK_VIEW,leaf=>new NotebookView(leaf,this));
   this.registerExtensions(['ipynb'],NOTEBOOK_VIEW);
-  if(this.pendingUpdateVersion)this.app.workspace.onLayoutReady(()=>this.showUpdateNotice());
+  if(this.pendingUpdateVersion)this.app.workspace.onLayoutReady(()=>{if(!this.isUnloading)this.showUpdateNotice()});
   this.notebookMetadata=new NotebookMetadataBridge(this,message=>new Notice(this.getTranslator()(message),10000));this.notebookMetadata.start();
   if(!Platform.isMobile)new NotebookOutlineBridge(this,path=>this.notebookMetadata?.get(path),{source:view=>view instanceof NotebookView?view.getOutlineNotebook():undefined,parse:(notebook,previous)=>this.notebookMetadata?.metadataForNotebook(notebook,previous)??Promise.resolve(undefined)}).start();
   new NotebookDataviewBridge(this,message=>new Notice(this.getTranslator()(message),10000)).start();
@@ -95,11 +97,15 @@ export default class NotebookPlugin extends Plugin{
  private pluginData(settings=this.settings):Record<string,unknown>{return {...syncedEnvironmentSettings(settings),...(this.lastSeenVersion?{lastSeenVersion:this.lastSeenVersion}:{})}}
  private showUpdateNotice():void{
   const version=this.pendingUpdateVersion;if(!version)return;this.pendingUpdateVersion=undefined;
-  new UpdateNoticeModal(this.app,version,this.getTranslator(),()=>{
+  const modal=new UpdateNoticeModal(this.app,version,this.getTranslator(),()=>{
+   this.updateNoticeModal=undefined;if(this.isUnloading)return;
+   const previous=this.lastSeenVersion;
    this.lastSeenVersion=version;
-   void this.saveData(this.pluginData()).catch(error=>new Notice(this.getTranslator()('更新记录已显示，但已读状态保存失败：{error}',{error:this.getTranslator()(String(error))}),10000));
-  }).open();
+   void this.saveData(this.pluginData()).catch(error=>{if(this.lastSeenVersion===version)this.lastSeenVersion=previous;new Notice(this.getTranslator()('更新记录已显示，但已读状态保存失败：{error}',{error:this.getTranslator()(String(error))}),10000)});
+  });
+  this.updateNoticeModal=modal;modal.open();
  }
+ onunload():void{this.isUnloading=true;this.pendingUpdateVersion=undefined;this.updateNoticeModal?.close();this.updateNoticeModal=undefined}
  getTranslator():Translator{return createTranslator(this.settings.language,typeof getLanguage==='function'?getLanguage():'en')}
  onPreferencesChanged():void{this.refreshLanguageCommands();for(const view of this.notebookViews())view.refreshPreferences()}
  private refreshLanguageCommands():void{

@@ -91,10 +91,11 @@ export async function exportNotebookMarkdown(notebook:Notebook,options:NotebookE
   if(Object.hasOwn(data,'text/latex'))return fence(text(data['text/latex']),'latex');
   return fence(text(data));
  };
- const cells:string[]=[];for(const cell of notebook.cells){
+ let completed=0;const cells:string[]=[];for(const cell of notebook.cells){
   if(cell.cell_type==='markdown')cells.push(await markdown(sourceText(cell),cell));
   else if(cell.cell_type==='raw')cells.push(fence(sourceText(cell)));
   else{cells.push(fence(sourceText(cell),'python'));for(const value of cell.outputs??[])cells.push(await output(value,cell))}
+  await options.onProgress?.(++completed,notebook.cells.length);
  }
  return {markdown:cells.join('\n\n')+'\n',resources};
 }

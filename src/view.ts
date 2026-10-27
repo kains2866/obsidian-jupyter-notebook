@@ -1,3 +1,4 @@
+import {ExportTask} from './export-task';
 import {NotebookJsonSource} from './notebook-json';
 import {renderMath,finishRenderMath} from 'obsidian';
 import {exportNotebookIpynb,exportNotebookPython,exportNotebookMarkdown,packageMarkdownExport,downloadNotebookExport,type NotebookExportFormat} from './notebook-export-formats';
@@ -25,6 +26,7 @@ import {EnvironmentPicker,confirm} from './settings';
 import {environmentName,belongsToEnvironmentDirectory} from './environments';
 export const NOTEBOOK_VIEW='native-ipynb';
 export class NotebookView extends FileView{
+ private exportTask=new ExportTask();
  private jsonSource?:NotebookJsonSource;private recoveryJsonSource?:string;
  private recoveredDraft?:RecoveryDraft;private recovery?:RecoveryDrafts;private recoveryTimer?:number;private recoveryBaseline='';private recoveryNotebook?:Notebook;
  private importTimer?:number;private importController?:AbortController;private importGeneration=0;
@@ -158,10 +160,24 @@ export class NotebookView extends FileView{
   try{if(jsonSource===undefined)await recovery.write(serializeNotebook(notebook),this.recoveryBaseline);else await recovery.write(serializeNotebook(notebook),this.recoveryBaseline,jsonSource);if(this.recovery===recovery&&this.session===session){this.recoveryNotebook=notebook;this.recoveryJsonSource=jsonSource}}catch(error){this.recoveryError(error);if(requireRaw)throw error}
  }
  private async exportNotebook(format:NotebookExportFormat):Promise<void>{
+  await this.exportTask.run(async()=>{
   this.applyJsonSource();
   const session=this.session,file=this.file;if(this.disposed||!session||!file)return;
   // Session updates replace notebook objects. Capture once so asynchronous image reads cannot mix revisions.
   const snapshot=session.notebook,doc=this.contentEl.ownerDocument;
+  const fragment=doc.createDocumentFragment(),label=fragment.createDiv();
+  const progress=fragment.createEl('progress');progress.max=1;
+  progress.setAttribute('aria-label',this.t('导出进度'));
+  const notice=new Notice(fragment,0);
+  const update=async(message:string,completed?:number,total?:number)=>{
+   label.textContent=message;
+   if(completed===undefined)progress.removeAttribute('value');else progress.value=total?completed/total:1;
+   // Yield a task so the renderer can paint before processing the next batch.
+   await new Promise<void>(resolve=>doc.defaultView!.setTimeout(resolve,0));
+  };
+  this.editor?.setExportBusy(true);
+  try{
+  await update(this.t('正在准备导出…'));
   const resolveImage=async(uri:string,cell:import('./notebook').Cell):Promise<ExportImage|undefined>=>{
    const attachment=decodeNotebookAttachment(cell,uri);
    if(attachment){if('error'in attachment)return;return attachment.mime==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder('utf-8',{fatal:true}).decode(attachment.data),sanitizeHTMLToDom)}:exportRasterDataUri(attachment.mime,attachment.data)}
@@ -173,16 +189,20 @@ export class NotebookView extends FileView{
    const bytes=new Uint8Array(await this.app.vault.readBinary(image));
    return type==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder('utf-8',{fatal:true}).decode(bytes),sanitizeHTMLToDom)}:exportRasterDataUri(type,bytes);
   };
-  const options={title:file.basename,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:(text:string)=>this.t(text)};
+  const options={title:file.basename,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:(text:string)=>this.t(text),onProgress:async(done:number,total:number)=>{if(done===total||done%10===0)await update(this.t('正在处理单元格')+` ${done}/${total}`,done,total)}};
   let content:string|Uint8Array,mime:string,extension:string;
   if(format==='ipynb'){content=exportNotebookIpynb(snapshot);mime='application/x-ipynb+json';extension='ipynb'}
   else if(format==='python'){content=exportNotebookPython(snapshot);mime='text/x-python';extension='py'}
-  else if(format==='markdown')({content,mime,extension}=packageMarkdownExport(await exportNotebookMarkdown(snapshot,options),file.basename));
+  else if(format==='markdown'){const result=await exportNotebookMarkdown(snapshot,options);await update(this.t('正在打包导出文件…'));({content,mime,extension}=packageMarkdownExport(result,file.basename))}
   else{content=await exportNotebookHtml(snapshot,options);mime='text/html';extension='html'}
   if(this.disposed||this.session!==session||this.file!==file)return;
   // Browsers may prompt or cancel; initiating a download is not evidence of a saved filesystem path.
+  await update(this.t('正在发起下载…'));
+  if(this.disposed||this.session!==session||this.file!==file)return;
   downloadNotebookExport(content,mime,file.basename+'.'+extension,doc);
   if(format==='python')new Notice(this.t('Python 导出保留 IPython 魔法命令，运行时可能需要 Jupyter。'));
+  }finally{notice.hide();this.editor?.setExportBusy(false)}
+  });
  }
  private async saveOutput(content:string,mime:string,filename:string):Promise<void>{
   if(this.disposed||!this.file)throw new Error(this.t('Notebook 已关闭。'));

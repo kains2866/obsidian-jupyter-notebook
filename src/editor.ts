@@ -115,7 +115,7 @@ export class NotebookEditor {
   this.button(more,'另存副本',()=>actions.saveCopy());
   if(actions.exportNotebook){
    const exports=this.menu(more,'导出为',true);
-   for(const [format,label] of [['ipynb','导出为 ipynb'],['html','导出为 HTML'],['markdown','导出为 Markdown'],['python','导出为 Python']] as const)this.button(exports,label,()=>actions.exportNotebook!(format));
+   for(const [format,label] of [['ipynb','导出为 ipynb'],['html','导出为 HTML'],['markdown','导出为 Markdown'],['python','导出为 Python']] as const)this.button(exports,label,()=>actions.exportNotebook!(format)).dataset.exportFormat=format;
   }else if(actions.exportHtml)this.button(more,'导出为 HTML',()=>actions.exportHtml!());
   this.button(more,'重新加载',()=>actions.reload());
   this.button(more,'撤销',()=>this.historyChange(()=>session.undo()));
@@ -445,6 +445,9 @@ export class NotebookEditor {
  }
  private renderExecutionTimes():void{
   this.session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type!=='code')return;const host=this.cellNodes[index]?.querySelector<HTMLElement>('.ipynb-execution-time');if(!host)return;const seconds=this.session.executionSeconds(index);host.hidden=seconds===undefined;if(seconds!==undefined){const value=seconds<0.1?'<0.1':seconds.toFixed(1);host.textContent=this.t('{seconds} 秒',{seconds:value});host.setAttribute('aria-label',this.t('运行时间：{seconds} 秒',{seconds:value}));host.title=this.t('运行时间：{seconds} 秒',{seconds:value})}});
+ }
+ setExportBusy(busy:boolean):void{
+  this.toolbar.querySelectorAll<HTMLButtonElement>('button').forEach(button=>{if(button.dataset.exportFormat)button.disabled=busy});
  }
  refresh():void{
   if(this.structureChanging)return;

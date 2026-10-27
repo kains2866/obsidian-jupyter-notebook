@@ -222,7 +222,7 @@ it('notifies native Outline when a Notebook loads or edits, using the live sessi
 it('导出菜单使用当前未保存快照，所有格式都不保存或执行',async()=>{
  const exports=await import('../src/notebook-export-formats');const download=vi.spyOn(exports,'downloadNotebookExport').mockImplementation(()=>{});
  try{
-  const {view,app}=setup();view.contentEl.ownerDocument={};
+  const {view,app}=setup();view.contentEl.ownerDocument={createDocumentFragment:()=>({createDiv:()=>({}),createEl:()=>({setAttribute(){},removeAttribute(){}})}),defaultView:{setTimeout}};
   view.session.change(editCell(view.session.notebook,0,{source:'unsaved export'}));const before=view.session.notebook;
   await view.exportNotebook('ipynb');expect(download).toHaveBeenLastCalledWith(expect.stringContaining('unsaved export'),'application/x-ipynb+json','测试.ipynb',expect.anything());
   await view.exportNotebook('python');expect(download).toHaveBeenLastCalledWith(expect.stringContaining('# %%\nunsaved export'),'text/x-python','测试.py',expect.anything());

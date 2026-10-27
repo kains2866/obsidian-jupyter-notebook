@@ -52,3 +52,8 @@ it.each(['https://track.test/a.png','//track.test/a.png','file:///tmp/a.png','ja
 it('uses escaped alternative text after resolver failures',async()=>{
  const html=await exportNotebookHtml(notebook([{cell_type:'markdown',metadata:{},source:'![<missing>](x.png)'}]),{...options,resolveImage:async()=>{throw new Error('missing')}});expect(html).toContain('&lt;missing&gt;');expect(html).not.toContain('<missing>');
 });
+it('reports completed cells in order and awaits progress callbacks',async()=>{
+ const completed:number[]=[];const onProgress=async(done:number,total:number)=>{await Promise.resolve();expect(total).toBe(2);completed.push(done)};
+ await exportNotebookHtml(notebook([{cell_type:'raw',metadata:{},source:'a'},{cell_type:'raw',metadata:{},source:'b'}]),{...options,onProgress});
+ expect(completed).toEqual([1,2]);
+});

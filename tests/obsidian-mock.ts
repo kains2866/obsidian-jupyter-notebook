@@ -4,7 +4,7 @@ export class FileView{
  constructor(leaf:any){this.app=leaf.app}
  addChild(c:any){return c}removeChild(){}
 }
-export class Notice{constructor(..._args:any[]){}}
+export class Notice{constructor(..._args:any[]){}hide(){}}
 export class Component{}
 export const MarkdownRenderer={render:async()=>{}};
 export function sanitizeHTMLToDom():any{return {}}

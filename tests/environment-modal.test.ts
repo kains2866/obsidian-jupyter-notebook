@@ -1,3 +1,4 @@
+import {setImmediate} from 'node:timers';
 import {beforeEach,expect,it,vi} from 'vitest';
 const state=vi.hoisted(()=>({modal:null as any,buttons:[] as any[],texts:[] as any[],validate:vi.fn(),provision:vi.fn(),choose:vi.fn(),inspect:vi.fn(),remove:vi.fn(),detect:vi.fn()}));
 class Element {
@@ -17,7 +18,8 @@ vi.mock('../src/managed-runtime',()=>({provisionStandaloneEnvironment:state.prov
 vi.mock('../src/dependency-modal',()=>({showDependencies:vi.fn()}));
 import {EnvironmentPicker} from '../src/settings';
 const options={vaultId:'v',vaultRoot:'/vault',configDir:'.obsidian',deviceId:'device'};
-const settle=async()=>{await new Promise(resolve=>setTimeout(resolve,10))};
+// Mock services resolve in microtasks; drain this turn without a wall-clock delay.
+const settle=async()=>{await new Promise<void>(resolve=>setImmediate(resolve))};
 const button=(name:string)=>[...state.buttons].reverse().find(b=>b.text===name);
 const allText=(e:Element):string=>[e.text,...e.children.map(allText)].join('\n');
 const find=(e:Element,tag:string):Element[]=>[...(e.tag===tag?[e]:[]),...e.children.flatMap(c=>find(c,tag))];

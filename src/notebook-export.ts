@@ -9,6 +9,7 @@ import {valueText} from './value-text';
 export type ExportImage=string|{svg:string};
 export interface NotebookExportOptions{
  title:string;
+ onProgress?(completed:number,total:number):Promise<void>;
  /** Must return detached, sanitized static HTML. Never use live application DOM. */
  sanitizeHtml(html:string,cell:Cell):Promise<string>;
  resolveImage(uri:string,cell:Cell):Promise<ExportImage|undefined>;
@@ -90,6 +91,7 @@ export async function exportNotebookHtml(notebook:Notebook,options:NotebookExpor
   else if(cell.cell_type==='raw')content=pre(source,'raw');
   else{const outputs:string[]=[];for(const output of cell.outputs??[])outputs.push(await outputHtml(output,cell,options));content=`<pre class="code"><code>${escape(source)}</code></pre>${outputs.map(output=>`<div class="output">${output}</div>`).join('')}`}
   cells.push(`<section class="cell ${cell.cell_type}">${content}</section>`);
+  await options.onProgress?.(cells.length,notebook.cells.length);
  }
  return `<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src 'none'; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>${escape(options.title)}</title><style>body{max-width:960px;margin:2rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#202124;background:#fff;line-height:1.6}.cell{margin:1.5rem 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background:#f4f5f6;border-radius:6px}code{font-family:ui-monospace,monospace}img,svg{max-width:100%;height:auto}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #ccc;padding:.35rem .65rem}.export-math.is-display{display:block;text-align:center;margin:1em 0}.export-math svg{vertical-align:middle}.error{color:#a11}.export-note,.missing-image{color:#666;font-size:.9rem}blockquote{border-left:3px solid #ccc;padding-left:1rem}</style></head><body><h1>${escape(options.title)}</h1><p class="export-note">${escape(t('静态离线导出：仅包含已有输出，不执行代码。公式已内嵌；无法渲染时保留 LaTeX 源码，远程或缺失图片显示替代文字。'))}</p>${cells.join('\n')}</body></html>`;
 }

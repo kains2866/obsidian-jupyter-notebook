@@ -27,8 +27,9 @@ export default class NotebookPlugin extends Plugin{
  async onload():Promise<void>{
   const raw:unknown=await this.loadData();
   const stored=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Record<string,unknown>:undefined;
+  const currentVersion=this.manifest?.version;
   this.lastSeenVersion=typeof stored?.lastSeenVersion==='string'?stored.lastSeenVersion:undefined;
-  if(!stored)this.lastSeenVersion=this.manifest.version;
+  if(!stored&&currentVersion)this.lastSeenVersion=currentVersion;
   const vaultId=typeof stored?.vaultId==='string'&&/^[a-zA-Z0-9_-]+$/.test(stored.vaultId)?stored.vaultId:crypto.randomUUID();
   this.settings={...DEFAULT_SETTINGS,...normalizePreferences(stored),vaultId};
   if(!Platform.isMobile){
@@ -49,8 +50,8 @@ export default class NotebookPlugin extends Plugin{
    }else this.settings={...this.settings,...local};
    if(localReadFailed)await this.saveData(this.pluginData());else await this.saveSettings();
   }else await this.saveData(this.pluginData());
-  if(stored&&!this.lastSeenVersion)this.pendingUpdateVersion=this.manifest.version;
-  else if(this.lastSeenVersion&&compareVersions(this.manifest.version,this.lastSeenVersion)>0)this.pendingUpdateVersion=this.manifest.version;
+  if(currentVersion&&stored&&!this.lastSeenVersion)this.pendingUpdateVersion=currentVersion;
+  else if(currentVersion&&this.lastSeenVersion&&compareVersions(currentVersion,this.lastSeenVersion)>0)this.pendingUpdateVersion=currentVersion;
   this.registerView(NOTEBOOK_VIEW,leaf=>new NotebookView(leaf,this));
   this.registerExtensions(['ipynb'],NOTEBOOK_VIEW);
   if(this.pendingUpdateVersion)this.app.workspace.onLayoutReady(()=>this.showUpdateNotice());

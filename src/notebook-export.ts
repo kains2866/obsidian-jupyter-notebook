@@ -10,11 +10,13 @@ export type ExportImage=string|{svg:string};
 export interface NotebookExportOptions{
  title:string;
  onProgress?(completed:number,total:number):Promise<void>;
+ signal?:AbortSignal;
  /** Must return detached, sanitized static HTML. Never use live application DOM. */
  sanitizeHtml(html:string,cell:Cell):Promise<string>;
  resolveImage(uri:string,cell:Cell):Promise<ExportImage|undefined>;
  translate?(text:string):string;
 }
+export function throwIfExportAborted(signal?:AbortSignal):void{if(signal?.aborted)throw new DOMException('Export cancelled','AbortError')}
 const rasterData=/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z\d+/]+={0,2}$/i;
 const rasterMimes=new Set(['image/png','image/jpeg','image/gif','image/webp']);
 const escape=(text:string)=>text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
@@ -85,13 +87,14 @@ async function outputHtml(output:Output,cell:Cell,options:NotebookExportOptions)
 /** Export a captured immutable notebook, including stored outputs; never executes or saves it. */
 export async function exportNotebookHtml(notebook:Notebook,options:NotebookExportOptions):Promise<string>{
  const t=(text:string)=>options.translate?.(text)??text;const cells:string[]=[];
- for(const cell of notebook.cells){
+ try{for(const cell of notebook.cells){
+  throwIfExportAborted(options.signal);
   const source=sourceText(cell);let content:string;
   if(cell.cell_type==='markdown')content=await markdown(source,cell,options);
   else if(cell.cell_type==='raw')content=pre(source,'raw');
-  else{const outputs:string[]=[];for(const output of cell.outputs??[])outputs.push(await outputHtml(output,cell,options));content=`<pre class="code"><code>${escape(source)}</code></pre>${outputs.map(output=>`<div class="output">${output}</div>`).join('')}`}
+  else{const outputs:string[]=[];for(const output of cell.outputs??[]){throwIfExportAborted(options.signal);outputs.push(await outputHtml(output,cell,options))}content=`<pre class="code"><code>${escape(source)}</code></pre>${outputs.map(output=>`<div class="output">${output}</div>`).join('')}`}
   cells.push(`<section class="cell ${cell.cell_type}">${content}</section>`);
-  await options.onProgress?.(cells.length,notebook.cells.length);
- }
+  await options.onProgress?.(cells.length,notebook.cells.length);throwIfExportAborted(options.signal);
+ }}catch(error){cells.length=0;throw error}
  return `<!doctype html>\n<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; font-src 'none'; script-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none'"><title>${escape(options.title)}</title><style>body{max-width:960px;margin:2rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#202124;background:#fff;line-height:1.6}.cell{margin:1.5rem 0}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:1rem;background:#f4f5f6;border-radius:6px}code{font-family:ui-monospace,monospace}img,svg{max-width:100%;height:auto}table{border-collapse:collapse;display:block;overflow:auto}th,td{border:1px solid #ccc;padding:.35rem .65rem}.export-math.is-display{display:block;text-align:center;margin:1em 0}.export-math svg{vertical-align:middle}.error{color:#a11}.export-note,.missing-image{color:#666;font-size:.9rem}blockquote{border-left:3px solid #ccc;padding-left:1rem}</style></head><body><h1>${escape(options.title)}</h1><p class="export-note">${escape(t('静态离线导出：仅包含已有输出，不执行代码。公式已内嵌；无法渲染时保留 LaTeX 源码，远程或缺失图片显示替代文字。'))}</p>${cells.join('\n')}</body></html>`;
 }

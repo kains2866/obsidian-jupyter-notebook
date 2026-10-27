@@ -1,6 +1,6 @@
 import MarkdownIt from 'markdown-it';
 import {sourceText,type Cell,type Notebook} from './notebook';
-import {isExportLocalImage,type NotebookExportOptions} from './notebook-export';
+import {isExportLocalImage,throwIfExportAborted,type NotebookExportOptions} from './notebook-export';
 import {valueText} from './value-text';
 export interface MarkdownResource{path:string;bytes:Uint8Array}
 export interface MarkdownExport{markdown:string;resources:MarkdownResource[]}
@@ -8,10 +8,24 @@ export type NotebookExportFormat='ipynb'|'html'|'markdown'|'python';
 const text=(value:unknown)=>Array.isArray(value)&&value.every(item=>typeof item==='string')?value.join(''):valueText(value);
 const record=(value:unknown):value is Record<string,unknown>=>!!value&&typeof value==='object'&&!Array.isArray(value);
 /** Unlike the save serializer, a full snapshot export retains runtime/unknown fields too. */
-export function exportNotebookIpynb(notebook:Notebook):string{return JSON.stringify(notebook,null,2)+'\n'}
-export function exportNotebookPython(notebook:Notebook):string{
+function indentJson(value:string,spaces:number,indentFirst=true):string{return value.split('\n').map((line,index)=>index===0&&!indentFirst?line:' '.repeat(spaces)+line).join('\n')}
+export async function exportNotebookIpynb(notebook:Notebook,options:Pick<NotebookExportOptions,'signal'|'onProgress'>={}):Promise<string>{
+ const entries:string[]=[];let completed=0;
+ try{for(const key of Object.keys(notebook)){
+  throwIfExportAborted(options.signal);const value=(notebook as unknown as Record<string,unknown>)[key];if(value===undefined||typeof value==='function'||typeof value==='symbol')continue;
+  let serialized:string|undefined;
+  if(key==='cells'&&Array.isArray(value)){
+   const cells:string[]=[];for(const cell of value){throwIfExportAborted(options.signal);const item=JSON.stringify(cell,null,2);if(item!==undefined)cells.push(indentJson(item,4));await options.onProgress?.(++completed,notebook.cells.length);throwIfExportAborted(options.signal)}
+   serialized=cells.length?`[\n${cells.join(',\n')}\n  ]`:'[]';
+  }else{const item=JSON.stringify(value,null,2);serialized=item===undefined?undefined:indentJson(item,2,false)}
+  if(serialized!==undefined)entries.push(`${JSON.stringify(key)}: ${serialized}`);
+ }}catch(error){entries.length=0;throw error}
+ return entries.length?`{\n${entries.map(entry=>'  '+entry).join(',\n')}\n}\n`:'{}\n';
+}
+export async function exportNotebookPython(notebook:Notebook,options:Pick<NotebookExportOptions,'signal'|'onProgress'>={}):Promise<string>{
+ const cells:string[]=[];try{for(const cell of notebook.cells){throwIfExportAborted(options.signal);cells.push(cell.cell_type==='code'?`# %%\n${sourceText(cell)}`:`# %% [${cell.cell_type}]\n${sourceText(cell).split('\n').map(line=>'# '+line).join('\n')}`);await options.onProgress?.(cells.length,notebook.cells.length);throwIfExportAborted(options.signal)}}catch(error){cells.length=0;throw error}
  const header='# Exported without execution. IPython magic and shell commands may require Jupyter.\n';
- return header+'\n'+notebook.cells.map(cell=>cell.cell_type==='code'?`# %%\n${sourceText(cell)}`:`# %% [${cell.cell_type}]\n${sourceText(cell).split('\n').map(line=>'# '+line).join('\n')}`).join('\n\n')+'\n';
+ return header+'\n'+cells.join('\n\n')+'\n';
 }
 function fence(source:string,language=''):string{
  const marker='`'.repeat(Math.max(3,...Array.from(source.matchAll(/`+/g),match=>match[0].length+1)));
@@ -28,6 +42,7 @@ export async function exportNotebookMarkdown(notebook:Notebook,options:NotebookE
   return add(new TextEncoder().encode(standalone),'svg');
  };
  const image=async(uri:string,cell:Cell):Promise<string|undefined>=>{
+  throwIfExportAborted(options.signal);
   if(!isExportLocalImage(uri))return;
   try{
    const resolved=uri.startsWith('data:')?uri:await options.resolveImage(uri,cell);
@@ -91,33 +106,37 @@ export async function exportNotebookMarkdown(notebook:Notebook,options:NotebookE
   if(Object.hasOwn(data,'text/latex'))return fence(text(data['text/latex']),'latex');
   return fence(text(data));
  };
- let completed=0;const cells:string[]=[];for(const cell of notebook.cells){
+ let completed=0;const cells:string[]=[];try{for(const cell of notebook.cells){
+  throwIfExportAborted(options.signal);
   if(cell.cell_type==='markdown')cells.push(await markdown(sourceText(cell),cell));
   else if(cell.cell_type==='raw')cells.push(fence(sourceText(cell)));
-  else{cells.push(fence(sourceText(cell),'python'));for(const value of cell.outputs??[])cells.push(await output(value,cell))}
-  await options.onProgress?.(++completed,notebook.cells.length);
- }
+  else{cells.push(fence(sourceText(cell),'python'));for(const value of cell.outputs??[]){throwIfExportAborted(options.signal);cells.push(await output(value,cell))}}
+  await options.onProgress?.(++completed,notebook.cells.length);throwIfExportAborted(options.signal);
+ }}catch(error){cells.length=0;resources.length=0;throw error}
  return {markdown:cells.join('\n\n')+'\n',resources};
 }
 /** Store-only ZIP (no compression/dependencies). Entries are generated local names, never notebook paths. */
-export function packageMarkdownExport(result:MarkdownExport,title:string):{content:string|Uint8Array;extension:string;mime:string}{
- if(!result.resources.length)return {content:result.markdown,extension:'md',mime:'text/markdown'};
+export async function packageMarkdownExport(result:MarkdownExport,title:string,options:Pick<NotebookExportOptions,'signal'> & {onProgress?:(completed:number,total:number)=>Promise<void>}={}):Promise<{content:string|Uint8Array;extension:string;mime:string}>{
+ throwIfExportAborted(options.signal);if(!result.resources.length)return {content:result.markdown,extension:'md',mime:'text/markdown'};
  const basename=(title.split(/[\\/]/).at(-1)??'').replace(/[<>:"|?*]/g,'_').split('').map(char=>char.charCodeAt(0)<32||char.charCodeAt(0)===127?'_':char).join('').replace(/\.\./g,'_').replace(/^[. ]+|[. ]+$/g,'')||'notebook';
  const markdownName=(/^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(basename)?'_'+basename:basename)+'.md';
  const files=[{path:markdownName,bytes:new TextEncoder().encode(result.markdown)},...result.resources];
  const seen=new Set<string>();for(const file of files){if((file.path!==markdownName&&!/^assets\/[a-zA-Z0-9_-]+\.(?:png|jpg|gif|webp|svg)$/.test(file.path))||seen.has(file.path))throw new Error('导出资源文件名无效。');seen.add(file.path)}
  if(files.length>65535)throw new Error('导出资源过多。');
- const parts:Uint8Array[]=[];const central:Uint8Array[]=[];let offset=0,centralLength=0;
+ const parts:Uint8Array[]=[];const central:Uint8Array[]=[];let offset=0,centralLength=0,completed=0;const filesSize=files.reduce((total,file)=>total+file.bytes.length,0);const zipSize=22+files.reduce((total,file)=>{const nameLength=new TextEncoder().encode(file.path).length;return total+30+nameLength+file.bytes.length+46+nameLength},0);const progressTotal=filesSize+zipSize;const yieldToUi=()=>new Promise<void>(resolve=>window.setTimeout(resolve,0));
  const header=(size:number)=>{const bytes=new Uint8Array(size);return {bytes,view:new DataView(bytes.buffer)}};
  for(const file of files){
+  throwIfExportAborted(options.signal);
   const name=new TextEncoder().encode(file.path),size=file.bytes.length;if(size>0xffffffff||offset+size+30+name.length>0xffffffff)throw new Error('导出文件过大。');
-  let crc=0xffffffff;for(const byte of file.bytes){crc^=byte;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0)}crc=(crc^0xffffffff)>>>0;
+  let crc=0xffffffff;for(let start=0;start<size;start+=262144){throwIfExportAborted(options.signal);const end=Math.min(start+262144,size);for(let index=start;index<end;index++){crc^=file.bytes[index]??0;for(let bit=0;bit<8;bit++)crc=(crc>>>1)^((crc&1)?0xedb88320:0)}completed+=end-start;if(options.onProgress){await options.onProgress(completed,Math.max(1,progressTotal));await yieldToUi()}}
+  crc=(crc^0xffffffff)>>>0;
   const local=header(30+name.length);local.view.setUint32(0,0x04034b50,true);local.view.setUint16(4,20,true);local.view.setUint16(6,0x800,true);local.view.setUint32(14,crc,true);local.view.setUint32(18,size,true);local.view.setUint32(22,size,true);local.view.setUint16(26,name.length,true);local.bytes.set(name,30);parts.push(local.bytes,file.bytes);
   const directory=header(46+name.length);directory.view.setUint32(0,0x02014b50,true);directory.view.setUint16(4,20,true);directory.view.setUint16(6,20,true);directory.view.setUint16(8,0x800,true);directory.view.setUint32(16,crc,true);directory.view.setUint32(20,size,true);directory.view.setUint32(24,size,true);directory.view.setUint16(28,name.length,true);directory.view.setUint32(42,offset,true);directory.bytes.set(name,46);central.push(directory.bytes);centralLength+=directory.bytes.length;offset+=local.bytes.length+size;
  }
  if(offset+centralLength+22>0xffffffff)throw new Error('导出文件过大。');
  const end=header(22);end.view.setUint32(0,0x06054b50,true);end.view.setUint16(8,files.length,true);end.view.setUint16(10,files.length,true);end.view.setUint32(12,centralLength,true);end.view.setUint32(16,offset,true);
- const content=new Uint8Array(offset+centralLength+22);let position=0;for(const part of [...parts,...central,end.bytes]){content.set(part,position);position+=part.length}
+ const content=new Uint8Array(offset+centralLength+22);let position=0;for(const part of [...parts,...central,end.bytes]){for(let start=0;start<part.length;start+=262144){throwIfExportAborted(options.signal);const chunk=part.subarray(start,Math.min(start+262144,part.length));content.set(chunk,position);position+=chunk.length;completed+=chunk.length;if(options.onProgress){await options.onProgress(completed,Math.max(1,progressTotal));await yieldToUi()}}}
+ throwIfExportAborted(options.signal);
  return {content,extension:'zip',mime:'application/zip'};
 }
 /** Download initiation only; the browser may prompt or cancel. */

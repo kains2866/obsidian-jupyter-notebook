@@ -23,7 +23,7 @@
 - **在本机完成代码工作流**：选择 Python 环境、管理依赖、交互输入、查看运行耗时与丰富输出。
 - **带走文件，继续使用**：同一份标准 `.ipynb` 可在 Jupyter 或 VS Code 中打开。属性保存在 Markdown YAML 块内，不生成伴随 Markdown 文件。
 
-**[0.7.0 更新](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.0)**：原生 Properties 与笔记索引、异常退出草稿恢复、编辑历史保留及增量依赖检测。完整变更见 [更新记录](CHANGELOG.md)。
+**[0.7.2 更新](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.2)**：支持将图片嵌入 Notebook；完善 LaTeX 公式渲染；保留 YAML 注释与格式；适配 Markdown 标题层级；增加多种导出格式；支持切换到 JSON 视图。完整变更见 [更新记录](CHANGELOG.md)。
 
 ## 文档导航
 

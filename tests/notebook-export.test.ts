@@ -57,3 +57,8 @@ it('reports completed cells in order and awaits progress callbacks',async()=>{
  await exportNotebookHtml(notebook([{cell_type:'raw',metadata:{},source:'a'},{cell_type:'raw',metadata:{},source:'b'}]),{...options,onProgress});
  expect(completed).toEqual([1,2]);
 });
+it('stops HTML export at the cell boundary after cancellation',async()=>{
+ const controller=new AbortController(),completed:number[]=[];const n=notebook([{cell_type:'raw',metadata:{},source:'first'},{cell_type:'raw',metadata:{},source:'second'}]);
+ await expect(exportNotebookHtml(n,{...options,signal:controller.signal,onProgress:async done=>{completed.push(done);if(done===1)controller.abort()}})).rejects.toMatchObject({name:'AbortError'});
+ expect(completed).toEqual([1]);
+});

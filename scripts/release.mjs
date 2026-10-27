@@ -5,7 +5,8 @@ const json = async (name) => JSON.parse(await readFile(name, 'utf8'));
 const semver = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 const files = ['main.js', 'manifest.json', 'styles.css'];
 const save = (name, data) => writeFile(name, JSON.stringify(data, null, 2) + '\n');
-async function metadata() { const [pkg, lock, manifest, versions, changelog] = await Promise.all([json('package.json'), json('package-lock.json'), json('manifest.json'), json('versions.json'), readFile('CHANGELOG.md', 'utf8')]); return { pkg, lock, manifest, versions, changelog }; }
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+async function metadata() { const [pkg, lock, manifest, versions, changelog, updateNotes, readmeEn, readmeZh, workflow] = await Promise.all([json('package.json'), json('package-lock.json'), json('manifest.json'), json('versions.json'), readFile('CHANGELOG.md', 'utf8'), json('src/update-notes.json'), readFile('README.md', 'utf8'), readFile('README.zh-CN.md', 'utf8'), readFile('.github/workflows/release.yml', 'utf8')]); return { pkg, lock, manifest, versions, changelog, updateNotes, readmeEn, readmeZh, workflow }; }
 function notes(changelog, version) {
     const heading = `## [${version}]`;
     const start = changelog.split('\n').findIndex(line => line === heading || line.startsWith(heading + ' - '));
@@ -21,11 +22,42 @@ function notes(changelog, version) {
     return body + '\n';
 }
 function check(data) {
-    const { pkg, lock, manifest, versions, changelog } = data;
+    const { pkg, lock, manifest, versions, changelog, updateNotes, readmeEn, readmeZh, workflow } = data;
     const v = manifest.version;
     if (!semver.test(v) || pkg.version !== v || lock.version !== v || lock.packages?.['']?.version !== v || versions[v] !== manifest.minAppVersion)
         throw Error('Release versions are inconsistent');
-    notes(changelog, v);
+    const changelogBody = notes(changelog, v);
+    const summary = updateNotes[v];
+    if (!summary || !Array.isArray(summary.zh) || !summary.zh.length || !Array.isArray(summary.en) || !summary.en.length)
+        throw Error(`Missing Chinese and English release summary for ${v}`);
+    if (summary.zh.some(item => typeof item !== 'string' || !item.trim()))
+        throw Error(`Chinese release summary is empty for ${v}`);
+    if (summary.en.some(item => typeof item !== 'string' || !item.trim()))
+        throw Error(`English release summary is empty for ${v}`);
+    for (const item of summary.zh) {
+        if (!changelogBody.includes(item))
+            throw Error(`Changelog does not contain Chinese release summary item for ${v}: ${item}`);
+    }
+    const title = text => text.match(/^#\s+(.+)\s*$/m)?.[1]?.trim();
+    if (title(readmeEn) !== manifest.name)
+        throw Error('English README title does not match manifest name');
+    if (title(readmeZh) !== manifest.name)
+        throw Error('Chinese README title does not match manifest name');
+    const escapedVersion = escapeRegex(v);
+    const englishReleaseLine = readmeEn.match(new RegExp(`\\*\\*New in \\[${escapedVersion}\\]\\([^)]*/releases/tag/${escapedVersion}\\):\\*\\* ([^\\n]+)`))?.[1];
+    if (!englishReleaseLine)
+        throw Error(`English README does not link to release ${v}`);
+    const chineseReleaseLine = readmeZh.match(new RegExp(`\\*\\*\\[${escapedVersion} 更新\\]\\([^)]*/releases/tag/${escapedVersion}\\)\\*\\*：([^\\n]+)`))?.[1];
+    if (!chineseReleaseLine)
+        throw Error(`Chinese README does not link to release ${v}`);
+    if (!englishReleaseLine.startsWith(`${summary.en.join('; ')}.`))
+        throw Error(`English README summary does not match release notes for ${v}`);
+    if (!chineseReleaseLine.startsWith(`${summary.zh.join('；')}。`))
+        throw Error(`Chinese README summary does not match release notes for ${v}`);
+    const uploadLine = workflow.split('\n').find(line => line.trim().startsWith('gh release upload '));
+    const uploaded = uploadLine?.match(/release\/[\w.*-]+/g) ?? [];
+    if (JSON.stringify(uploaded.sort()) !== JSON.stringify(files.map(name => `release/${name}`).sort()))
+        throw Error('Release workflow must publish only main.js, manifest.json, and styles.css');
     if (process.env.RELEASE_TAG && process.env.RELEASE_TAG !== v)
         throw Error('Release tag does not match metadata');
     return v;
@@ -107,7 +139,7 @@ async function main() {
     }
     const current = check(data);
     if (command === 'check') {
-        console.log(`Release ${current} metadata verified`);
+        console.log(`Release ${current} preflight passed: versions, bilingual summaries, README, and published assets`);
         return;
     }
     if (command !== 'package')

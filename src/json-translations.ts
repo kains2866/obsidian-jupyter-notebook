@@ -1,5 +1,5 @@
 export const jsonTranslations:Record<string,string>={
- '导出进度':'Export progress','正在准备导出…':'Preparing export…','正在处理单元格':'Processing cells','正在打包导出文件…':'Packaging export…','正在发起下载…':'Starting download…',
+ '导出进度':'Export progress','正在准备导出…':'Preparing export…','正在处理单元格':'Processing cells','正在打包导出文件…':'Packaging export…','正在发起下载…':'Starting download…','取消导出':'Cancel export','导出已取消。':'Export cancelled.',
  '请等待当前运行结束后再编辑 JSON。':'Wait for the current operation to finish before editing JSON.',
  '请先打开 JSON 视图。':'Open the JSON view first.',
  '复制 JSON 草稿':'Copy JSON draft',

@@ -1,0 +1,20 @@
+{
+  "0.7.2": {
+    "zh": [
+      "支持将图片嵌入 Notebook",
+      "完善 LaTeX 公式渲染",
+      "保留 YAML 注释与格式",
+      "适配 Markdown 标题层级",
+      "增加多种导出格式",
+      "支持切换到 JSON 视图"
+    ],
+    "en": [
+      "Embed images in notebooks",
+      "Improve LaTeX rendering",
+      "Preserve YAML comments and formatting",
+      "Adapt Markdown heading levels",
+      "Add more export formats",
+      "Add a JSON source view"
+    ]
+  }
+}

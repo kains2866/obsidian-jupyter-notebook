@@ -222,12 +222,30 @@ it('notifies native Outline when a Notebook loads or edits, using the live sessi
 it('导出菜单使用当前未保存快照，所有格式都不保存或执行',async()=>{
  const exports=await import('../src/notebook-export-formats');const download=vi.spyOn(exports,'downloadNotebookExport').mockImplementation(()=>{});
  try{
-  const {view,app}=setup();view.contentEl.ownerDocument={createDocumentFragment:()=>({createDiv:()=>({}),createEl:()=>({setAttribute(){},removeAttribute(){}})}),defaultView:{setTimeout}};
+  const {view,app}=setup();const paint=vi.fn(setTimeout);view.contentEl.ownerDocument={createDocumentFragment:()=>({createDiv:()=>({}),createEl:()=>({setAttribute(){},removeAttribute(){},addEventListener(){}})}),defaultView:{setTimeout:paint}};
   view.session.change(editCell(view.session.notebook,0,{source:'unsaved export'}));const before=view.session.notebook;
   await view.exportNotebook('ipynb');expect(download).toHaveBeenLastCalledWith(expect.stringContaining('unsaved export'),'application/x-ipynb+json','测试.ipynb',expect.anything());
   await view.exportNotebook('python');expect(download).toHaveBeenLastCalledWith(expect.stringContaining('# %%\nunsaved export'),'text/x-python','测试.py',expect.anything());
   await view.exportNotebook('markdown');expect(download).toHaveBeenLastCalledWith(expect.stringContaining('unsaved export'),'text/markdown','测试.md',expect.anything());
-  expect(view.session.notebook).toBe(before);expect(view.session.dirty).toBe(true);expect(app.vault.process).not.toHaveBeenCalled();expect(app.vault.create).not.toHaveBeenCalled();
+  expect(view.session.notebook).toBe(before);expect(view.session.dirty).toBe(true);expect(app.vault.process).not.toHaveBeenCalled();expect(app.vault.create).not.toHaveBeenCalled();expect(paint).not.toHaveBeenCalled();
+ }finally{download.mockRestore()}
+});
+it('导出进度上的取消按钮会在单元格间中止任务且不下载文件',async()=>{
+ const exports=await import('../src/notebook-export-formats');const download=vi.spyOn(exports,'downloadNotebookExport').mockImplementation(()=>{});
+ try{
+  const {view}=setup();view.session.change(editCell(view.session.notebook,0,{source:'x'.repeat(1024*1024)}));view.session.change(insertCell(view.session.notebook,1,{id:'two',cell_type:'raw',source:'second',metadata:{}}));let cancelClick=()=>{};let paints=0;
+  const element=(tag:string)=>({tag,setAttribute(){},removeAttribute(){},addEventListener(_name:string,callback:()=>void){if(tag==='button')cancelClick=callback}});
+  view.contentEl.ownerDocument={createDocumentFragment:()=>({createDiv:()=>element('div'),createEl:(tag:string)=>element(tag)}),defaultView:{setTimeout(callback:()=>void){return setTimeout(()=>{if(++paints===2)cancelClick();callback()},0)}}};
+  await view.exportNotebook('html');expect(paints).toBe(2);expect(download).not.toHaveBeenCalled();expect(view.exportTask.busy).toBe(false);
+ }finally{download.mockRestore()}
+});
+it('小型 Notebook 引用大型 Vault 图片时动态显示导出进度',async()=>{
+ const exports=await import('../src/notebook-export-formats');const download=vi.spyOn(exports,'downloadNotebookExport').mockImplementation(()=>{});
+ try{
+  const {view,app}=setup();view.session.change(editCell(view.session.notebook,0,{cell_type:'markdown',source:'![chart](chart.png)'}));app.metadataCache={getFirstLinkpathDest:()=>({extension:'png'})};app.vault.readBinary=vi.fn(async()=>new Uint8Array(1024*1024).buffer);
+  let progressCreated=false;const node=(tag:string)=>({tag,setAttribute(){},removeAttribute(){},addEventListener(){}});
+  view.contentEl.ownerDocument={createDocumentFragment:()=>({createDiv:()=>node('div'),createEl:(tag:string)=>{if(tag==='progress')progressCreated=true;return node(tag)}}),defaultView:{setTimeout(callback:()=>void){callback();return 0}}};
+  await view.exportNotebook('markdown');expect(app.vault.readBinary).toHaveBeenCalled();expect(progressCreated).toBe(true);expect(download).toHaveBeenCalledOnce();
  }finally{download.mockRestore()}
 });
 

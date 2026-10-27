@@ -1,8 +1,9 @@
 import {ExportTask} from './export-task';
+import {shouldShowExportProgress} from './export-progress';
 import {NotebookJsonSource} from './notebook-json';
 import {renderMath,finishRenderMath} from 'obsidian';
 import {exportNotebookIpynb,exportNotebookPython,exportNotebookMarkdown,packageMarkdownExport,downloadNotebookExport,type NotebookExportFormat} from './notebook-export-formats';
-import {createExportHtmlSanitizer,exportNotebookHtml,exportRasterDataUri,isExportLocalImage,type ExportImage} from './notebook-export';
+import {createExportHtmlSanitizer,exportNotebookHtml,exportRasterDataUri,isExportLocalImage,throwIfExportAborted,type ExportImage} from './notebook-export';
 import {decodeNotebookAttachment} from './notebook-attachments';
 import {bindNotebookAttachments,sanitizeNotebookSvg,type AttachmentError} from './notebook-attachments';
 import {resolveNotebookNavigation} from './notebook-navigation';
@@ -160,20 +161,22 @@ export class NotebookView extends FileView{
   try{if(jsonSource===undefined)await recovery.write(serializeNotebook(notebook),this.recoveryBaseline);else await recovery.write(serializeNotebook(notebook),this.recoveryBaseline,jsonSource);if(this.recovery===recovery&&this.session===session){this.recoveryNotebook=notebook;this.recoveryJsonSource=jsonSource}}catch(error){this.recoveryError(error);if(requireRaw)throw error}
  }
  private async exportNotebook(format:NotebookExportFormat):Promise<void>{
-  await this.exportTask.run(async()=>{
+  await this.exportTask.run(async signal=>{
   this.applyJsonSource();
   const session=this.session,file=this.file;if(this.disposed||!session||!file)return;
   // Session updates replace notebook objects. Capture once so asynchronous image reads cannot mix revisions.
   const snapshot=session.notebook,doc=this.contentEl.ownerDocument;
-  const fragment=doc.createDocumentFragment(),label=fragment.createDiv();
-  const progress=fragment.createEl('progress');progress.max=1;
-  progress.setAttribute('aria-label',this.t('导出进度'));
-  const notice=new Notice(fragment,0);
+  let progressVisible=false,externalImageBytes=0,notice:Notice|undefined,label:HTMLElement|undefined,progress:HTMLProgressElement|undefined;
+  const showProgress=()=>{if(progressVisible)return;progressVisible=true;const fragment=doc.createDocumentFragment();label=fragment.createDiv();progress=fragment.createEl('progress');progress.max=1;progress.setAttribute('aria-label',this.t('导出进度'));const cancel=fragment.createEl('button',{text:this.t('取消导出')});cancel.addEventListener('click',()=>this.exportTask.cancel());notice=new Notice(fragment,0)};
+  if(shouldShowExportProgress(snapshot))showProgress();
   const update=async(message:string,completed?:number,total?:number)=>{
+   throwIfExportAborted(signal);
+   if(!progressVisible||!label||!progress)return;
    label.textContent=message;
    if(completed===undefined)progress.removeAttribute('value');else progress.value=total?completed/total:1;
    // Yield a task so the renderer can paint before processing the next batch.
    await new Promise<void>(resolve=>doc.defaultView!.setTimeout(resolve,0));
+   throwIfExportAborted(signal);
   };
   this.editor?.setExportBusy(true);
   try{
@@ -187,13 +190,14 @@ export class NotebookView extends FileView{
    const mime:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml'};
    const type=mime[image.extension.toLowerCase()];if(!type)return;
    const bytes=new Uint8Array(await this.app.vault.readBinary(image));
+   externalImageBytes+=bytes.byteLength;if(!progressVisible&&shouldShowExportProgress(snapshot,externalImageBytes))showProgress();
    return type==='image/svg+xml'?{svg:sanitizeNotebookSvg(new TextDecoder('utf-8',{fatal:true}).decode(bytes),sanitizeHTMLToDom)}:exportRasterDataUri(type,bytes);
   };
-  const options={title:file.basename,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:(text:string)=>this.t(text),onProgress:async(done:number,total:number)=>{if(done===total||done%10===0)await update(this.t('正在处理单元格')+` ${done}/${total}`,done,total)}};
+  const options={title:file.basename,signal,resolveImage,sanitizeHtml:createExportHtmlSanitizer(doc,sanitizeHTMLToDom,{resolveImage}),translate:(text:string)=>this.t(text),onProgress:async(done:number,total:number)=>update(this.t('正在处理单元格')+` ${done}/${total}`,done,total)};
   let content:string|Uint8Array,mime:string,extension:string;
-  if(format==='ipynb'){content=exportNotebookIpynb(snapshot);mime='application/x-ipynb+json';extension='ipynb'}
-  else if(format==='python'){content=exportNotebookPython(snapshot);mime='text/x-python';extension='py'}
-  else if(format==='markdown'){const result=await exportNotebookMarkdown(snapshot,options);await update(this.t('正在打包导出文件…'));({content,mime,extension}=packageMarkdownExport(result,file.basename))}
+  if(format==='ipynb'){content=await exportNotebookIpynb(snapshot,options);mime='application/x-ipynb+json';extension='ipynb'}
+  else if(format==='python'){content=await exportNotebookPython(snapshot,options);mime='text/x-python';extension='py'}
+  else if(format==='markdown'){const result=await exportNotebookMarkdown(snapshot,options);await update(this.t('正在打包导出文件…'));({content,mime,extension}=await packageMarkdownExport(result,file.basename,{signal,onProgress:progressVisible?(done,total)=>update(this.t('正在打包导出文件…'),done,total):undefined}))}
   else{content=await exportNotebookHtml(snapshot,options);mime='text/html';extension='html'}
   if(this.disposed||this.session!==session||this.file!==file)return;
   // Browsers may prompt or cancel; initiating a download is not evidence of a saved filesystem path.
@@ -201,7 +205,8 @@ export class NotebookView extends FileView{
   if(this.disposed||this.session!==session||this.file!==file)return;
   downloadNotebookExport(content,mime,file.basename+'.'+extension,doc);
   if(format==='python')new Notice(this.t('Python 导出保留 IPython 魔法命令，运行时可能需要 Jupyter。'));
-  }finally{notice.hide();this.editor?.setExportBusy(false)}
+  }catch(error){if(signal.aborted)new Notice(this.t('导出已取消。'));else throw error}
+  finally{notice?.hide();this.editor?.setExportBusy(false)}
   });
  }
  private async saveOutput(content:string,mime:string,filename:string):Promise<void>{

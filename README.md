@@ -23,7 +23,7 @@
 - **A complete local workflow:** Python environments, package management, interactive input, execution timing, and rich outputs.
 - **A standard file you can keep using elsewhere:** open the same `.ipynb` in Jupyter or VS Code. Properties stay in a Markdown YAML cell; no companion Markdown files are created.
 
-**New in [0.7.2](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.2):** Embed images in notebooks; Improve LaTeX rendering; Preserve YAML comments and formatting; Adapt Markdown heading levels; Add more export formats; Add a JSON source view. See the [changelog](CHANGELOG.md) for details.
+**New in [0.7.3](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.3):** Show release notes after a plugin update; Show progress and allow cancellation for large exports; Unify environment logs and combine environment checks and repairs; Group installed dependencies and navigate to related packages; Check versions, bilingual documentation, and release assets before publishing; Improve environment creation tests and update notice reliability. See the [changelog](CHANGELOG.md) for details.
 
 ## Documentation
 

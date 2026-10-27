@@ -1,4 +1,22 @@
 {
+  "0.7.3": {
+    "zh": [
+      "插件更新后显示本版本更新摘要",
+      "大文件导出显示进度并支持取消",
+      "统一环境操作日志，合并环境检查与修复入口",
+      "已安装依赖分组显示并支持跳转到关联依赖",
+      "发布前校验版本、双语说明与发行文件",
+      "提升环境创建并发测试及更新摘要的稳定性"
+    ],
+    "en": [
+      "Show release notes after a plugin update",
+      "Show progress and allow cancellation for large exports",
+      "Unify environment logs and combine environment checks and repairs",
+      "Group installed dependencies and navigate to related packages",
+      "Check versions, bilingual documentation, and release assets before publishing",
+      "Improve environment creation tests and update notice reliability"
+    ]
+  },
   "0.7.2": {
     "zh": [
       "支持将图片嵌入 Notebook",

@@ -11,6 +11,7 @@ import {syncedEnvironmentSettings} from './environment-config';
 import {normalizePreferences} from './preferences';
 import {createTranslator,type Translator} from './i18n';
 import {belongsToEnvironmentDirectory,type Environment} from './environments';
+import {UpdateNoticeModal} from './update-notice-modal';
 export default class NotebookPlugin extends Plugin{
  settings:NotebookSettings={...DEFAULT_SETTINGS,outputOptions:{...DEFAULT_SETTINGS.outputOptions}};
  notebookMetadata?:NotebookMetadataBridge;
@@ -19,11 +20,15 @@ export default class NotebookPlugin extends Plugin{
  private creationQueue:Promise<void>=Promise.resolve();
  private recoveryCleanup?:ReturnType<typeof cleanupRecoveryDrafts>;
  private persistedRetentionDays=7;
+ private lastSeenVersion?:string;
+ private pendingUpdateVersion?:string;
  private persistedLocal={bridgePython:'',kernelPython:''};
  deviceId="";
  async onload():Promise<void>{
   const raw:unknown=await this.loadData();
   const stored=raw&&typeof raw==='object'&&!Array.isArray(raw)?raw as Record<string,unknown>:undefined;
+  this.lastSeenVersion=typeof stored?.lastSeenVersion==='string'?stored.lastSeenVersion:undefined;
+  if(!stored)this.lastSeenVersion=this.manifest.version;
   const vaultId=typeof stored?.vaultId==='string'&&/^[a-zA-Z0-9_-]+$/.test(stored.vaultId)?stored.vaultId:crypto.randomUUID();
   this.settings={...DEFAULT_SETTINGS,...normalizePreferences(stored),vaultId};
   if(!Platform.isMobile){
@@ -42,10 +47,13 @@ export default class NotebookPlugin extends Plugin{
      if(!bridge.missing.length&&!kernel.missing.length)this.settings={...this.settings,bridgePython:stored.bridgePython,kernelPython:stored.kernelPython};
     }catch{new Notice(this.getTranslator()('原环境在此电脑不可用，请选择本机 Python 或创建仓库环境。'))}
    }else this.settings={...this.settings,...local};
-   if(localReadFailed)await this.saveData(syncedEnvironmentSettings(this.settings));else await this.saveSettings();
-  }else await this.saveData(syncedEnvironmentSettings(this.settings));
+   if(localReadFailed)await this.saveData(this.pluginData());else await this.saveSettings();
+  }else await this.saveData(this.pluginData());
+  if(stored&&!this.lastSeenVersion)this.pendingUpdateVersion=this.manifest.version;
+  else if(this.lastSeenVersion&&compareVersions(this.manifest.version,this.lastSeenVersion)>0)this.pendingUpdateVersion=this.manifest.version;
   this.registerView(NOTEBOOK_VIEW,leaf=>new NotebookView(leaf,this));
   this.registerExtensions(['ipynb'],NOTEBOOK_VIEW);
+  if(this.pendingUpdateVersion)this.app.workspace.onLayoutReady(()=>this.showUpdateNotice());
   this.notebookMetadata=new NotebookMetadataBridge(this,message=>new Notice(this.getTranslator()(message),10000));this.notebookMetadata.start();
   if(!Platform.isMobile)new NotebookOutlineBridge(this,path=>this.notebookMetadata?.get(path),{source:view=>view instanceof NotebookView?view.getOutlineNotebook():undefined,parse:(notebook,previous)=>this.notebookMetadata?.metadataForNotebook(notebook,previous)??Promise.resolve(undefined)}).start();
   new NotebookDataviewBridge(this,message=>new Notice(this.getTranslator()(message),10000)).start();
@@ -65,10 +73,10 @@ export default class NotebookPlugin extends Plugin{
   const nextLocal={bridgePython:normalized.bridgePython,kernelPython:normalized.kernelPython};const previousLocal=this.persistedLocal;
   if(!Platform.isMobile){
    const {writeLocalEnvironmentSettings}=await import('./environment-manager');await writeLocalEnvironmentSettings(normalized.vaultId,nextLocal);
-   try{await this.saveData(syncedEnvironmentSettings(normalized))}
+   try{await this.saveData(this.pluginData(normalized))}
    catch(error){if(preserveLocalOnSyncFailure){this.persistedLocal=nextLocal;throw error}try{await writeLocalEnvironmentSettings(normalized.vaultId,previousLocal)}catch(rollbackError){throw new Error(this.getTranslator()('同步设置保存失败，本机配置恢复也失败，请重新选择默认环境。{error}',{error:String(rollbackError)}))}throw error}
    this.persistedLocal=nextLocal;
-  }else await this.saveData(syncedEnvironmentSettings(normalized));
+  }else await this.saveData(this.pluginData(normalized));
   if(normalized.recoveryRetentionDays!==this.persistedRetentionDays){this.persistedRetentionDays=normalized.recoveryRetentionDays;await this.cleanRecoveryCache(false)}
  }
  private recoveryDirectory():string|undefined{const root=this.vaultRoot();return !Platform.isMobile&&root&&this.manifest?.id&&this.deviceId?recoveryCacheDirectory(root,this.manifest.id,this.deviceId):undefined}
@@ -82,6 +90,14 @@ export default class NotebookPlugin extends Plugin{
    if(manual)new Notice(this.getTranslator()('已清理 {count} 个过期缓存文件，释放 {size} MiB。',{count:result.removed,size:(result.bytes/1048576).toFixed(2)}));
    if(result.errors.length)new Notice(this.getTranslator()('部分恢复缓存无法清理，请检查目录权限后重试。'),10000);
   }catch(error){new Notice(this.getTranslator()('恢复缓存清理失败：{error}',{error:this.getTranslator()(error instanceof Error?error.message:String(error))}),10000)}
+ }
+ private pluginData(settings=this.settings):Record<string,unknown>{return {...syncedEnvironmentSettings(settings),...(this.lastSeenVersion?{lastSeenVersion:this.lastSeenVersion}:{})}}
+ private showUpdateNotice():void{
+  const version=this.pendingUpdateVersion;if(!version)return;this.pendingUpdateVersion=undefined;
+  new UpdateNoticeModal(this.app,version,this.getTranslator(),()=>{
+   this.lastSeenVersion=version;
+   void this.saveData(this.pluginData()).catch(error=>new Notice(this.getTranslator()('更新记录已显示，但已读状态保存失败：{error}',{error:this.getTranslator()(String(error))}),10000));
+  }).open();
  }
  getTranslator():Translator{return createTranslator(this.settings.language,typeof getLanguage==='function'?getLanguage():'en')}
  onPreferencesChanged():void{this.refreshLanguageCommands();for(const view of this.notebookViews())view.refreshPreferences()}
@@ -142,4 +158,11 @@ export default class NotebookPlugin extends Plugin{
   try{await this.app.workspace.getLeaf('tab').setViewState({type:NOTEBOOK_VIEW,state:{file:file.path},active:true})}
   catch(error){new Notice(this.getTranslator()('Notebook 已创建于 {path}，但打开失败。请从文件列表重新打开。{error}',{path:file.path,error:this.getTranslator()(String(error))}),10000)}
  }
+}
+
+function compareVersions(left:string,right:string):number{
+ const parse=(value:string)=>value.split('.').map(part=>Number.parseInt(part,10));
+ const a=parse(left),b=parse(right);if(a.length!==3||b.length!==3||[...a,...b].some(value=>!Number.isFinite(value)))return 0;
+ for(let index=0;index<3;index++){const difference=(a[index]??0)-(b[index]??0);if(difference)return difference}
+ return 0;
 }

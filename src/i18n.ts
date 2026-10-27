@@ -9,6 +9,7 @@ import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
+ '更新内容':'What’s new','更新内容 · {version}':'What’s new · {version}','查看完整更新记录':'View full changelog','知道了':'Got it','此版本的更新摘要暂不可用。':'A summary for this version is not available yet.',
  'Notebook 链接已写入，但部分视图刷新失败；已更新保存基线，请重新打开视图。':'Notebook links were saved, but some views could not refresh. Save baselines were updated; reopen those views.',
  'Obsidian 链接更新格式不兼容，Notebook 原文件未修改。':'The Obsidian link update format is incompatible. The Notebook was not changed.',
  'Notebook 链接索引已失效，请重新索引后重试重命名。':'The Notebook link index is stale. Reindex it before retrying the rename.',

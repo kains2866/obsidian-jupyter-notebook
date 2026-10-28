@@ -5,12 +5,18 @@ import {NotebookPropertiesEditor} from '../src/native-properties';
 function node():any{return {nodeType:1,children:[],inert:false,textContent:'',classList:{add:vi.fn()},append(...children:any[]){this.children.push(...children)},replaceChildren(...children:any[]){this.children=children},remove:vi.fn(),createEl(tag:string,options:any={}){const child=node();child.tag=tag;child.textContent=options.text??'';this.children.push(child);return child}}}
 function setup(fail=false){
  let native:any;const release=vi.fn();const file={path:'demo.ipynb'} as TFile;const hooks={getFile:()=>file,change:vi.fn(),undo:vi.fn(),redo:vi.fn(),focus:vi.fn(),error:vi.fn(),translate:createTranslator('zh')};
- class Native{containerEl=node();properties:any;constructor(_app:unknown,public owner:any){native=this;if(fail)throw new Error('unsupported')}load(){}unload(){release()}synchronize(p:any){this.properties=p}serialize(){return this.properties}}
+ const heading=node(),addLabel=node();
+ class Native{containerEl=node();properties:any;constructor(_app:unknown,public owner:any){native=this;this.containerEl.querySelector=(selector:string)=>selector==='.metadata-properties-title'?heading:selector==='.metadata-add-button .text-button-label'?addLabel:null;if(fail)throw new Error('unsupported')}load(){}unload(){release()}synchronize(p:any){this.properties=p}serialize(){return this.properties}}
  vi.spyOn(Native.prototype,'synchronize');
  const app:any={workspace:{getLeavesOfType:()=>[{view:{metadataEditor:{constructor:Native}}}]}};
  const parent:any={addChild:vi.fn(),removeChild:vi.fn()};const host=node();const controller=new NotebookPropertiesEditor(app,{} as any,parent,host,hooks);
- return {controller,hooks,app,parent,host,file,get native(){return native},release};
+ return {controller,hooks,app,parent,host,file,heading,addLabel,get native(){return native},release};
 }
+it('localizes native properties heading and add label without changing user properties',()=>{
+ const s=setup();s.hooks.translate=createTranslator('en');const properties={'中文属性':'中文值'};s.controller.update(properties);
+ expect(s.heading.textContent).toBe('Properties');expect(s.addLabel.textContent).toBe('Add property');expect(s.native.properties).toEqual(properties);
+ const zh=setup();zh.hooks.translate=createTranslator('zh');zh.controller.update({title:'Example'});expect(zh.heading.textContent).toBe('笔记属性');expect(zh.addLabel.textContent).toBe('添加属性');
+});
 it('mounts the native component, clones properties and routes saves and history through the owner',()=>{
  const s=setup();const original={title:'Demo',tags:['Python']};s.controller.update(original);expect(s.host.children).toContain(s.native.containerEl);expect(s.parent.addChild).toHaveBeenCalledWith(s.native);expect(s.native.properties).toEqual(original);expect(s.native.properties).not.toBe(original);s.native.properties.tags.push('New');expect(original.tags).toEqual(['Python']);
  s.native.owner.saveFrontmatter({title:'Changed'});expect(s.hooks.change).toHaveBeenCalledWith({title:'Changed'});s.native.owner.undo();s.native.owner.redo();expect(s.hooks.undo).toHaveBeenCalled();expect(s.hooks.redo).toHaveBeenCalled();expect(s.native.owner.getFile()).toBe(s.file);

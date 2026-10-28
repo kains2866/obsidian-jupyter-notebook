@@ -9,6 +9,7 @@ import {outputTranslations} from './output-translations';
 export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
+ '笔记属性':'Properties','添加属性':'Add property',
  '更新记录已显示，但已读状态保存失败：{error}':'The update summary was shown, but its read status could not be saved: {error}',
  '支持将图片嵌入 Notebook':'Embed images in notebooks','完善 LaTeX 公式渲染':'Improve LaTeX rendering','保留 YAML 注释与格式':'Preserve YAML comments and formatting','适配 Markdown 标题层级':'Adapt Markdown heading levels','增加多种导出格式':'Add more export formats','支持切换到 JSON 视图':'Add a JSON source view',
  '更新内容':'What’s new','更新内容 · {version}':'What’s new · {version}','查看完整更新记录':'View full changelog','知道了':'Got it','此版本的更新摘要暂不可用。':'A summary for this version is not available yet.',

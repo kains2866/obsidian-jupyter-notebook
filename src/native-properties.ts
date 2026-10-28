@@ -16,6 +16,13 @@ interface PropertyHooks {
  error(error:unknown):void;translate:Translator;
 }
 function record(value:unknown):value is Record<string,unknown>{return !!value&&typeof value==='object'&&!Array.isArray(value)}
+/** Localize only the native editor's fixed labels, never property names or values. */
+function localizeNativeLabels(container:HTMLElement,translate:Translator):void{
+ const heading=container.querySelector('.metadata-properties-title');
+ const addLabel=container.querySelector('.metadata-add-button .text-button-label');
+ if(heading)heading.textContent=translate('笔记属性');
+ if(addLabel)addLabel.textContent=translate('添加属性');
+}
 function editorConstructor(view:unknown):NativeConstructor|undefined{
  if(!record(view)||!record(view.metadataEditor))return;
  const constructor:unknown=view.metadataEditor.constructor;
@@ -62,7 +69,7 @@ export class NotebookPropertiesEditor {
     }else this.failed=true;
    }catch{this.disposeNative();this.failed=true}
   }
-  if(this.native){try{this.native.synchronize(structuredClone(this.properties));this.setDisabled(this.disabled);return}catch{this.disposeNative();this.failed=true}}
+  if(this.native){try{this.native.synchronize(structuredClone(this.properties));localizeNativeLabels(this.native.containerEl,this.hooks.translate);this.setDisabled(this.disabled);return}catch{this.disposeNative();this.failed=true}}
   this.host.replaceChildren();renderPropertyPreview(this.host,this.properties,this.hooks.translate('Notebook 属性'));
   this.host.createEl('p',{cls:'ipynb-properties-hint',text:this.hooks.translate('原生属性编辑器不可用，当前仅预览属性；可在 Markdown 中编辑 YAML。')});
  }

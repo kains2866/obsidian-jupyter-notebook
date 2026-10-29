@@ -37,5 +37,6 @@ describe('notebook properties',()=>{
 });
 
 it('ignores malformed dynamic Dataview API values safely',async()=>{for(const value of [true,42,'api',[],{index:42}]){const s=setup();s.app.plugins.plugins.dataview.api=value;const warn=vi.fn();await new NotebookDataviewBridge(s.owner,warn,parser).scan();expect(warn).toHaveBeenCalledTimes(1);expect(s.index.finish).not.toHaveBeenCalled()}});
+it('waits safely for Dataview to become available and indexes when it is ready',async()=>{const s=setup();const api=s.app.plugins.plugins.dataview.api;delete s.app.plugins.plugins.dataview.api;const warn=vi.fn();const bridge=new NotebookDataviewBridge(s.owner,warn,parser);bridge.start();await bridge.scan();expect(s.index.finish).not.toHaveBeenCalled();expect(warn).not.toHaveBeenCalled();s.app.plugins.plugins.dataview.api=api;s.handlers['dataview:api-ready']();await vi.waitFor(()=>expect(s.index.pages.get(s.file.path)?.fields.get('title')).toBe('Demo'));bridge.dispose()});
 
 it('supports Luxon DateTime classes with static fromMillis',async()=>{const s=setup();class DateTime{static fromMillis(value:number){return {millis:value}}}s.app.plugins.plugins.dataview.api.luxon.DateTime=DateTime;const warn=vi.fn();await new NotebookDataviewBridge(s.owner,warn,parser).scan();expect(warn).not.toHaveBeenCalled();expect(s.index.pages.get(s.file.path).ctime).toEqual({millis:1})});

@@ -46,6 +46,7 @@ it('patches newly opened outline views and restores only its own wrappers on dis
 it('safely skips unsupported native outline versions and is idempotent',()=>{
  const owner={app:{workspace:{}}} as Plugin;const bridge=new NotebookOutlineBridge(owner,()=>undefined,{source:()=>undefined,parse:async()=>undefined});expect(()=>{bridge.start();bridge.start();bridge.dispose();bridge.dispose()}).not.toThrow();
 });
+it('leaves an immutable native outline unchanged when host methods cannot be patched',()=>{const s=fixture();const original=s.outline.getHeadings;Object.freeze(s.outline);const bridge=new NotebookOutlineBridge(s.owner,()=>s.saved,{source:s.live,parse:s.parse});expect(()=>{bridge.start();bridge.refresh();bridge.dispose()}).not.toThrow();expect(s.outline.getHeadings).toBe(original)});
 
 it('uses the active file view when Outline itself is focused in the main workspace',()=>{
  const s=fixture();s.workspace.getMostRecentLeaf=()=>s.outline.leaf as unknown as typeof s.leaf;

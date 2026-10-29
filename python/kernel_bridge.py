@@ -150,7 +150,10 @@ def main():
                         raise ValueError('Python interpreter is required')
                     manager = KernelManager()
                     manager.kernel_spec.argv = [python, '-m', 'ipykernel_launcher', '-f', '{connection_file}']
-                    manager.start_kernel(stdout=sys.stderr, stderr=sys.stderr, **({'cwd': request['cwd']} if request.get('cwd') else {}))
+                    try:
+                        manager.start_kernel(stdout=sys.stderr, stderr=sys.stderr, **({'cwd': request['cwd']} if request.get('cwd') else {}))
+                    except OSError as error:
+                        raise OSError(f'Failed to start Python interpreter {python}: {error}') from error
                     client = manager.client()
                     client.start_channels()
                     client.wait_for_ready(timeout=30)

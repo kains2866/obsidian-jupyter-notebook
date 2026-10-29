@@ -6,6 +6,7 @@ import queue
 import unittest
 import psutil
 import tempfile
+import os
 from pathlib import Path
 
 class BridgeTest(unittest.TestCase):
@@ -92,7 +93,8 @@ class BridgeTest(unittest.TestCase):
 
     def test_cwd_and_eof_during_non_interruptible_execution(self):
         self.send('execute', code='import os\nprint(os.getcwd())')
-        self.assertTrue(any(e.get('output', {}).get('text') == str(Path(self.directory.name).resolve()) + '\n' for e in self.until('result')))
+        outputs = [e.get('output', {}).get('text', '').strip() for e in self.until('result')]
+        self.assertTrue(any(os.path.normcase(os.path.realpath(value)) == os.path.normcase(os.path.realpath(self.directory.name)) for value in outputs if value))
         self.send('execute', code='import signal,time\nsignal.signal(signal.SIGINT,signal.SIG_IGN)\nprint("running",flush=True)\ntime.sleep(60)')
         self.until('output')
         children = psutil.Process(self.proc.pid).children(recursive=True)
@@ -118,10 +120,16 @@ class BridgeTest(unittest.TestCase):
         self.assertTrue(all(not process.is_running() for process in children))
 
     def test_interrupt_and_shutdown(self):
-        self.send('execute', code='import time\nprint("running", flush=True)\ntime.sleep(60)')
+        self.send('execute', code='print("running", flush=True)\nwhile True: pass')
         self.until('output')
         self.send('interrupt')
-        self.assertEqual(self.until('result')[-1]['status'], 'error')
+        while True:
+            event = self.events.get(timeout=30)
+            if event['event'] == 'error':
+                self.fail('Bridge reported an error during interrupt: ' + event.get('message', ''))
+            if event['event'] == 'result':
+                self.assertEqual(event['status'], 'error')
+                break
         children = psutil.Process(self.proc.pid).children(recursive=True)
         self.send('shutdown')
         self.until('stopped')

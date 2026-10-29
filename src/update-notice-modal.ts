@@ -5,6 +5,7 @@ import type {Translator} from './i18n';
 export class UpdateNoticeModal extends Modal {
  constructor(app:App,private version:string,private t:Translator,private onDismiss:()=>void){super(app)}
  onOpen():void{
+  this.modalEl.classList.add('ipynb-dialog');
   const notes=updateNotes[this.version],english=this.t('更新内容')==='What’s new';
   this.setTitle(this.t('更新内容 · {version}',{version:this.version}));
   const list=this.contentEl.createEl('ul');

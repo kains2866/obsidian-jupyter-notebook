@@ -42,7 +42,7 @@ export class DependencyModal extends Modal {
  private closed=false;
  constructor(app:App,private options:DependencyModalOptions,query:string){super(app);this.t=options.translate||createTranslator('zh');this.queries.search=query}
  onOpen():void{
-  this.modalEl.classList.add('ipynb-dependency-modal');this.contentEl.createEl('h2',{text:this.t('管理仓库依赖')});
+  this.modalEl.classList.add('ipynb-dialog','ipynb-dependency-modal');this.setTitle(this.t('管理仓库依赖'));
   this.contentEl.createEl('p',{text:this.t('仅管理本设备的仓库专用环境；不会修改系统 Python 或其他环境。'),cls:'ipynb-environment-description'});
   const tabs=this.contentEl.createDiv({cls:'ipynb-dependency-tabs'});tabs.setAttribute('role','tablist');
   for(const [value,label] of [['search','搜索安装'],['installed','已安装']] as const)new Setting(tabs).addButton(b=>{this.tabs.push(b);b.setButtonText(this.t(label));b.buttonEl.setAttribute('role','tab');b.buttonEl.setAttribute('aria-selected',String(this.tab===value));b.onClick(()=>{if(this.busy)return;this.tab=value;this.updateTabs();void this.read()})});

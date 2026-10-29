@@ -7,7 +7,7 @@ class Element {
  createSpan(options?:any){return this.createEl('span',options)}
  createDiv(options?:any){return this.createEl('div',options)}empty(){this.children=[]}get textContent(){return this.text}setText(text:string){this.text=text}setAttribute(k:string,v:string){this.attrs[k]=v}addEventListener(e:string,f:Function){this.events[e]=f}
 }
-vi.mock('obsidian',()=>({Modal:class{app:any;contentEl=new Element();modalEl=new Element();constructor(app:any){this.app=app;state.modal=this}open(){return (this as any).onOpen()}close(){(this as any).onClose?.()}},Notice:class{},PluginSettingTab:class{},Platform:{isMobile:false},Setting:class{
+vi.mock('obsidian',()=>({Modal:class{app:any;contentEl=new Element();modalEl=new Element();constructor(app:any){this.app=app;state.modal=this}setTitle(title:string){this.modalEl.createEl('h2',{text:title});return this}open(){return (this as any).onOpen()}close(){(this as any).onClose?.()}},Notice:class{},PluginSettingTab:class{},Platform:{isMobile:false},Setting:class{
  constructor(public element:any){}setName(){return this}setDesc(){return this}addText(cb:any){const t={value:'',setValue(v:string){this.value=v;return this},setDisabled(){return this},setPlaceholder(){return this},onChange(f:any){this.change=f;return this},change:null as any};state.texts.push(t);cb(t);return this}
  addButton(cb:any){const b={owner:this.element,text:'',disabled:false,click:null as any,setButtonText(t:string){this.text=t;return this},setCta(){return this},setDisabled(v:boolean){this.disabled=v;return this},onClick(f:any){this.click=f;return this}};state.buttons.push(b);cb(b);return this}
 }}));

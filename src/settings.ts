@@ -124,8 +124,8 @@ export class EnvironmentManagerModal extends Modal {
  private closed=false;
  constructor(app:App,private current:string,private projectDir:string|undefined,private choose:(environment:Environment)=>void|boolean|Promise<void|boolean>,private options?:EnvironmentPickerOptions){super(app);this.t=options?.translate||createTranslator('zh')}
  onOpen():void{
-  this.contentEl.empty();this.modalEl.classList.add('ipynb-environment-modal');
-  this.contentEl.createEl('h2',{text:this.t('选择 Notebook 环境')});
+  this.contentEl.empty();this.modalEl.classList.add('ipynb-dialog','ipynb-environment-modal');
+  this.setTitle(this.t('选择 Notebook 环境'));
   const toolbar=this.contentEl.createDiv({cls:'ipynb-environment-toolbar'});
   this.addButton(toolbar,'管理依赖',()=>this.dependencies());
   this.addButton(toolbar,'识别环境',()=>this.action(()=>this.initialize(true)));
@@ -277,7 +277,7 @@ export class EnvironmentManagerModal extends Modal {
   class ManualModal extends Modal {
    private path='';private status!:HTMLElement;private generation=0;
    onOpen():void{
-    this.contentEl.createEl('h3',{text:t('手动选择 Python 环境')});this.contentEl.createEl('p',{text:t('输入 Python 可执行文件或环境目录的完整路径。只验证和选择，不会修改此环境。')});
+    this.modalEl.classList.add('ipynb-dialog');this.setTitle(t('手动选择 Python 环境'));this.contentEl.createEl('p',{text:t('输入 Python 可执行文件或环境目录的完整路径。只验证和选择，不会修改此环境。')});
     new Setting(this.contentEl).setName(t('解释器或目录')).addText(input=>input.setPlaceholder('/path/to/environment').onChange(value=>{this.path=value.trim();this.generation++}));
     this.status=this.contentEl.createEl('p');this.status.setAttribute('role','status');
     new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('验证并选择')).setCta().onClick(()=>{void (async()=>{
@@ -310,7 +310,7 @@ export function confirm(app:App,title:string,message:string,t:Translator=createT
  return new Promise(resolve=>{
   class ConfirmModal extends Modal{
    private accepted=false;
-   onOpen():void{this.contentEl.createEl('h3',{text:title});this.contentEl.createEl('p',{text:message});new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('确认')).setCta().onClick(()=>{this.accepted=true;this.close()}))}
+   onOpen():void{this.modalEl.classList.add('ipynb-dialog');this.setTitle(title);this.contentEl.createEl('p',{text:message});new Setting(this.contentEl).addButton(b=>b.setButtonText(t('取消')).onClick(()=>this.close())).addButton(b=>b.setButtonText(t('确认')).setCta().onClick(()=>{this.accepted=true;this.close()}))}
    onClose():void{resolve(this.accepted)}
   }
   new ConfirmModal(app).open();

@@ -12,7 +12,7 @@ export function enableStaticMath(md:Parser):Parser{
   let end=rest.indexOf(close,open.length);
   while(end>=0&&rest[end-1]==='\\')end=rest.indexOf(close,end+close.length);
   if(end<0||!rest.slice(open.length,end).trim()||(open==='$'&&(/\s/.test(rest[end-1])||/\d/.test(rest[end+1]??'')||rest.slice(1,end).includes('\n'))))return false;
-  if(!silent){const token=state.push('ipynb_math','span',0);token.content=rest.slice(open.length,end);token.meta={display:open==='$$'||open==='\\['}}
+  if(!silent){const token=state.push('ipynb_math','span',0);token.content=rest.slice(open.length,end);token.meta={display:open==='$$'||open==='\\[',from:start,to:start+end+close.length}}
   state.pos+=end+close.length;return true;
  });
  md.block.ruler.before('fence','ipynb_math_block',(state,start,end,silent)=>{

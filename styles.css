@@ -196,3 +196,5 @@
 .ipynb-view-modes{flex-shrink:0;margin-left:4px}
 
 .ipynb-editor .ipynb-menu-trigger{font-family:var(--font-interface);font-size:var(--font-ui-small);font-weight:400;line-height:1.4}
+
+.ipynb-math-edit-preview { padding: 8px 12px; max-width: min(80vw, 600px); max-height: 35vh; overflow: auto; background: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); box-shadow: var(--shadow-s); color: var(--text-normal); }

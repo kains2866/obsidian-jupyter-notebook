@@ -1,14 +1,26 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-28
-version: "0.7.3"
+updated: 2026-10-29
+version: "0.7.4"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.7.4] - 2026-10-29
+
+- Markdown 编辑时就近预览光标所在的 LaTeX 公式，移到普通文字时自动隐藏
+- 修复公式引擎加载与预览容器创建问题
+- 修复原生 Properties 面板的中英文适配
+- 增加 Windows、Linux、macOS 跨平台检查及原生接口兼容性回归测试
+
+- Preview the LaTeX formula at the cursor while editing Markdown and hide it when moving to plain text
+- Fix math engine initialization and preview container creation
+- Localize native Properties labels in Chinese and English
+- Add Windows, Linux, and macOS checks and native interface compatibility regression tests
 
 ## [0.7.3] - 2026-10-28
 

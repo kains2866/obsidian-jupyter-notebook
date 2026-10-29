@@ -1,4 +1,5 @@
 import {bindMenuDismiss} from './menu-dismiss';
+import {mathPreviewExtension} from './math-preview-extension';
 import {NotebookJsonEditor} from './notebook-json-editor';
 import type {NotebookJsonSource} from './notebook-json';
 import type {NotebookExportFormat} from './notebook-export-formats';
@@ -257,7 +258,7 @@ export class NotebookEditor {
     node.classList.add('ipynb-editable-cell');const host=this.el('div','ipynb-code',body);
     const editor=new EditorView({parent:host,state:this.cachedState(index,sourceText(cell))??EditorState.create({doc:sourceText(cell),extensions:[
      lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),bracketMatching(),wordHighlights,history(),syntaxHighlighting(semanticHighlight,{fallback:true}),EditorState.readOnly.of(!!this.actions.readOnly),EditorView.editable.of(!this.actions.readOnly),
-     ...(cell.cell_type==='code'?[python()]:cell.cell_type==='markdown'?[markdown(),attachmentHistory]:[]),
+     ...(cell.cell_type==='code'?[python()]:cell.cell_type==='markdown'?[markdown(),attachmentHistory,mathPreviewExtension()]:[]),
      keymap.of([{key:'Shift-Enter',run:()=>{if(this.actions.readOnly)return false;void this.perform(async()=>{if(cell.cell_type==='code')await this.actions.run(index);else{this.preview.add(this.cellIdentity(this.session.notebook.cells[index]));this.remountCell(index)}if(cell.cell_type==='code')this.focusCell(index+1)});return true}},indentWithTab,...defaultKeymap,...historyKeymap]),
      EditorView.lineWrapping,
      EditorView.updateListener.of(update=>{const attachment=update.transactions.flatMap(transaction=>transaction.effects).filter(effect=>effect.is(attachmentEdit)).at(-1);if((update.docChanged||attachment)&&!this.syncingSource)this.session.change(editCell(this.session.notebook,index,{source:update.state.doc.toString(),...(attachment?{attachments:attachment.value.after}:{})}))}),

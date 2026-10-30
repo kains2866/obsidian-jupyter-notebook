@@ -185,7 +185,7 @@
 .ipynb-editor .ipynb-cell-list[hidden],.ipynb-editor .ipynb-notebook-properties[hidden]{display:none!important}
 .ipynb-json-panel{padding:12px 0;min-height:300px}
 .ipynb-json-tools{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.ipynb-json-source .cm-editor{border:1px solid var(--background-modifier-border);border-radius:var(--radius-s);min-height:300px}
+.ipynb-json-source .cm-editor{font-size:var(--code-size);border:1px solid var(--background-modifier-border);border-radius:var(--radius-s);min-height:300px}
 .ipynb-json-source .cm-scroller{overflow:auto;max-height:calc(100vh - 210px)}
 .ipynb-json-source .cm-content{padding:12px 0}
 

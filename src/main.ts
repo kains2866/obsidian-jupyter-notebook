@@ -117,7 +117,8 @@ export default class NotebookPlugin extends Plugin{
   if(this.ribbon){this.ribbon.setAttribute('aria-label',create);setTooltip(this.ribbon,create)}
  }
  getNotebookRenameSessions(path:string):import('./session').NotebookSession[]{return this.notebookViews().filter(view=>view.file?.path===path).flatMap(view=>{const session=view.getLinkRenameSession();return session?[session]:[]})}
- private notebookViews():NotebookView[]{return this.app.workspace.getLeavesOfType(NOTEBOOK_VIEW).map(leaf=>leaf.view as NotebookView)}
+ // Deferred leaves contain Obsidian placeholders, not NotebookView methods or running kernels.
+ private notebookViews():NotebookView[]{return this.app.workspace.getLeavesOfType(NOTEBOOK_VIEW).filter(leaf=>!leaf.isDeferred).map(leaf=>leaf.view as NotebookView)}
  async selectDefaultEnvironment(environment:Environment,managed=false):Promise<void|boolean>{
   if(this.environmentRemovalActive)throw new Error(this.getTranslator()('仓库环境正在卸载，请稍后重试。'));
   const {EnvironmentManager}=await import('./environment-manager');const manager=new EnvironmentManager();

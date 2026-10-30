@@ -23,7 +23,7 @@
 - **A complete local workflow:** Python environments, package management, interactive input, execution timing, and rich outputs.
 - **A standard file you can keep using elsewhere:** open the same `.ipynb` in Jupyter or VS Code. Properties stay in a Markdown YAML cell; no companion Markdown files are created.
 
-**New in [0.7.5](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.5):** Find text across Notebook cells with visible match highlighting and Obsidian native find commands and hotkey settings; Keep execution status stable while running and add a theme-aware code background enabled by default, with corrected rounded borders; Use consistent code font sizes in JSON and Notebook views; Refine modal close buttons, borders, and scrolling layouts; Fix AbortSignal type errors during environment downloads while preserving cancellation and timeouts; Improve recovery and retries after failed or canceled installations, with fallback termination of Windows installer processes. See the [changelog](CHANGELOG.md) for details.
+**New in [0.7.6](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.6):** Fix environment installation, removal, and settings refresh errors caused by deferred Notebook tabs; Stop pending installation, repair, and removal when the environment window closes during confirmation or preparation, and release operation locks; Prevent environment selection or dependency manager opening after the environment window has closed. See the [changelog](CHANGELOG.md) for details.
 
 ## Documentation
 

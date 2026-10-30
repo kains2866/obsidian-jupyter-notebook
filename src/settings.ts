@@ -192,6 +192,7 @@ export class EnvironmentManagerModal extends Modal {
  }
  private async activate(environment:Environment,choose:(environment:Environment)=>void|boolean|Promise<void|boolean>):Promise<void>{
   if(!this.manager||this.closed)return;const info=await this.manager.validate(environment.python,this.requiredModules());
+  if(this.closed)return;
   if(info.missing.length)throw new Error(this.t('缺少依赖：{modules}',{modules:info.missing.join(', ')}));
   if(await choose(environment)!==false&&!this.closed){this.current=environment.python;this.status.setText(this.t('启用中：{name}',{name:translateEnvironmentName(environment.name,this.t)}))}
  }
@@ -237,13 +238,15 @@ export class EnvironmentManagerModal extends Modal {
   await this.installManaged();await this.checkEnvironment();
  }
  private async installManaged():Promise<void>{
+  if(this.closed)return;
   if(!this.vaultOptions||this.managedMode==='blocked')throw new Error(this.t('仓库环境目录不可用，请先检查目录归属。'));
   if(this.managed&&!await confirm(this.app,this.t('修复环境'),this.t('将修复本设备的仓库专用 Python 和依赖，可能重新下载或安装。Notebook 文件保留。'),this.t))return;
   const {provisionStandaloneEnvironment}=await import('./managed-runtime');
+  if(this.closed)return;
   const hooks=this.options?.createOperationHooks?.('packages')||{before:()=>this.options?.onBeforePackages?.()||Promise.resolve(),after:()=>this.options?.onAfterPackages?.()};
   this.installRetry=false;const controller=new AbortController();this.abort=controller;this.cancelContainer.hidden=false;this.installProgress.hidden=false;this.cancel.setDisabled(false);let python:string;
   try{
-   await hooks.before();python=await provisionStandaloneEnvironment(this.vaultOptions,message=>this.progress(message),controller.signal);
+   await hooks.before();if(this.closed||controller.signal.aborted)return;python=await provisionStandaloneEnvironment(this.vaultOptions,message=>this.progress(message),controller.signal);
   }catch(error){this.installRetry=true;this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();this.managedMode=this.managed?'repair':'install';this.managedDescription=this.t('需要修复');throw error}finally{try{hooks.after()}finally{this.cancel.setDisabled(true);this.cancelContainer.hidden=true;this.installProgress.hidden=true;this.abort=undefined}}
   if(this.closed)return;if(controller.signal.aborted){this.installRetry=true;this.managedMode=this.managed?'repair':'install';return}
   await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed||this.managed.python!==python)throw new Error(this.t('仓库环境需要修复。'));
@@ -251,13 +254,14 @@ export class EnvironmentManagerModal extends Modal {
 
  }
  private async uninstallManaged():Promise<void>{
-  if(!this.vaultOptions||!this.managed)return;
+  if(this.closed||!this.vaultOptions||!this.managed)return;
   const environment=this.managed;const {vaultEnvironmentDirectory}=await import('./vault-environment');const directory=vaultEnvironmentDirectory(this.vaultOptions.vaultRoot,this.vaultOptions.configDir,this.vaultOptions.deviceId);
   if(!await confirm(this.app,this.t('删除仓库专用环境'),this.t('将关闭使用此环境的内核、清除运行变量，并删除此设备的 Python 和依赖。Notebook 和依赖清单保留。目录：{path}',{path:directory}),this.t))return;
   const {removeStandaloneEnvironment}=await import('./managed-runtime');
+  if(this.closed)return;
   const hooks=this.options?.createOperationHooks?.('uninstall')||{before:()=>this.options?.onBeforeUninstall?.()||Promise.resolve(),after:()=>this.options?.onAfterUninstall?.()};
   try{
-   await hooks.before();this.progress(this.t('正在删除仓库专用环境…'));
+   await hooks.before();if(this.closed)return;this.progress(this.t('正在删除仓库专用环境…'));
    try{await removeStandaloneEnvironment(this.vaultOptions)}catch(error){
     await this.inspectManaged();if(!this.managed&&this.managedMode!=='blocked'){if(belongsToEnvironmentDirectory(this.current,environment.python))this.current='';this.catalog=this.catalog.filter(row=>!belongsToEnvironmentDirectory(row.python,environment.python));await this.options?.onUninstalled?.(environment)}throw error;
    }
@@ -267,8 +271,8 @@ export class EnvironmentManagerModal extends Modal {
  }
  private async dependencies():Promise<void>{
   if(this.busy)return;
-  await this.action(async()=>{await this.inspectManaged();if(this.managedMode!=='ready'||!this.vaultOptions){this.status.setText(this.t('请先安装仓库专用环境。'));return}
-   const {showDependencies}=await import('./dependency-modal');await showDependencies(this.app,{...this.vaultOptions,translate:this.t,onBeforePackages:this.options?.onBeforePackages,onAfterPackages:this.options?.onAfterPackages,createOperationHooks:this.options?.createOperationHooks,currentPython:this.current})});
+  await this.action(async()=>{await this.inspectManaged();if(this.closed)return;if(this.managedMode!=='ready'||!this.vaultOptions){this.status.setText(this.t('请先安装仓库专用环境。'));return}
+   const {showDependencies}=await import('./dependency-modal');if(this.closed)return;await showDependencies(this.app,{...this.vaultOptions,translate:this.t,onBeforePackages:this.options?.onBeforePackages,onAfterPackages:this.options?.onAfterPackages,createOperationHooks:this.options?.createOperationHooks,currentPython:this.current})});
  }
  private manualPath():void{
   if(this.busy)return;

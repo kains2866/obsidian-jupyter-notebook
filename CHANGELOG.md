@@ -2,13 +2,23 @@
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
 updated: 2026-10-30
-version: "0.7.5"
+version: "0.7.6"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.7.6] - 2026-10-30
+
+- 修复后台延迟加载的 Notebook 标签页导致环境安装、删除和设置刷新报错的问题
+- 环境窗口在确认或准备操作时关闭后，停止尚未开始的安装、修复与删除，并释放操作锁
+- 修复窗口关闭后仍可能选择环境或打开依赖管理界面的问题
+
+- Fix environment installation, removal, and settings refresh errors caused by deferred Notebook tabs
+- Stop pending installation, repair, and removal when the environment window closes during confirmation or preparation, and release operation locks
+- Prevent environment selection or dependency manager opening after the environment window has closed
 
 ## [0.7.5] - 2026-10-30
 

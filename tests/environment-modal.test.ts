@@ -137,3 +137,28 @@ it('failed installation releases controls without waiting for another potentiall
  await button('安装').click();await settle();
  try{expect(after).toHaveBeenCalledOnce();expect(picker.busy).toBe(false);expect(picker.cancelContainer.hidden).toBe(true);expect(state.inspect).toHaveBeenCalledTimes(reads);expect(button('重试安装').disabled).toBe(false)}finally{finish?.();await settle()}
 });
+for(const kind of ['repair','delete'] as const)it(`does not ${kind} when the environment window closes before confirmation resolves`,async()=>{
+ state.inspect.mockResolvedValue({python:'/managed/python',complete:true,info:{version:'3.12',missing:[]}});
+ const before=vi.fn(),after=vi.fn();await EnvironmentPicker.show({} as any,'/managed/python',undefined,state.choose,{...options,onBeforePackages:before,onAfterPackages:after,onBeforeUninstall:before,onAfterUninstall:after});await settle();
+ const picker=state.modal;
+ if(kind==='delete')await button('删除').click();else void picker.action(()=>picker.installManaged());
+ await settle();picker.close();await button('确认').click();await settle();
+ expect(state.provision).not.toHaveBeenCalled();expect(state.remove).not.toHaveBeenCalled();expect(before).not.toHaveBeenCalled();expect(picker.busy).toBe(false);
+});
+for(const kind of ['install','delete'] as const)it(`closing during ${kind} preparation stops before disk changes and releases the operation`,async()=>{
+ state.inspect.mockResolvedValue(kind==='delete'?{python:'/managed/python',complete:true,info:{version:'3.12',missing:[]}}:null);
+ let finish!:()=>void;const before=vi.fn(()=>new Promise<void>(resolve=>{finish=resolve})),after=vi.fn();
+ await EnvironmentPicker.show({} as any,'',undefined,state.choose,{...options,onBeforePackages:before,onAfterPackages:after,onBeforeUninstall:before,onAfterUninstall:after});await settle();const picker=state.modal;
+ await button(kind==='delete'?'删除':'安装').click();await settle();if(kind==='delete'){await button('确认').click();await settle()}
+ expect(before).toHaveBeenCalledOnce();picker.close();finish();await settle();
+ expect(state.provision).not.toHaveBeenCalled();expect(state.remove).not.toHaveBeenCalled();expect(after).toHaveBeenCalledOnce();expect(picker.busy).toBe(false);
+});
+it('does not select an environment after its validation completes in a closed window',async()=>{
+ await EnvironmentPicker.show({} as any,'',undefined,state.choose,options);await settle();const picker=state.modal;let finish!:(info:any)=>void;
+ state.validate.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));const pending=picker.activate({name:'local',python:'/local/python'},state.choose);picker.close();finish({missing:[],version:'3.12'});await pending;expect(state.choose).not.toHaveBeenCalled();
+});
+it('does not open a dependency window if the environment window closes during inspection',async()=>{
+ const {showDependencies}=await import('../src/dependency-modal');vi.mocked(showDependencies).mockClear();
+ await EnvironmentPicker.show({} as any,'',undefined,state.choose,options);await settle();const picker=state.modal;let finish!:(info:any)=>void;
+ state.inspect.mockImplementationOnce(()=>new Promise(resolve=>{finish=resolve}));const pending=picker.dependencies();await settle();picker.close();finish({python:'/managed/python',complete:true,info:{version:'3.12',missing:[]}});await pending;expect(showDependencies).not.toHaveBeenCalled();expect(picker.busy).toBe(false);
+});

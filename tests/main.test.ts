@@ -66,3 +66,20 @@ it('registers a contextual find command without conflicting default hotkeys',asy
  let active:any=null;plugin.app.workspace.getActiveViewOfType=()=>active;expect(command.checkCallback(true)).toBe(false);
  active={showSearch:vi.fn()};expect(command.checkCallback(true)).toBe(true);expect(active.showSearch).not.toHaveBeenCalled();expect(command.checkCallback(false)).toBe(true);expect(active.showSearch).toHaveBeenCalledOnce();
 });
+it('environment operations ignore deferred Notebook placeholders while guarding loaded notebooks',async()=>{
+ const plugin=new NotebookPlugin({} as any,{} as any);await plugin.onload();
+ const loaded={prepareEnvironmentRemoval:vi.fn().mockResolvedValue(true),finishEnvironmentRemoval:vi.fn(),clearRemovedEnvironment:vi.fn(),refreshPreferences:vi.fn()};
+ const deferred={getViewType:()=> 'native-ipynb'};
+ plugin.app.workspace.getLeavesOfType=()=>[{isDeferred:true,view:deferred},{isDeferred:false,view:loaded}] as any;
+ const options=plugin.getEnvironmentPickerOptions();await options.onBeforeUninstall!();expect(loaded.prepareEnvironmentRemoval).toHaveBeenCalledOnce();
+ expect(()=>options.onAfterUninstall!()).not.toThrow();expect(loaded.finishEnvironmentRemoval).toHaveBeenCalledOnce();expect(plugin.environmentRemovalActive).toBe(false);
+ await options.onUninstalled!({name:'owned',python:'/owned/bin/python'});expect(loaded.clearRemovedEnvironment).toHaveBeenCalledWith('/owned/bin/python');
+ expect(()=>plugin.onPreferencesChanged()).not.toThrow();expect(loaded.refreshPreferences).toHaveBeenCalledOnce();
+});
+it('deferred views cannot mask a real running-kernel refusal or prevent releasing other notebooks',async()=>{
+ const plugin=new NotebookPlugin({} as any,{} as any);await plugin.onload();
+ const loaded={prepareEnvironmentRemoval:vi.fn().mockResolvedValue(false),finishEnvironmentRemoval:vi.fn()};
+ plugin.app.workspace.getLeavesOfType=()=>[{isDeferred:true,view:{}},{isDeferred:false,view:loaded}] as any;
+ const options=plugin.getEnvironmentPickerOptions();await expect(options.onBeforePackages!()).rejects.toThrow('Wait for execution to finish');
+ expect(()=>options.onAfterPackages!()).not.toThrow();expect(loaded.finishEnvironmentRemoval).toHaveBeenCalledOnce();expect(plugin.environmentRemovalActive).toBe(false);
+});

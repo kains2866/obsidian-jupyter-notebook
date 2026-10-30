@@ -274,3 +274,16 @@ it('retains this execution failure in the public status when the bridge exits',a
  await expect(view.run(0)).rejects.toThrow('bridge exited');expect(view.editor.actions.lastExecution()).toBe('error');expect(view.editor.actions.executionActive()).toBe(false);
 });
 it('exposes the native current-file find entry point',()=>{const {view}=setup();view.editor={openSearch:vi.fn()};view.showSearch();expect(view.editor.openSearch).toHaveBeenCalledOnce()});
+it('unchanged code still offers dependency installation after a previously available module is uninstalled',async()=>{
+ const {view}=setup();view.session.change(editCell(view.session.notebook,0,{source:"import pandas"}));
+ const check=vi.fn();view.importChecker={check,clear:vi.fn()};
+ const showDependencyNotice=vi.fn();view.editor={showDependencyNotice};view.openDependencyManager=vi.fn(async()=>{});
+ let installed=true;view.getKernel=async()=>({execute:async(_code:string,emit:(output:any)=>void)=>{
+  if(!installed)emit({output_type:'error',ename:'ModuleNotFoundError',evalue:"No module named 'pandas'",traceback:[]});
+  return {status:installed?'ok':'error',execution_count:1};
+ }});
+ await view.run(0);expect(showDependencyNotice).not.toHaveBeenCalled();
+ installed=false;await view.run(0);
+ expect(check).not.toHaveBeenCalled();expect(showDependencyNotice).toHaveBeenCalledOnce();expect(showDependencyNotice.mock.calls[0][0]).toBe('pandas');
+ await showDependencyNotice.mock.calls[0][2]();expect(view.openDependencyManager).toHaveBeenCalledWith('pandas');
+});

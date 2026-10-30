@@ -1,14 +1,30 @@
 ---
 title: Obsidian Jupyter Notebook 更新记录
 created: 2026-10-13
-updated: 2026-10-29
-version: "0.7.4"
+updated: 2026-10-30
+version: "0.7.5"
 status: readyForReview
 scope:
   - obsidian-ipynb
 ---
 
 # 更新记录
+
+## [0.7.5] - 2026-10-30
+
+- 支持 Notebook 跨单元格查找与匹配高亮，接入 Obsidian 原生查找命令与快捷键设置
+- 稳定代码运行期间的状态提示，增加默认开启的主题代码背景设置并修复圆角边框显示
+- 统一 JSON 视图与 Notebook 的代码字号
+- 优化弹窗关闭按钮、边框与滚动布局
+- 修复环境下载时的 AbortSignal 类型错误，保留下载取消与超时处理
+- 优化安装失败和取消后的状态恢复与重试，补充 Windows 终止安装进程的兜底
+
+- Find text across Notebook cells with visible match highlighting and Obsidian native find commands and hotkey settings
+- Keep execution status stable while running and add a theme-aware code background enabled by default, with corrected rounded borders
+- Use consistent code font sizes in JSON and Notebook views
+- Refine modal close buttons, borders, and scrolling layouts
+- Fix AbortSignal type errors during environment downloads while preserving cancellation and timeouts
+- Improve recovery and retries after failed or canceled installations, with fallback termination of Windows installer processes
 
 ## [0.7.4] - 2026-10-29
 

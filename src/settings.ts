@@ -244,8 +244,8 @@ export class EnvironmentManagerModal extends Modal {
   this.installRetry=false;const controller=new AbortController();this.abort=controller;this.cancelContainer.hidden=false;this.installProgress.hidden=false;this.cancel.setDisabled(false);let python:string;
   try{
    await hooks.before();python=await provisionStandaloneEnvironment(this.vaultOptions,message=>this.progress(message),controller.signal);
-  }catch(error){this.installRetry=true;this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();await this.inspectManaged();throw error}finally{hooks.after();this.cancel.setDisabled(true);this.cancelContainer.hidden=true;this.installProgress.hidden=true;this.abort=undefined}
-  if(this.closed)return;if(controller.signal.aborted){this.installRetry=true;await this.inspectManaged();return}
+  }catch(error){this.installRetry=true;this.diagnostic=classifyEnvironmentFailure(this.managed?.python||'',error);this.renderDiagnostic();this.managedMode=this.managed?'repair':'install';this.managedDescription=this.t('需要修复');throw error}finally{try{hooks.after()}finally{this.cancel.setDisabled(true);this.cancelContainer.hidden=true;this.installProgress.hidden=true;this.abort=undefined}}
+  if(this.closed)return;if(controller.signal.aborted){this.installRetry=true;this.managedMode=this.managed?'repair':'install';return}
   await this.inspectManaged();if(this.managedMode!=='ready'||!this.managed||this.managed.python!==python)throw new Error(this.t('仓库环境需要修复。'));
   await this.activate(this.managed,this.options?.onManagedCreated||this.choose);
 

@@ -23,7 +23,7 @@
 - **在本机完成代码工作流**：选择 Python 环境、管理依赖、交互输入、查看运行耗时与丰富输出。
 - **带走文件，继续使用**：同一份标准 `.ipynb` 可在 Jupyter 或 VS Code 中打开。属性保存在 Markdown YAML 块内，不生成伴随 Markdown 文件。
 
-**[0.7.4 更新](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.4)**：Markdown 编辑时就近预览光标所在的 LaTeX 公式，移到普通文字时自动隐藏；修复公式引擎加载与预览容器创建问题；修复原生 Properties 面板的中英文适配；增加 Windows、Linux、macOS 跨平台检查及原生接口兼容性回归测试。完整变更见 [更新记录](CHANGELOG.md)。
+**[0.7.5 更新](https://github.com/kains2866/obsidian-jupyter-notebook/releases/tag/0.7.5)**：支持 Notebook 跨单元格查找与匹配高亮，接入 Obsidian 原生查找命令与快捷键设置；稳定代码运行期间的状态提示，增加默认开启的主题代码背景设置并修复圆角边框显示；统一 JSON 视图与 Notebook 的代码字号；优化弹窗关闭按钮、边框与滚动布局；修复环境下载时的 AbortSignal 类型错误，保留下载取消与超时处理；优化安装失败和取消后的状态恢复与重试，补充 Windows 终止安装进程的兜底。完整变更见 [更新记录](CHANGELOG.md)。
 
 ## 文档导航
 

@@ -17,7 +17,7 @@ try{
  await build({entryPoints:['src/vault-environment.ts'],outfile:join(root,'core.mjs'),bundle:true,format:'esm',platform:'node'});
  await build({entryPoints:['src/environment-manager.ts'],outfile:join(root,'manager.mjs'),bundle:true,format:'esm',platform:'node'});
  await build({entryPoints:['src/kernel.ts'],outfile:join(root,'kernel.mjs'),bundle:true,format:'esm',platform:'node'});
- const {provisionVaultEnvironment,inspectVaultEnvironment,getDeviceId}=await import(pathToFileURL(join(root,'core.mjs')));
+ const {provisionVaultEnvironment,inspectVaultEnvironment,removeVaultEnvironment,getDeviceId}=await import(pathToFileURL(join(root,'core.mjs')));
  const {EnvironmentManager}=await import(pathToFileURL(join(root,'manager.mjs')));
  const manager=new EnvironmentManager(async(file,args)=>exec(file,args,{timeout:120000,maxBuffer:2*1024*1024,env:{...process.env,PIP_NO_INDEX:'1',PIP_FIND_LINKS:pathToFileURL(wheels).href,PIP_DISABLE_PIP_VERSION_CHECK:'1'}}));
  const vault=join(root,'vault');await mkdir(vault);
@@ -30,5 +30,7 @@ try{
  kernel=new KernelClient(python,python,resolve('python/kernel_bridge.py'),vault);await kernel.start();
  const outputs=[];const result=await kernel.execute('print(6*7)',output=>outputs.push(output));
  assert.equal(result.status,'ok');assert.ok(outputs.some(o=>String(o.text).includes('42')));
- console.log('PASS 离线一键创建、真实依赖安装、设备归属与专用内核运行');
+ await kernel.close();kernel=undefined;await removeVaultEnvironment(opts);assert.equal(await inspectVaultEnvironment(opts,manager),null);
+ const rebuilt=await provisionVaultEnvironment(opts,manager);assert.equal(rebuilt,python);assert.equal((await inspectVaultEnvironment(opts,manager)).complete,true);
+ console.log('PASS 离线创建、真实依赖安装、内核运行、环境删除及重新安装');
 }finally{await kernel?.close();await rm(root,{recursive:true,force:true})}

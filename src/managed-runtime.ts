@@ -28,24 +28,27 @@ export interface ManagedRuntimeOptions{vaultRoot:string;configDir:string;deviceI
 export function managedRuntimeDirectory(options:ManagedRuntimeOptions):string{return join(dirname(dirname(vaultEnvironmentDirectory(options.vaultRoot,options.configDir,options.deviceId))),'ipynb-runtimes',options.deviceId)}
 const busy=new Set<string>();
 function aborted(signal?:AbortSignal){if(signal?.aborted)throw new Error('安装已取消。')}
-const run:RuntimeRunner=(file,args,options)=>new Promise((resolve,reject)=>{
- let last=0,stdout='',stderr='',failure='';let canceled=false;
+export const runRuntimeProcess:RuntimeRunner=(file,args,options)=>new Promise((resolve,reject)=>{
+ let last=0,stdout='',stderr='',failure='';let canceled=false,settled=false;
+ let hardStop:ReturnType<typeof setTimeout>|undefined;
  const child=spawn(file,args,{cwd:options.cwd,env:options.env,detached:process.platform!=='win32',stdio:['ignore','pipe','pipe'],windowsHide:true});
+ const killDirect=()=>{try{child.kill('SIGKILL')}catch{/* A close/error event still owns operation completion. */}};
  const terminate=()=>{
-  if(!child.pid)return;
-  if(process.platform==='win32')execFile('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{timeout:10000,maxBuffer:65536},()=>{});
-  else {try{process.kill(-child.pid,'SIGTERM')}catch{/* Process may already have exited. */};const pid=child.pid;const timer=setTimeout(()=>{try{process.kill(-pid,'SIGKILL')}catch{/* Process may already have exited. */}},1000);timer.unref?.()}
+  if(!child.pid||settled)return;
+  if(!hardStop){hardStop=setTimeout(()=>{if(settled)return;if(process.platform==='win32')killDirect();else try{process.kill(-child.pid!,'SIGKILL')}catch{/* Process may already have exited. */}},1000);hardStop.unref?.()}
+  if(process.platform==='win32')execFile('taskkill.exe',['/PID',String(child.pid),'/T','/F'],{timeout:10000,maxBuffer:65536,windowsHide:true},error=>{if(error&&!settled)killDirect()});
+  else try{process.kill(-child.pid,'SIGTERM')}catch{killDirect()}
  };
  const onAbort=()=>{canceled=true;terminate()};
  const timeout=setTimeout(()=>{failure='安装超时。';terminate()},15*60*1000);timeout.unref?.();
- const cleanup=()=>{clearTimeout(timeout);options.signal?.removeEventListener('abort',onAbort)};
- child.on('error',error=>{cleanup();reject(error)});
- child.on('close',code=>{cleanup();if(canceled||options.signal?.aborted)reject(new Error('安装已取消。'));else if(failure||code!==0)reject(new Error(`${failure||`进程退出 (${code})`}\n${stderr.slice(-12000)}`));else resolve({stdout,stderr})});
+ const cleanup=()=>{clearTimeout(timeout);if(hardStop)clearTimeout(hardStop);options.signal?.removeEventListener('abort',onAbort)};
+ child.on('error',error=>{if(settled)return;settled=true;cleanup();reject(error)});
+ child.on('close',code=>{if(settled)return;settled=true;cleanup();if(canceled||options.signal?.aborted)reject(new Error('安装已取消。'));else if(failure||code!==0)reject(new Error(`${failure||`进程退出 (${code})`}\n${stderr.slice(-12000)}`));else resolve({stdout,stderr})});
  options.signal?.addEventListener('abort',onAbort,{once:true});if(options.signal?.aborted)onAbort();
  child.stdout.on('data',(chunk:Buffer)=>{stdout+=chunk.toString();if(stdout.length>2*1024*1024){failure='进程输出超过安全大小。';terminate()}});
  child.stderr.on('data',(chunk:Buffer)=>{stderr=(stderr+chunk.toString()).slice(-12000);if(Date.now()-last>250){last=Date.now();options.progress?.(chunk.toString().slice(-1000).trim())}});
 });
-type ElectronNetwork={net?:{fetch:typeof fetch};remote?:{net?:{fetch:typeof fetch}}};
+type ElectronNetwork={net?:{fetch:typeof fetch};remote?:{net?:{fetch:typeof fetch};getGlobal?:(name:'AbortController')=>new()=>AbortController}};
 /** Electron networking follows release redirects without renderer CORS restrictions. */
 export function selectRuntimeFetch(electron?:ElectronNetwork):typeof fetch{
  const net=electron?.net??electron?.remote?.net;
@@ -53,12 +56,24 @@ export function selectRuntimeFetch(electron?:ElectronNetwork):typeof fetch{
  if(electron)throw new Error('Electron 下载接口不可用，请更新 Obsidian。');
  return requestAsFetch;
 }
+/** Remote fetch requires a main-realm signal; retain the relay through body streaming. */
+export function runtimeRequestSignal(electron:ElectronNetwork|undefined,signal?:AbortSignal):{signal?:AbortSignal;dispose:()=>void}{
+ if(!signal||electron?.net||!electron?.remote?.net)return {signal,dispose:()=>{}};
+ const Controller=electron.remote.getGlobal?.('AbortController');
+ if(!Controller)throw new Error('Electron 下载接口不可用，请更新 Obsidian。');
+ const controller=new Controller();const abort=()=>controller.abort();
+ signal.addEventListener('abort',abort,{once:true});if(signal.aborted)abort();
+ return {signal:controller.signal,dispose:()=>signal.removeEventListener('abort',abort)};
+}
 async function downloadBody(url:string,progress?:((message:string)=>void),signal?:AbortSignal):Promise<Buffer>{
- const transport=selectRuntimeFetch(process.versions.electron?await import('electron'):undefined);
- const response=await transport(url,{signal});if(!response.ok||!response.body)throw new Error(`下载失败：HTTP ${response.status}`);
- const total=Number(response.headers.get('content-length'))||0;const reader=response.body.getReader();const parts:Uint8Array[]=[];let received=0,last=0;
- try{while(true){aborted(signal);const next=await reader.read();if(next.done)break;received+=next.value.length;if(received>64*1024*1024)throw new Error('下载文件超过安全大小限制。');parts.push(next.value);if(Date.now()-last>250){last=Date.now();progress?.(`下载 uv：${received} 字节${total?` / ${total} 字节`:''}`)}}}finally{await reader.cancel().catch(()=>{})}
- return Buffer.concat(parts);
+ const electron=process.versions.electron?await import('electron'):undefined;
+ const transport=selectRuntimeFetch(electron),request=runtimeRequestSignal(electron,signal);
+ try{
+  const response=await transport(url,{signal:request.signal});if(!response.ok||!response.body)throw new Error(`下载失败：HTTP ${response.status}`);
+  const total=Number(response.headers.get('content-length'))||0;const reader=response.body.getReader();const parts:Uint8Array[]=[];let received=0,last=0;
+  try{while(true){aborted(signal);const next=await reader.read();if(next.done)break;received+=next.value.length;if(received>64*1024*1024)throw new Error('下载文件超过安全大小限制。');parts.push(next.value);if(Date.now()-last>250){last=Date.now();progress?.(`下载 uv：${received} 字节${total?` / ${total} 字节`:''}`)}}}finally{await reader.cancel().catch(()=>{})}
+  return Buffer.concat(parts);
+ }finally{request.dispose()}
 }
 /** The timeout includes response headers and the complete response body. */
 export async function downloadRuntimeAsset(url:string,progress?:((message:string)=>void),signal?:AbortSignal):Promise<Buffer>{
@@ -91,7 +106,7 @@ async function validateRuntimeTree(directory:string):Promise<void>{
 async function lease<T>(options:ManagedRuntimeOptions,operation:()=>Promise<T>):Promise<T>{const key=managedRuntimeDirectory({...options,vaultRoot:await realpath(options.vaultRoot)});if(busy.has(key))throw new Error('此设备环境正在安装或删除，请稍候。');busy.add(key);try{return await operation()}finally{busy.delete(key)}}
 async function ensure(options:ManagedRuntimeOptions,progress?:((message:string)=>void),signal?:AbortSignal):Promise<string>{
  aborted(signal);const asset=uvAsset();const directory=(await ownedDirectory(options,true))!;const executable=join(directory,'tools',process.platform==='win32'?'uv.exe':'uv');
- const runner=options.run??run;const env={...Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('UV_')&&!key.startsWith('PYTHON'))),UV_PYTHON_INSTALL_DIR:join(directory,'python'),UV_CACHE_DIR:join(directory,'cache'),UV_PYTHON_BIN_DIR:join(directory,'bin'),UV_NO_CONFIG:'1'};
+ const runner=options.run??runRuntimeProcess;const env={...Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('UV_')&&!key.startsWith('PYTHON'))),UV_PYTHON_INSTALL_DIR:join(directory,'python'),UV_CACHE_DIR:join(directory,'cache'),UV_PYTHON_BIN_DIR:join(directory,'bin'),UV_NO_CONFIG:'1'};
  const invoke=(file:string,args:string[])=>runner(file,args,{cwd:directory,env,signal,progress});
  let ready=false;
  try{const info=await lstat(executable);if(!info.isFile()||info.isSymbolicLink())throw new Error('uv 可执行文件不安全。');const hash=createHash('sha256').update(await readFile(executable)).digest('hex');const marker=join(directory,'tools','uv.sha256');const markerInfo=await lstat(marker);if(!markerInfo.isFile()||markerInfo.isSymbolicLink())throw new Error('uv 验证文件不是普通文件。');const expected=await readFile(marker,'utf8');ready=hash===expected;if(!ready)progress?.('uv 可执行文件校验失败，将重新下载并验证。')}catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error}
@@ -117,7 +132,7 @@ export async function ensureManagedPython(options:ManagedRuntimeOptions,progress
 export async function provisionStandaloneEnvironment(options:ManagedRuntimeOptions,progress?:((message:string)=>void),signal?:AbortSignal):Promise<string>{
  return lease(options,async()=>{
   const basePython=await ensure(options,progress,signal);aborted(signal);
-  const runner:RuntimeRunner=options.run??run;const env={...Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PYTHON')&&!key.startsWith('PIP_'))),PYTHONNOUSERSITE:'1',PIP_CONFIG_FILE:process.platform==='win32'?'NUL':'/dev/null'};
+  const runner:RuntimeRunner=options.run??runRuntimeProcess;const env={...Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('PYTHON')&&!key.startsWith('PIP_'))),PYTHONNOUSERSITE:'1',PIP_CONFIG_FILE:process.platform==='win32'?'NUL':'/dev/null'};
   const invoke=(file:string,args:string[])=>runner(file,args[0]==='-m'&&args[1]==='pip'?['-I','-m','pip','--isolated',...args.slice(2)]:['-I',...args],{cwd:options.vaultRoot,env,signal,progress});
   const manager=new EnvironmentManager(invoke);
   const python=await provisionVaultEnvironment({...options,basePython,manager,onProgress:progress});aborted(signal);

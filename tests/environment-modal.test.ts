@@ -130,3 +130,10 @@ it('offers retry after cancellation with a fresh non-aborted signal',async()=>{
  const signals:AbortSignal[]=[];let reject!:(error:Error)=>void;state.provision.mockImplementationOnce((_options:any,_progress:any,signal:AbortSignal)=>{signals.push(signal);return new Promise((_resolve,r)=>{reject=r})}).mockImplementationOnce(async(_options:any,_progress:any,signal:AbortSignal)=>{signals.push(signal);return '/managed/python'});
  await EnvironmentPicker.show({} as any,'',undefined,state.choose,options);await settle();const work=button('安装').click();await settle();await button('取消').click();reject(new Error('安装已取消。'));await work;await settle();await button('重试安装').click();await settle();expect(signals).toHaveLength(2);expect(signals[0].aborted).toBe(true);expect(signals[1].aborted).toBe(false);
 });
+it('failed installation releases controls without waiting for another potentially hung interpreter probe',async()=>{
+ const after=vi.fn();await EnvironmentPicker.show({} as any,'',undefined,state.choose,{...options,onAfterPackages:after});await settle();
+ const picker=state.modal,reads=state.inspect.mock.calls.length;let finish!:()=>void;
+ state.inspect.mockImplementation(()=>new Promise(resolve=>{finish=()=>resolve(null)}));state.provision.mockRejectedValueOnce(new Error('install failed'));
+ await button('安装').click();await settle();
+ try{expect(after).toHaveBeenCalledOnce();expect(picker.busy).toBe(false);expect(picker.cancelContainer.hidden).toBe(true);expect(state.inspect).toHaveBeenCalledTimes(reads);expect(button('重试安装').disabled).toBe(false)}finally{finish?.();await settle()}
+});

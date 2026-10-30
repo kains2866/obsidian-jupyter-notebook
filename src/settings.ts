@@ -7,8 +7,8 @@ import {belongsToEnvironmentDirectory,translateEnvironmentName,type Environment}
 import {createTranslator,type Translator,type LanguageSetting} from './i18n';
 import {DEFAULT_OUTPUT_OPTIONS,type OutputOptions} from './output-policy';
 import {probeKernelCatalog,type KernelCatalogRow} from './kernel-catalog';
-export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string;language:LanguageSetting;outputOptions:OutputOptions;recoveryRetentionDays:number}
-export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:'',language:'auto',recoveryRetentionDays:7,outputOptions:{...DEFAULT_OUTPUT_OPTIONS}};
+export interface NotebookSettings {bridgePython:string;kernelPython:string;vaultId:string;language:LanguageSetting;outputOptions:OutputOptions;recoveryRetentionDays:number;codeBackground:boolean}
+export const DEFAULT_SETTINGS:NotebookSettings={vaultId:'',bridgePython:'',kernelPython:'',language:'auto',recoveryRetentionDays:7,codeBackground:true,outputOptions:{...DEFAULT_OUTPUT_OPTIONS}};
 const OUTPUT_TOGGLES=[['collapse','折叠长输出'],['lazyImages','延迟加载图片'],['hardLimit','启用输出硬限制'],['autoDiscardOld','自动丢弃旧输出'],['releaseHistoryOnClear','清空输出时释放撤销历史']] as const;
 const OUTPUT_NUMBERS=[['warnCellMiB','单元格输出警告阈值（MiB）'],['warnNotebookMiB','Notebook 输出警告阈值（MiB）'],['collapseHeight','输出折叠高度（px）']] as const;
 const PYTHON_PATHS=[['bridgePython','桥接 Python'],['kernelPython','默认运行 Python']] as const;
@@ -25,7 +25,7 @@ export class NotebookSettingsTab extends PluginSettingTab {
   const language:SettingDefinitionItem={name:t('语言'),aliases:['language','语言'],control:{type:'dropdown',key:'language',defaultValue:'auto',options:{auto:t('跟随 Obsidian'),zh:'中文',en:'English'}}};
   const graph=this.graphGuidance();
   if(Platform.isMobile)return [language,graph,{name:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')}];
-  return [{type:'group',heading:t('Notebook 设置'),items:[language,graph,{name:t('默认内核'),desc:t('新打开的 Notebook 使用此环境；当前内核保持运行。'),aliases:['Python','kernel','内核'],render:setting=>{setting.addButton(button=>button.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}))}}]},
+  return [{type:'group',heading:t('Notebook 设置'),items:[language,graph,{name:t('代码区背景'),desc:t('使用主题背景区分代码内容和输出。'),control:{type:'toggle',key:'codeBackground',defaultValue:true}},{name:t('默认内核'),desc:t('新打开的 Notebook 使用此环境；当前内核保持运行。'),aliases:['Python','kernel','内核'],render:setting=>{setting.addButton(button=>button.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}))}}]},
    {type:'group',heading:t('输出管理'),items:[
     ...OUTPUT_TOGGLES.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'toggle' as const,key:`outputOptions.${key}`,defaultValue:Boolean(DEFAULT_OUTPUT_OPTIONS[key])}})),
     ...OUTPUT_NUMBERS.map(([key,label])=>({name:t(label),aliases:[key,'output','输出'],control:{type:'number' as const,key:`outputOptions.${key}`,defaultValue:Number(DEFAULT_OUTPUT_OPTIONS[key]),validate:(value:number)=>Number.isFinite(value)&&value>0?undefined:t('请输入大于零的有限数值。')}}))]},
@@ -44,13 +44,14 @@ export class NotebookSettingsTab extends PluginSettingTab {
  }
  private async recoveryAction(action:()=>Promise<void>,failure:string):Promise<void>{try{await action()}catch{new Notice(this.plugin.getTranslator()(failure))}}
  getControlValue(key:string):unknown{
-  if(key==='recoveryRetentionDays'||key==='language'||key==='bridgePython'||key==='kernelPython')return this.plugin.settings[key];
+  if(key==='codeBackground'||key==='recoveryRetentionDays'||key==='language'||key==='bridgePython'||key==='kernelPython')return this.plugin.settings[key];
   const outputKey=key.slice('outputOptions.'.length);
   if(key.startsWith('outputOptions.')&&isOutputKey(outputKey))return this.plugin.settings.outputOptions[outputKey];
   return undefined;
  }
  async setControlValue(key:string,value:unknown):Promise<void>{
   const settings=this.plugin.settings;
+  if(key==='codeBackground'){if(typeof value==='boolean')await this.updateSettings({...settings,codeBackground:value});return}
   if(key==='recoveryRetentionDays'){if(typeof value==='number'&&Number.isInteger(value)&&value>=1&&value<=365)await this.updateSettings({...settings,recoveryRetentionDays:value},false);return}
   if(key==='language'){
    if(value!=='auto'&&value!=='zh'&&value!=='en')return;
@@ -70,6 +71,7 @@ export class NotebookSettingsTab extends PluginSettingTab {
   const graph=this.graphGuidance();new Setting(this.containerEl).setName(graph.name).setDesc(graph.desc||'');
   if(Platform.isMobile){this.containerEl.createEl('p',{text:t('移动端仅支持查看 Notebook；本机 Python 环境管理仅支持桌面端。')});return}
   new Setting(this.containerEl).setName(t('默认内核')).setDesc(t('新打开的 Notebook 使用此环境；当前内核保持运行。')).addButton(b=>b.setButtonText(t('选择环境')).onClick(()=>{void EnvironmentPicker.show(this.app,this.plugin.settings.kernelPython,undefined,environment=>this.plugin.selectDefaultEnvironment(environment,false),{...this.plugin.getEnvironmentPickerOptions(),translate:t,onManagedCreated:environment=>this.plugin.selectDefaultEnvironment(environment,true)})}));
+  new Setting(this.containerEl).setName(t('代码区背景')).setDesc(t('使用主题背景区分代码内容和输出。')).addToggle(control=>control.setValue(this.plugin.settings.codeBackground).onChange(value=>{void this.updateSettings({...this.plugin.settings,codeBackground:value})}));
   new Setting(this.containerEl).setName(t('输出管理')).setHeading();
   const toggle=(key:keyof OutputOptions,label:string)=>new Setting(this.containerEl).setName(t(label)).addToggle(control=>control.setValue(Boolean(this.plugin.settings.outputOptions[key])).onChange(value=>{void this.updateSettings({...this.plugin.settings,outputOptions:{...this.plugin.settings.outputOptions,[key]:value}})}));
   for(const [key,label] of OUTPUT_TOGGLES)toggle(key,label);

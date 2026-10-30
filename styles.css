@@ -31,6 +31,9 @@
 .ipynb-code-cell .ipynb-code .cm-editor{min-height:max(72px,calc(var(--font-ui-small,14px)*1.5 + var(--font-ui-smaller,12px)*1.5 + 24px))}
 .ipynb-code .cm-scroller{font-family:var(--font-monospace);line-height:var(--line-height-normal)}
 .ipynb-code .cm-editor.cm-focused{outline:none}
+/* Keep opaque code backgrounds inside the cell border without clipping editor UI. */
+.ipynb-code-cell .ipynb-code,
+.ipynb-code-cell .ipynb-code > .cm-editor{border-top-left-radius:4px;border-top-right-radius:4px}
 .ipynb-code .cm-gutters{background:transparent;color:var(--text-muted);font-size:inherit;min-width:30px}
 .ipynb-code .cm-activeLine,.ipynb-code .cm-activeLineGutter{background:transparent}
 .ipynb-code .cm-focused .cm-activeLine{background:var(--background-secondary)}
@@ -198,3 +201,16 @@
 .ipynb-editor .ipynb-menu-trigger{font-family:var(--font-interface);font-size:var(--font-ui-small);font-weight:400;line-height:1.4}
 
 .ipynb-math-edit-preview { padding: 8px 12px; max-width: min(80vw, 600px); max-height: 35vh; overflow: auto; background: var(--background-primary); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); box-shadow: var(--shadow-s); color: var(--text-normal); }
+
+.ipynb-find{position:sticky;top:var(--ipynb-toolbar-height,48px);z-index:4;display:flex;align-items:center;gap:8px;padding:8px;background:var(--background-primary);border-bottom:1px solid var(--background-modifier-border);font-size:var(--font-ui-small);flex-wrap:wrap}
+.ipynb-find[hidden]{display:none}
+.ipynb-find input{flex:1;min-width:100px}
+.ipynb-find span{color:var(--text-muted);white-space:nowrap}
+
+.ipynb-code-background .ipynb-code-cell .ipynb-code,
+.ipynb-code-background .ipynb-code-cell .ipynb-code .cm-editor,
+.ipynb-code-background .ipynb-code-cell .ipynb-code .cm-gutters,
+.ipynb-code-background .ipynb-code-cell .ipynb-execution-time{background:var(--code-background,var(--background-secondary))}
+
+.ipynb-editor :is(.ipynb-search-match,.cm-searchMatch){background:var(--text-highlight-bg,rgba(255,208,0,.35));border-radius:2px;box-shadow:inset 0 -1px var(--interactive-accent)}
+.ipynb-editor :is(.ipynb-search-match-selected,.cm-searchMatch-selected){background:color-mix(in srgb,var(--interactive-accent) 30%,var(--background-primary));outline:2px solid var(--interactive-accent);outline-offset:-1px;border-radius:2px;box-shadow:none}

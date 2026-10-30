@@ -1,3 +1,7 @@
+import {notebookSearchHighlight} from './notebook-search-highlight';
+import {executionStatusText} from './execution-status';
+import {NotebookFind,type NotebookMatch} from './notebook-find';
+import {openSearchPanel,search,SearchQuery,setSearchQuery} from '@codemirror/search';
 import {bindMenuDismiss} from './menu-dismiss';
 import {mathPreviewExtension} from './math-preview-extension';
 import {NotebookJsonEditor} from './notebook-json-editor';
@@ -34,6 +38,8 @@ const semanticHighlight=HighlightStyle.define([
  {tag:[tags.typeName,tags.className],color:'var(--code-important, var(--text-normal))'},
 ]);
 export interface EditorActions {
+ codeBackground?:boolean;
+ executionActive?():boolean;
  readOnly?:boolean;
  jsonSource?:NotebookJsonSource;
  jsonBlocked?():boolean;
@@ -61,6 +67,7 @@ export interface EditorActions {
 export interface ImportStatus {modules:string[];missing:string[];optional?:string[];syntaxError?:boolean;state?:'checking'|'no-environment'|'error'}
 export interface EditorSnapshot {preview:boolean[];selections:({ranges:{anchor:number;head:number}[];main:number}|undefined)[];focused:number;selected?:number}
 export class NotebookEditor {
+ private find?:NotebookFind;
  private jsonEditor?:NotebookJsonEditor;private jsonPanel?:HTMLElement;private jsonScroll=0;private jsonFocus?:HTMLElement;
  private importStatuses:ImportStatus[]=[];
  private cellObserver?:IntersectionObserver;
@@ -105,7 +112,7 @@ export class NotebookEditor {
  constructor(private root:HTMLElement,private session:NotebookSession,private actions:EditorActions,snapshot?:EditorSnapshot){
   snapshot?.selections.forEach((selection,index)=>{const cell=session.notebook.cells[index];if(selection&&cell)this.savedSelections.set(this.cellIdentity(cell),selection)});
   this.t=actions.translate??createTranslator('zh');
-  root.classList.add('ipynb-editor');root.replaceChildren();
+  root.classList.add('ipynb-editor');root.classList.toggle('ipynb-code-background',actions.codeBackground!==false);root.replaceChildren();
   this.toolbar=this.el('div','ipynb-toolbar',root);
   if(!actions.readOnly){
   this.iconButton(this.toolbar,'运行全部','play',()=>actions.runAll(),true);
@@ -113,6 +120,7 @@ export class NotebookEditor {
   this.iconButton(this.toolbar,'中断','stop',()=>actions.interrupt());
   this.iconButton(this.toolbar,'重启内核','restart',()=>actions.restart());
   const more=this.menu(this.toolbar,'更多操作');
+  this.button(more,'查找',()=>this.openSearch());
   this.button(more,'另存副本',()=>actions.saveCopy());
   if(actions.exportNotebook){
    const exports=this.menu(more,'导出为',true);
@@ -135,12 +143,12 @@ export class NotebookEditor {
   this.list=this.el('div','ipynb-cell-list',root);
   const measureToolbar=()=>{root.style.setProperty('--ipynb-toolbar-height',`${this.toolbar.getBoundingClientRect().height||48}px`);this.enableVirtualization()};
   measureToolbar();this.toolbarObserver=new ResizeObserver(measureToolbar);this.toolbarObserver.observe(this.toolbar);this.toolbarObserver.observe(root);
-  root.addEventListener('keydown',this.onKeyDown);root.addEventListener('scroll',this.onScroll,{passive:true});root.addEventListener('focusout',this.onRecycle);root.ownerDocument.addEventListener('selectionchange',this.onRecycle);
+  root.addEventListener('keydown',this.onKeyDown,true);root.addEventListener('scroll',this.onScroll,{passive:true});root.addEventListener('focusout',this.onRecycle);root.ownerDocument.addEventListener('selectionchange',this.onRecycle);
   session.onChange=()=>this.refresh();session.notebook.cells.forEach((cell,index)=>{if(cell.cell_type==='markdown'&&(snapshot?snapshot.preview[index]:sourceText(cell).trim()))this.preview.add(this.cellIdentity(cell))});this.renderCells();if(actions.jsonSource?.active)this.showJson();if(snapshot){snapshot.selections.forEach((selection,index)=>{if(selection&&this.editors[index])this.editors[index].dispatch({selection:EditorSelection.fromJSON(this.clampSelection(selection,this.editors[index].state.doc.length))})});if(snapshot.focused>=0)this.focusCell(snapshot.focused);if(snapshot.selected!==undefined&&snapshot.selected>=0)this.selectCell(snapshot.selected)}
  }
  private sourceBlocked():boolean{return !!this.actions.readOnly||this.session.running||this.session.busy||!!this.actions.jsonBlocked?.()}
  openJson(restored?:string):void{const source=this.actions.jsonSource;if(!source)return;if(this.sourceBlocked())throw new Error(this.t('请等待当前运行结束后再编辑 JSON。'));if(source.active&&this.jsonPanel)return;source.open(restored);this.showJson();this.actions.jsonChanged?.()}
- private showJson():void{
+ private showJson():void{this.find?.close();
   const source=this.actions.jsonSource;if(!source)return;
   if(this.recycleFrame!==undefined){this.root.win.cancelAnimationFrame(this.recycleFrame);this.recycleFrame=undefined}
   this.cancelDrag();this.jsonScroll=this.root.scrollTop;this.jsonFocus=this.root.ownerDocument.activeElement as HTMLElement;
@@ -159,6 +167,19 @@ export class NotebookEditor {
  private rememberSelections():void{this.editors.forEach((editor,index)=>{const id=this.cellNodes[index]?.dataset.cellId;if(editor&&id)this.savedSelections.set(id,{ranges:editor.state.selection.ranges.map(range=>({anchor:range.anchor,head:range.head})),main:editor.state.selection.mainIndex})})}
  private clampSelection(selection:NonNullable<EditorSnapshot['selections'][number]>,length:number):NonNullable<EditorSnapshot['selections'][number]>{return {...selection,ranges:selection.ranges.map(range=>({anchor:Math.max(0,Math.min(length,range.anchor)),head:Math.max(0,Math.min(length,range.head))}))}}
  captureState():EditorSnapshot{this.rememberSelections();return {preview:this.session.notebook.cells.map(cell=>this.preview.has(this.cellIdentity(cell))),selections:this.session.notebook.cells.map(cell=>this.savedSelections.get(this.cellIdentity(cell))),focused:this.editors.findIndex(editor=>editor?.hasFocus),selected:this.cellNodes.findIndex(node=>node.dataset.cellId===this.selectedCellId)}}
+ openSearch():void{
+  if(this.jsonEditor){this.find?.close();openSearchPanel(this.jsonEditor.view);return}
+  if(!this.find){this.find=new NotebookFind(this.root,()=>this.session.notebook.cells,(match,query)=>this.revealSearchMatch(match,query),this.t,()=>this.clearSearchHighlights());this.toolbar.after(this.root.querySelector('.ipynb-find')!)}
+  this.find.open();
+ }
+ private clearSearchHighlights():void{const effects=setSearchQuery.of(new SearchQuery({search:''}));for(const editor of this.editors)editor?.dispatch({effects});for(const [index,state]of this.cachedEditorStates)this.cachedEditorStates.set(index,state.update({effects}).state)}
+ private revealSearchMatch(match:NotebookMatch,query:string):void{
+  this.clearSearchHighlights();
+  this.focusCell(match.index);const cell=this.session.notebook.cells[match.index];
+  if(cell.cell_type==='markdown'&&this.preview.has(this.cellIdentity(cell))&&!this.actions.readOnly)this.editMarkdown(match.index);
+  const editor=this.editors[match.index];if(editor)editor.dispatch({selection:{anchor:match.from,head:match.to},effects:[EditorView.scrollIntoView(match.from,{y:'center'}),setSearchQuery.of(new SearchQuery({search:query,caseSensitive:false,literal:true}))]});
+  this.cellNodes[match.index]?.scrollIntoView({block:'nearest'});
+ }
  private onScroll=()=>{if(Math.abs(this.root.scrollTop-this.expectedScroll)>1){this.captureAnchor();this.expectedScroll=this.root.scrollTop}this.scheduleRecycle()};
  private onKeyDown=(e:KeyboardEvent)=>{
   if(e.key==='Escape')this.cancelDrag();
@@ -257,7 +278,7 @@ export class NotebookEditor {
    }else{
     node.classList.add('ipynb-editable-cell');const host=this.el('div','ipynb-code',body);
     const editor=new EditorView({parent:host,state:this.cachedState(index,sourceText(cell))??EditorState.create({doc:sourceText(cell),extensions:[
-     lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),bracketMatching(),wordHighlights,history(),syntaxHighlighting(semanticHighlight,{fallback:true}),EditorState.readOnly.of(!!this.actions.readOnly),EditorView.editable.of(!this.actions.readOnly),
+     search(),notebookSearchHighlight,lineNumbers(),highlightActiveLine(),highlightActiveLineGutter(),bracketMatching(),wordHighlights,history(),syntaxHighlighting(semanticHighlight,{fallback:true}),EditorState.readOnly.of(!!this.actions.readOnly),EditorView.editable.of(!this.actions.readOnly),
      ...(cell.cell_type==='code'?[python()]:cell.cell_type==='markdown'?[markdown(),attachmentHistory,mathPreviewExtension()]:[]),
      keymap.of([{key:'Shift-Enter',run:()=>{if(this.actions.readOnly)return false;void this.perform(async()=>{if(cell.cell_type==='code')await this.actions.run(index);else{this.preview.add(this.cellIdentity(this.session.notebook.cells[index]));this.remountCell(index)}if(cell.cell_type==='code')this.focusCell(index+1)});return true}},indentWithTab,...defaultKeymap,...historyKeymap]),
      EditorView.lineWrapping,
@@ -458,9 +479,8 @@ export class NotebookEditor {
   if(!this.session.running&&!this.waitingInput)this.inputSequence=0;
   this.actions.notebookChanged?.();this.renderImportStatuses();
   const kernelState=this.actions.kernelState?.()??((this.session.running||this.session.busy)?'busy':'stopped');
-  const stateLabel=this.waitingInput?'等待输入':{stopped:'内核已停止',starting:'内核启动中',busy:'内核运行中',idle:'内核空闲'}[kernelState];
-  const execution=this.actions.lastExecution?.();
-  this.status.textContent=[this.t(stateLabel),this.t(execution==='success'?'运行成功':execution==='error'?'运行失败':execution==='modified'?'代码已修改':'尚未运行'),this.t(this.session.dirty||this.actions.jsonSource?.dirty?'未保存':'已保存')].filter(Boolean).join(' · ');
+  const statusText=executionStatusText({active:!!this.actions.executionActive?.()||this.session.running||kernelState==='busy',waitingInput:this.waitingInput,kernelState,result:this.actions.lastExecution?.(),dirty:this.session.dirty||!!this.actions.jsonSource?.dirty},this.t);
+  if(this.status.textContent!==statusText)this.status.textContent=statusText;
   this.status.dataset.kernelState=kernelState;
   this.jsonEditor?.refresh();
   this.toolbar.querySelectorAll<HTMLButtonElement>('button').forEach(button=>{const action=button.dataset.action;if(action==='JSON')button.disabled=this.sourceBlocked();if(action==='Notebook'||action==='JSON')button.setAttribute('aria-pressed',String((action==='JSON')===!!this.actions.jsonSource?.active));if(['运行全部','重启内核','撤销','重做','清除全部输出','清理运行变量'].includes(action??''))button.disabled=!!this.actions.jsonSource?.active||this.sourceBlocked()});
@@ -485,5 +505,5 @@ export class NotebookEditor {
   this.waitingInput=true;const context=this.t('单元格 {index} · 第 {count} 次输入',{index:(this.session.runningIndex??0)+1,count:++this.inputSequence});this.refresh();
   return requestKernelInput(this.inputHost,request,controller.signal,this.t,context).finally(()=>{signal.removeEventListener('abort',abort);if(this.inputController===controller){this.inputController=undefined;this.waitingInput=false;if(!this.destroyed)this.refresh()}});
  }
- destroy():void{this.disposeMenuDismiss?.();this.disposeMenuDismiss=undefined;this.jsonEditor?.destroy();this.jsonEditor=undefined;this.revealGeneration++;this.destroyed=true;this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.cellMounts?.clear();this.cellGaps?.clear();this.cachedEditorStates?.clear();this.mountedCells?.clear();this.visibleCells?.clear();if(this.recycleFrame!==undefined)this.root.win.cancelAnimationFrame(this.recycleFrame);this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.outputSnapshots?.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor?.destroy());this.session.onChange=()=>{};this.root.removeEventListener('focusout',this.onRecycle);this.root.ownerDocument.removeEventListener('selectionchange',this.onRecycle);this.root.removeEventListener('keydown',this.onKeyDown);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
+ destroy():void{this.find?.destroy();this.disposeMenuDismiss?.();this.disposeMenuDismiss=undefined;this.jsonEditor?.destroy();this.jsonEditor=undefined;this.revealGeneration++;this.destroyed=true;this.inputController?.abort();if(this.timingTimer)window.clearInterval(this.timingTimer);this.timingTimer=undefined;this.cellObserver?.disconnect();this.pendingCells.clear();this.cellMounts?.clear();this.cellGaps?.clear();this.cachedEditorStates?.clear();this.mountedCells?.clear();this.visibleCells?.clear();if(this.recycleFrame!==undefined)this.root.win.cancelAnimationFrame(this.recycleFrame);this.toolbarObserver?.disconnect();this.outputRenderers.forEach(renderer=>renderer.destroy());this.outputRenderers.clear();this.outputSnapshots?.clear();this.cancelDrag();this.anchorObserver?.disconnect();this.editors.forEach(editor=>editor?.destroy());this.session.onChange=()=>{};this.root.removeEventListener('focusout',this.onRecycle);this.root.ownerDocument.removeEventListener('selectionchange',this.onRecycle);this.root.removeEventListener('keydown',this.onKeyDown,true);this.root.removeEventListener('scroll',this.onScroll);this.root.replaceChildren()}
 }

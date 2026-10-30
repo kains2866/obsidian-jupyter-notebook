@@ -13,7 +13,7 @@ const colors=HighlightStyle.define([
  {tag:[tags.number,tags.bool,tags.null],color:'var(--code-value, var(--text-normal))'},
 ]);
 export function notebookJsonState(source:string,changed:(source:string)=>void,blocked:()=>boolean,readOnly=new Compartment(),t:Translator=text=>text):EditorState{
- return EditorState.create({doc:source,extensions:[EditorState.phrases.of({Find:t('查找'),Replace:t('替换'),next:t('下一个'),previous:t('上一个'),all:t('全部'),'match case':t('区分大小写'),regexp:t('正则表达式'),'by word':t('全字匹配'),replace:t('替换'),'replace all':t('全部替换'),close:t('关闭')}),EditorView.contentAttributes.of({'aria-label':'Notebook JSON',spellcheck:'false'}),json(),history(),search(),lineNumbers(),bracketMatching(),syntaxHighlighting(colors),keymap.of([indentWithTab,...defaultKeymap,...historyKeymap,...searchKeymap]),
+ return EditorState.create({doc:source,extensions:[EditorState.phrases.of({Find:t('查找'),Replace:t('替换'),next:t('下一个'),previous:t('上一个'),all:t('全部'),'match case':t('区分大小写'),regexp:t('正则表达式'),'by word':t('全字匹配'),replace:t('替换'),'replace all':t('全部替换'),close:t('关闭')}),EditorView.contentAttributes.of({'aria-label':'Notebook JSON',spellcheck:'false'}),json(),history(),search(),lineNumbers(),bracketMatching(),syntaxHighlighting(colors),keymap.of([indentWithTab,...defaultKeymap,...historyKeymap,...searchKeymap.filter(binding=>binding.key!=='Mod-f')]),
   readOnly.of([EditorState.readOnly.of(blocked()),EditorView.editable.of(!blocked())]),
   EditorState.transactionFilter.of(transaction=>transaction.docChanged&&blocked()?[]:transaction),
   EditorView.updateListener.of(update=>{if(update.docChanged)changed(update.state.doc.toString())}),

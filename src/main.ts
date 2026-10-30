@@ -109,10 +109,11 @@ export default class NotebookPlugin extends Plugin{
  getTranslator():Translator{return createTranslator(this.settings.language,typeof getLanguage==='function'?getLanguage():'en')}
  onPreferencesChanged():void{this.refreshLanguageCommands();for(const view of this.notebookViews())view.refreshPreferences()}
  private refreshLanguageCommands():void{
-  if(Platform.isMobile)return;const t=this.getTranslator();const create=t('新建 Jupyter Notebook'),save=t('保存 Notebook');const labels=JSON.stringify([create,save]);if(labels===this.commandLabels)return;
+  if(Platform.isMobile)return;const t=this.getTranslator();const create=t('新建 Jupyter Notebook'),save=t('保存 Notebook'),find=t('查找');const labels=JSON.stringify([create,save,find]);if(labels===this.commandLabels)return;
   for(const id of this.commandIds)this.removeCommand(id);
   this.addCommand({id:'create-notebook',name:create,callback:()=>void this.createNotebook()});this.addCommand({id:'save-notebook',name:save,checkCallback:checking=>{const view=this.app.workspace.getActiveViewOfType(NotebookView);if(!view)return false;if(!checking)void view.save().catch(error=>new Notice(this.getTranslator()(String(error))));return true}});
-  this.commandIds=['create-notebook','save-notebook'];this.commandLabels=labels;
+  this.addCommand({id:'find',name:find,checkCallback:checking=>{const view=this.app.workspace.getActiveViewOfType(NotebookView);if(!view)return false;if(!checking)view.showSearch();return true}});
+  this.commandIds=['create-notebook','save-notebook','find'];this.commandLabels=labels;
   if(this.ribbon){this.ribbon.setAttribute('aria-label',create);setTooltip(this.ribbon,create)}
  }
  getNotebookRenameSessions(path:string):import('./session').NotebookSession[]{return this.notebookViews().filter(view=>view.file?.path===path).flatMap(view=>{const session=view.getLinkRenameSession();return session?[session]:[]})}

@@ -11,7 +11,7 @@ import {createTranslator} from '../src/i18n';
 function setup(){const plugin:any={settings:{...DEFAULT_SETTINGS,outputOptions:{...DEFAULT_SETTINGS.outputOptions}},saveSettings:vi.fn(async()=>{}),onPreferencesChanged:vi.fn(),getTranslator(){return createTranslator(this.settings.language==='en'?'en':'zh')}};return {plugin,tab:new NotebookSettingsTab({} as any,plugin)}}
 function entries(items:any[]):any[]{return items.flatMap(item=>item.items?entries(item.items):[item])}
 beforeEach(()=>{state.names=[];state.descriptions=[];state.notices=[];state.mobile=false});
-it('indexes all preferences using translated searchable definitions and Python aliases',()=>{const {tab,plugin}=setup();plugin.settings.language='en';const definitions=entries(tab.getSettingDefinitions());expect(definitions).toHaveLength(16);expect(definitions.find(d=>d.control?.key==='language').name).toBe('Language');expect(definitions.find(d=>d.control?.key==='outputOptions.collapse').control.type).toBe('toggle');expect(definitions.find(d=>d.control?.key==='bridgePython').aliases).toContain('Python');expect(definitions.find(d=>d.control?.key==='outputOptions.warnCellMiB').control.validate(0)).toBeTruthy()});
+it('indexes all preferences using translated searchable definitions and Python aliases',()=>{const {tab,plugin}=setup();plugin.settings.language='en';const definitions=entries(tab.getSettingDefinitions());expect(definitions).toHaveLength(17);expect(definitions.find(d=>d.control?.key==='language').name).toBe('Language');expect(definitions.find(d=>d.control?.key==='outputOptions.collapse').control.type).toBe('toggle');expect(definitions.find(d=>d.control?.key==='bridgePython').aliases).toContain('Python');expect(definitions.find(d=>d.control?.key==='outputOptions.warnCellMiB').control.validate(0)).toBeTruthy()});
 it('reads and persists nested output preferences immutably through plugin saveSettings',async()=>{const {tab,plugin}=setup();const previous=plugin.settings,output=previous.outputOptions;expect(tab.getControlValue('outputOptions.collapse')).toBe(true);await tab.setControlValue('outputOptions.collapse',false);expect(plugin.settings).not.toBe(previous);expect(plugin.settings.outputOptions).not.toBe(output);expect(output.collapse).toBe(true);expect(plugin.settings.outputOptions.collapse).toBe(false);expect(plugin.saveSettings).toHaveBeenCalledOnce();expect(plugin.onPreferencesChanged).toHaveBeenCalledOnce()});
 it('rejects invalid values, trims manual paths and ignores unknown keys',async()=>{const {tab,plugin}=setup();await tab.setControlValue('outputOptions.warnCellMiB',0);await tab.setControlValue('language','unknown');await tab.setControlValue('vaultId','changed');expect(plugin.saveSettings).not.toHaveBeenCalled();await tab.setControlValue('bridgePython',' /python ');expect(plugin.settings.bridgePython).toBe('/python')});
 it('restores preferences and refreshes modern definitions after failed persistence',async()=>{const {tab,plugin}=setup();const previous=plugin.settings;const update=vi.fn();Object.assign(tab,{update});plugin.saveSettings.mockRejectedValueOnce(new Error('disk'));await tab.setControlValue('outputOptions.collapse',false);expect(plugin.settings).toBe(previous);expect(update).toHaveBeenCalledOnce();expect(state.notices).toContain('Error: disk')});
@@ -24,7 +24,7 @@ it('modern and legacy settings labels stay aligned before and after language cha
  for(const language of ['zh','en'] as const){
   await tab.setControlValue('language',language);
   const definitions=entries(tab.getSettingDefinitions());tab.display();
-  expect(definitions).toHaveLength(16);for(const definition of definitions)expect(state.names).toContain(definition.name);
+  expect(definitions).toHaveLength(17);for(const definition of definitions)expect(state.names).toContain(definition.name);
  }
 });
 
@@ -46,3 +46,4 @@ it('shows translated informational graph guidance in modern and legacy settings 
  }
  expect(plugin.saveSettings).not.toHaveBeenCalled();
 });
+it('enables themed code background by default and persists the toggle',async()=>{const {tab,plugin}=setup();expect(tab.getControlValue('codeBackground')).toBe(true);expect(entries(tab.getSettingDefinitions()).find(d=>d.control?.key==='codeBackground').control.defaultValue).toBe(true);await tab.setControlValue('codeBackground',false);expect(plugin.settings.codeBackground).toBe(false);expect(plugin.onPreferencesChanged).toHaveBeenCalledOnce()});

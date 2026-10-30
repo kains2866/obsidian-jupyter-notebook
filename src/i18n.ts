@@ -10,6 +10,8 @@ export type LanguageSetting='auto'|'zh'|'en';
 export type Translator=(text:string,values?:Record<string,string|number>)=>string;
 const common:Record<string,string>={
  '公式预览':'Formula preview','没有完整的公式':'No complete formulas',
+ '查找单元格源文本':'Find in cell sources','未找到匹配':'No matches found',
+ '代码区背景':'Code area background','使用主题背景区分代码内容和输出。':'Use the theme background to distinguish code from output.',
  '笔记属性':'Properties','添加属性':'Add property',
  '更新记录已显示，但已读状态保存失败：{error}':'The update summary was shown, but its read status could not be saved: {error}',
  '支持将图片嵌入 Notebook':'Embed images in notebooks','完善 LaTeX 公式渲染':'Improve LaTeX rendering','保留 YAML 注释与格式':'Preserve YAML comments and formatting','适配 Markdown 标题层级':'Adapt Markdown heading levels','增加多种导出格式':'Add more export formats','支持切换到 JSON 视图':'Add a JSON source view',

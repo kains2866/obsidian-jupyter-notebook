@@ -39,7 +39,7 @@ export class NotebookView extends FileView{
  private kernelPython:string;
  private kernelBridgePython?:string;
  private confirmingRestart=false;
- private closing=false;private disposed=false;private runAllActive=false;private stopAll=false;
+ private closing=false;private disposed=false;private executingCell=false;private runAllActive=false;private stopAll=false;
  private propertiesEditor?:NotebookPropertiesEditor;private propertiesSource?:string;
  private markdownChildren:Component[]=[];
  private markdownHosts=new Map<HTMLElement,Component>();
@@ -48,6 +48,8 @@ export class NotebookView extends FileView{
  private t:Translator=(text,values)=>this.plugin.getTranslator?.()(text,values)??createTranslator('zh')(text,values);
  constructor(leaf:WorkspaceLeaf,private plugin:NotebookPlugin){super(leaf);this.kernelPython=plugin.settings.kernelPython}
  getLinkRenameSession():NotebookSession|undefined{if(this.disposed)return undefined;if(this.jsonSource?.active)throw new Error(this.t('JSON 视图中不能更新链接，请先返回 Notebook 视图。'));if(this.loadingNotebook)throw new Error(this.t('Notebook 正在加载，链接更新已跳过。'));return this.session}
+ /** Used by Obsidian’s configurable current-file search command. */
+ showSearch():void{this.editor?.openSearch()}
  getViewType():string{return NOTEBOOK_VIEW}
  getDisplayText():string{return this.file?.basename??'Notebook'}
  getIcon():string{return 'notebook-pen'}
@@ -88,9 +90,10 @@ export class NotebookView extends FileView{
    jsonSource:this.jsonSource,jsonBlocked:()=>this.jsonBlocked(),jsonChanged:()=>{this.scheduleRecovery();this.syncProperties(session)},
    translate:this.t,confirm:(title,message)=>confirm(this.app,title,message,this.t),
    notebookChanged:()=>{this.scheduleImportCheck();this.syncProperties(session);this.app.workspace.trigger?.('native-ipynb-outline-change',this)},retryImports:()=>this.scheduleImportCheck(true),installImport:module=>this.openDependencyManager(module),externalKernel:()=>this.isExternalKernel(),
+   codeBackground:this.plugin.settings.codeBackground,executionActive:()=>this.executingCell||this.runAllActive,
    readOnly:Platform.isMobile,save:()=>this.save(),saveCopy:()=>this.saveCopy(),exportNotebook:format=>this.exportNotebook(format),reload:()=>this.reload(),
    run:index=>this.run(index),runAll:()=>this.runAll(),interrupt:()=>this.interrupt(),restart:()=>this.restart(),
-   kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
+   kernelState:()=>this.starting?'starting':this.kernel?.isAlive===false?'stopped':this.session?.running?'busy':this.kernel?'idle':'stopped',lastExecution:()=>this.kernel?.isAlive===false&&this.lastExecution!=='error'?undefined:this.lastExecution&&this.lastExecutionCode!==undefined&&this.lastExecutionCode!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText))?'modified':this.lastExecution,clearVariables:()=>this.restart(true),
    environment:()=>environmentName(this.kernelPython,this.t),chooseEnvironment:()=>this.chooseEnvironment(),
    sanitize:html=>sanitizeHTMLToDom(html),clearMarkdown:()=>this.clearMarkdown(),disposeMarkdown:parent=>this.disposeMarkdown(parent),
    markdown:(text,parent,cell)=>this.renderNotebookMarkdown(session,text,parent,cell),
@@ -351,7 +354,7 @@ export class NotebookView extends FileView{
     const {bridge}=await ensurePythonScripts(adapter.getFullPath(`${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}`));
     this.kernelBridgePython=this.plugin.settings.bridgePython;
     client=new KernelClient(this.kernelBridgePython,this.kernelPython,bridge,this.projectDir());
-    client.onStateChange=()=>{if(this.kernel===client&&!client?.isAlive)this.lastExecution=undefined;if(!this.disposed)this.editor?.refresh?.()};
+    client.onStateChange=()=>{if(this.kernel===client&&!client?.isAlive&&this.lastExecution!=='error')this.lastExecution=undefined;if(!this.disposed)this.editor?.refresh?.()};
     await client.start();if(this.disposed){await client.close();throw new Error(this.t('Notebook 已关闭。'))}
     this.kernel=client;return client;
    }catch(error){await client?.close().catch(()=>{});throw new Error(this.t('无法启动 Python 内核：{error}',{error:this.t(error instanceof Error?error.message:String(error))})+'\n'+this.t('请检查桥接环境已安装 jupyter_client，运行环境已安装 ipykernel。'))}
@@ -370,20 +373,22 @@ export class NotebookView extends FileView{
   this.guardJson();
   const session=this.session;if(!session||session.notebook.cells[index]?.cell_type!=='code')return 'ok';
   const codeSnapshot=JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText));
-  const unlock=session.lock();
+  let executionStarted=false;const unlock=session.lock();
   try{if(!await this.ensureNotebookTrust(session))return 'cancelled';
+   this.executingCell=true;this.editor?.refresh?.();
    const kernel=await this.getKernel();
    if(this.disposed||this.session!==session)throw new Error(this.t('Notebook 已关闭或切换。'));
    if(codeSnapshot!==JSON.stringify(session.notebook.cells.filter(cell=>cell.cell_type==='code').map(sourceText)))throw new Error(this.t('确认期间代码已改变，请重新运行并检查代码。'));
    unlock();this.lastExecution=undefined;
-   let missing:string|undefined;const result=await session.run(index,{execute:(code,emit)=>kernel.execute(code,o=>{missing=detectMissingDependency(o)??missing;emit(o as Output)},async(request,signal)=>{
+   executionStarted=true;let missing:string|undefined;const result=await session.run(index,{execute:(code,emit)=>kernel.execute(code,o=>{missing=detectMissingDependency(o)??missing;emit(o as Output)},async(request,signal)=>{
     if(this.disposed||this.session!==session||signal.aborted)return null;
     return this.editor?.requestInput(request,signal)??null;
    })});
    if(!this.disposed&&this.session===session){this.lastExecution=result==='ok'?'success':'error';this.lastExecutionCode=codeSnapshot;this.editor?.refresh?.()}
    if(missing&&!this.disposed&&this.session===session)this.editor?.showDependencyNotice(missing,this.isExternalKernel(),()=>this.openDependencyManager(missing?.split('.')[0]),()=>this.chooseEnvironment());
    return result;
-  }finally{unlock()}
+  }catch(error){if(executionStarted&&!this.disposed&&this.session===session){this.lastExecution='error';this.lastExecutionCode=codeSnapshot}throw error}
+  finally{this.executingCell=false;unlock();this.editor?.refresh?.()}
  }
  private async ensureNotebookTrust(session:NotebookSession):Promise<boolean>{
   const file=this.file;if(!file||this.disposed)return false;
@@ -412,7 +417,7 @@ export class NotebookView extends FileView{
   this.guardRemoval();
   if(!this.session||this.session.running||this.session.busy||this.runAllActive)throw new Error(this.t('内核正在运行。'));
   this.runAllActive=true;this.stopAll=false;
-  try{for(let i=0;i<this.session.notebook.cells.length&&!this.stopAll&&!this.disposed;i++){if(await this.runCell(i)!=='ok')break}}finally{this.runAllActive=false}
+  try{for(let i=0;i<this.session.notebook.cells.length&&!this.stopAll&&!this.disposed;i++){if(await this.runCell(i)!=='ok')break}}finally{this.runAllActive=false;this.editor?.refresh?.()}
  }
  private async interrupt():Promise<void>{this.stopAll=true;if(this.kernel)await this.kernel.interrupt();else if(this.starting)throw new Error(this.t('内核仍在启动，请稍后重试。'))}
  private async restart(clearVariables=false):Promise<void>{
